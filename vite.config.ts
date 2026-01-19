@@ -15,7 +15,7 @@ export default defineConfig(({ mode }) => ({
     mode === "development" && componentTagger(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'robots.txt', 'app-icon.svg'],
+      includeAssets: ['favicon.ico', 'robots.txt', 'app-icon.png'],
       manifest: {
         name: 'FutoraOne',
         short_name: 'FutoraOne',
@@ -26,15 +26,15 @@ export default defineConfig(({ mode }) => ({
         orientation: 'portrait',
         icons: [
           {
-            src: 'app-icon.svg',
+            src: 'app-icon.png',
             sizes: '192x192',
-            type: 'image/svg+xml',
+            type: 'image/png',
             purpose: 'any maskable'
           },
           {
-            src: 'app-icon.svg',
+            src: 'app-icon.png',
             sizes: '512x512',
-            type: 'image/svg+xml',
+            type: 'image/png',
             purpose: 'any maskable'
           }
         ]
