@@ -17,8 +17,8 @@ export default defineConfig(({ mode }) => ({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'robots.txt', 'app-icon.png'],
       manifest: {
-        name: 'FutoraOne',
-        short_name: 'FutoraOne',
+        name: 'FutoraFlow',
+        short_name: 'FutoraFlow',
         description: 'The Future of Social Networking for Developers',
         theme_color: '#0f172a',
         background_color: '#0f172a',
@@ -37,7 +37,83 @@ export default defineConfig(({ mode }) => ({
             type: 'image/png',
             purpose: 'any maskable'
           }
-        ]
+        ],
+        screenshots: [
+          {
+            src: 'app-icon.png',
+            sizes: '512x512',
+            type: 'image/png',
+            form_factor: 'wide',
+            label: 'FutoraFlow Desktop'
+          },
+          {
+            src: 'app-icon.png',
+            sizes: '512x512',
+            type: 'image/png',
+            form_factor: 'narrow',
+            label: 'FutoraFlow Mobile'
+          }
+        ],
+        categories: ['social', 'productivity', 'developer tools'],
+        shortcuts: [
+          {
+            name: 'Chat',
+            short_name: 'Chat',
+            description: 'Open Chat',
+            url: '/chat',
+            icons: [{ src: 'app-icon.png', sizes: '192x192' }]
+          }
+        ],
+        iarc_rating_id: 'e84b072d-71b3-4d3e-86ae-31a8ce4e53b7',
+        related_applications: [],
+        prefer_related_applications: false,
+      },
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'google-fonts-cache',
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 60 * 60 * 24 * 365 // <== 365 days
+              },
+              cacheableResponse: {
+                statuses: [0, 200]
+              }
+            }
+          },
+          {
+            urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'gstatic-fonts-cache',
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 60 * 60 * 24 * 365 // <== 365 days
+              },
+              cacheableResponse: {
+                statuses: [0, 200]
+              }
+            }
+          },
+          // Cache images
+          {
+            urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp)$/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'images',
+              expiration: {
+                maxEntries: 60,
+                maxAgeSeconds: 30 * 24 * 60 * 60, // 30 Days
+              },
+            },
+          },
+        ],
+        navigateFallback: 'index.html',
+        navigateFallbackDenylist: [/^\/api/]
       }
     })
   ].filter(Boolean),

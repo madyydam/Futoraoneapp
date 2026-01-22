@@ -183,7 +183,7 @@ const MemoryMatch = () => {
             // For this refactor, we assume sendMove is stable or its changes don't require re-creating initializeGame.
             // If sendMove is not stable, it should be added to the dependency array.
             // For now, we follow the provided example's dependency list.
-            // eslint-disable-next-line @typescript-eslint/no-use-before-define
+             
             sendMove({
                 cards: gameCards,
                 currentPlayer: 1,
@@ -200,7 +200,7 @@ const MemoryMatch = () => {
         playSound('win');
 
         if (gameMode === 'ONLINE') {
-            // eslint-disable-next-line @typescript-eslint/no-use-before-define
+             
             sendMove({ isWon: true });
 
             // Determine winner for confetti

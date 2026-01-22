@@ -12,6 +12,8 @@ import { ThemeProvider } from "@/components/theme-provider";
 import ScrollToTop from "@/components/ScrollToTop";
 import { CartoonLoader } from "@/components/CartoonLoader";
 import { AchievementListener } from "@/components/AchievementListener";
+import { InstallPrompt } from "@/components/pwa/InstallPrompt";
+import { OfflineIndicator } from "@/components/pwa/OfflineIndicator";
 import { UserPresenceProvider } from "@/contexts/UserPresenceContext";
 import { GlobalErrorBoundary } from "@/components/GlobalErrorBoundary";
 import { SectionErrorBoundary } from "@/components/SectionErrorBoundary";
@@ -109,6 +111,8 @@ const App = () => {
         <TooltipProvider>
           <Toaster />
           <Sonner />
+          <InstallPrompt />
+          <OfflineIndicator />
           <AchievementListener />
           <UserPresenceProvider>
             <CoinRewardPopup />

@@ -46,7 +46,7 @@ const minimax = (currentBoard: Player[], depth: number, isMaximizing: boolean): 
         for (let i = 0; i < 9; i++) {
             if (currentBoard[i] === null) {
                 currentBoard[i] = "O";
-                let score = minimax(currentBoard, depth + 1, false);
+                const score = minimax(currentBoard, depth + 1, false);
                 currentBoard[i] = null;
                 bestScore = Math.max(score, bestScore);
             }
@@ -57,7 +57,7 @@ const minimax = (currentBoard: Player[], depth: number, isMaximizing: boolean): 
         for (let i = 0; i < 9; i++) {
             if (currentBoard[i] === null) {
                 currentBoard[i] = "X";
-                let score = minimax(currentBoard, depth + 1, true);
+                const score = minimax(currentBoard, depth + 1, true);
                 currentBoard[i] = null;
                 bestScore = Math.min(score, bestScore);
             }
@@ -77,7 +77,7 @@ const getBestMove = (currentBoard: Player[]): number => {
     for (let i = 0; i < 9; i++) {
         if (currentBoard[i] === null) {
             currentBoard[i] = "O";
-            let score = minimax(currentBoard, 0, false);
+            const score = minimax(currentBoard, 0, false);
             currentBoard[i] = null;
             if (score > bestScore) {
                 bestScore = score;

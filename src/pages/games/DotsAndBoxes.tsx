@@ -250,8 +250,8 @@ const DotsAndBoxes = () => {
     };
 
     const executeMove = (r: number, c: number, vertical: boolean, isAi = false) => {
-        let newHLines = [...hLines.map(row => [...row])];
-        let newVLines = [...vLines.map(row => [...row])];
+        const newHLines = [...hLines.map(row => [...row])];
+        const newVLines = [...vLines.map(row => [...row])];
 
         if (vertical) {
             newVLines[r][c] = currentPlayer;

@@ -6,6 +6,9 @@ export const Logo = ({ className = "" }: { className?: string }) => {
       src={logo}
       alt="FutoraOne Logo"
       className={className}
+      width="150"
+      height="40"
+      decoding="async"
     />
   );
 };

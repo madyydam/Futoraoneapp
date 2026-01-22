@@ -110,7 +110,7 @@ const RockPaperScissors = () => {
                 // But we are inside component, so it's fine.
                 // However, wait. sendMove is from useMultiplayerGame.
                 // We'll need to pass it or accessible.
-                // eslint-disable-next-line @typescript-eslint/no-use-before-define
+                 
                 sendMove({ p1Choice: c1, p2Choice: c2, scores: newScores });
             } else if (gameMode === 'ONLINE') {
                 // Client just updates local display, actual sync comes from host usually but for responsive UI we update

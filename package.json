@@ -12,6 +12,9 @@
     "send-digest": "ts-node scripts/send-digest.ts"
   },
   "dependencies": {
+    "@capacitor/android": "^8.0.1",
+    "@capacitor/cli": "^8.0.1",
+    "@capacitor/core": "^8.0.1",
     "@hookform/resolvers": "^3.10.0",
     "@marsidev/react-turnstile": "^1.4.1",
     "@radix-ui/react-accordion": "^1.2.11",

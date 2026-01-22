@@ -247,7 +247,7 @@ const GamificationWidget = memo(({
         }
       ]);
     }
-  }, [isExpanded]);
+  }, []); // Removed isExpanded dependency as it's not used inside
 
   useEffect(() => {
     if (isExpanded) {
@@ -257,27 +257,28 @@ const GamificationWidget = memo(({
 
   useEffect(() => {
     if (!isExpanded) return;
+
     const channel = supabase
       .channel('challenge-updates')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'posts' },
         () => {
-          if (isExpanded) fetchChallengeProgress();
+          fetchChallengeProgress();
         }
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'likes' },
         () => {
-          if (isExpanded) fetchChallengeProgress();
+          fetchChallengeProgress();
         }
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'comments' },
         () => {
-          if (isExpanded) fetchChallengeProgress();
+          fetchChallengeProgress();
         }
       )
       .subscribe();

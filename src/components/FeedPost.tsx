@@ -1,7 +1,6 @@
-import { memo, useState, useCallback, useMemo } from "react";
+import { memo, useState, useCallback, useMemo, Suspense, lazy } from "react";
 import { Card } from "@/components/ui/card";
 import { motion, AnimatePresence } from "framer-motion";
-import { CommentSection } from "@/components/CommentSection";
 import type { User } from "@supabase/supabase-js";
 import { useNavigate } from "react-router-dom";
 import { triggerHeartConfetti } from "@/utils/confetti";
@@ -9,6 +8,9 @@ import { PostHeader } from "@/components/feed/PostHeader";
 import { PostContent } from "@/components/feed/PostContent";
 import { PostMedia } from "@/components/feed/PostMedia";
 import { PostActions } from "@/components/feed/PostActions";
+
+// Lazy load CommentSection
+const CommentSection = lazy(() => import("@/components/CommentSection").then(module => ({ default: module.CommentSection })));
 
 interface Post {
   id: string;
@@ -26,6 +28,7 @@ interface Post {
   likes: { id: string; user_id: string }[];
   comments: { id: string }[];
   saves?: { id: string; user_id: string }[];
+  updated_at?: string;
 }
 
 interface FeedPostProps {
@@ -153,11 +156,13 @@ export const FeedPost = memo(({ post, currentUser, onLike, onSave, onShare, onDe
                 className="overflow-hidden"
               >
                 <div className="mt-4 pt-4 border-t border-border/50">
-                  <CommentSection
-                    postId={post.id}
-                    postAuthorId={post.user_id}
-                    currentUser={currentUser}
-                  />
+                  <Suspense fallback={<div className="h-20 flex items-center justify-center text-muted-foreground">Loading comments...</div>}>
+                    <CommentSection
+                      postId={post.id}
+                      postAuthorId={post.user_id}
+                      currentUser={currentUser}
+                    />
+                  </Suspense>
                 </div>
               </motion.div>
             )}

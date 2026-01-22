@@ -199,7 +199,7 @@ const ConnectFour = () => {
 
         setBoard(newBoard);
 
-        let nextPlayer = currentPlayer === 1 ? 2 : 1;
+        const nextPlayer = currentPlayer === 1 ? 2 : 1;
 
         if (checkWin(newBoard, row, col, currentPlayer)) {
             setWinner(currentPlayer);

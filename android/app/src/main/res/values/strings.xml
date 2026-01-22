@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">FutoraFlow</string>
+    <string name="title_activity_main">FutoraFlow</string>
+    <string name="package_name">com.futoraone.app</string>
+    <string name="custom_url_scheme">com.futoraone.app</string>
+</resources>
