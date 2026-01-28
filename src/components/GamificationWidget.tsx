@@ -130,17 +130,24 @@ const GamificationWidget = memo(({
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Fetch user's real XP and level
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('xp, level')
-        .eq('id', user.id)
-        .single();
+      // Calculate XP based on user activity (posts, likes, comments, followers)
+      const [postsRes, likesRes, commentsRes, followersRes] = await Promise.all([
+        supabase.from('posts').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
+        supabase.from('likes').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
+        supabase.from('comments').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
+        supabase.from('follows').select('id', { count: 'exact', head: true }).eq('following_id', user.id),
+      ]);
 
-      if (profile) {
-        setRealUserXP(profile.xp || 0);
-        setRealUserLevel(profile.level || 1);
-      }
+      const calculatedXP = 
+        (postsRes.count || 0) * 50 + 
+        (likesRes.count || 0) * 5 + 
+        (commentsRes.count || 0) * 10 + 
+        (followersRes.count || 0) * 25;
+      
+      const calculatedLevel = Math.floor(calculatedXP / 500) + 1;
+      
+      setRealUserXP(calculatedXP);
+      setRealUserLevel(calculatedLevel);
 
       // Get today's date for daily challenges
       const today = new Date();
