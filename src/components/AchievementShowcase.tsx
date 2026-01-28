@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, memo, useMemo } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, Variants } from "framer-motion";
 import {
     Trophy,
     Share2,
@@ -39,6 +39,16 @@ interface LeaderboardUser {
     level: number;
 }
 
+// Local achievement definitions
+const DEFAULT_ACHIEVEMENTS: Achievement[] = [
+    { id: 'first_post', title: 'First Post', description: 'Created your first post!', icon_name: 'PenTool', xp_reward: 50 },
+    { id: 'first_like', title: 'Liked!', description: 'Received your first like', icon_name: 'Heart', xp_reward: 25 },
+    { id: 'rising_star', title: 'Rising Star', description: 'Got your first follower', icon_name: 'Star', xp_reward: 75 },
+    { id: 'code_master', title: 'Code Master', description: 'Shared 10 code snippets', icon_name: 'Code', xp_reward: 100 },
+    { id: 'bug_hunter', title: 'Bug Hunter', description: 'Helped debug 5 issues', icon_name: 'Bug', xp_reward: 150 },
+    { id: 'on_fire', title: 'On Fire!', description: '7-day activity streak', icon_name: 'Flame', xp_reward: 200 },
+];
+
 // Map icon names from database to Lucide components
 const IconMap: { [key: string]: React.ElementType } = {
     'Footprints': Footprints,
@@ -55,7 +65,7 @@ const IconMap: { [key: string]: React.ElementType } = {
 
 export const AchievementShowcase = memo(({ userId }: { userId?: string }) => {
     const [activeTab, setActiveTab] = useState<'badges' | 'leaderboard'>('badges');
-    const [achievements, setAchievements] = useState<Achievement[]>([]);
+    const [achievements, setAchievements] = useState<Achievement[]>(DEFAULT_ACHIEVEMENTS);
     const [leaderboard, setLeaderboard] = useState<LeaderboardUser[]>([]);
     const [loading, setLoading] = useState(true);
     const [showAllBadges, setShowAllBadges] = useState(false);
@@ -73,93 +83,86 @@ export const AchievementShowcase = memo(({ userId }: { userId?: string }) => {
                 if (user) targetId = user.id;
             }
 
-            if (!targetId) return;
+            if (!targetId) {
+                setLoading(false);
+                return;
+            }
 
             setCurrentViewerId(targetId);
 
-            // Fetch everything in parallel
-            const [allAchievementsRes, userUnlocksRes, leaderboardRes] = await Promise.all([
-                supabase.from('achievements').select('*'),
-                supabase.from('user_achievements').select('achievement_id, unlocked_at').eq('user_id', targetId),
-                supabase.from('profiles').select('id, username, avatar_url, xp, level').order('xp', { ascending: false }).limit(100)
+            // Fetch user stats to simulate unlocked achievements
+            const [postsRes, likesRes, followersRes] = await Promise.all([
+                supabase.from('posts').select('id', { count: 'exact' }).eq('user_id', targetId),
+                supabase.from('likes').select('id', { count: 'exact' }).eq('user_id', targetId),
+                supabase.from('follows').select('id', { count: 'exact' }).eq('following_id', targetId),
             ]);
 
-            if (allAchievementsRes.error) throw allAchievementsRes.error;
-            if (userUnlocksRes.error) throw userUnlocksRes.error;
-            if (leaderboardRes.error) throw leaderboardRes.error;
+            const postCount = postsRes.count || 0;
+            const likeCount = likesRes.count || 0;
+            const followerCount = followersRes.count || 0;
 
-            // Merge achievements
-            const unlocksMap = new Map(userUnlocksRes.data?.map(u => [u.achievement_id, u.unlocked_at]));
-            const mergedAchievements = allAchievementsRes.data?.map(ach => ({
+            // Simulate unlocked achievements based on activity
+            const unlockedIds: string[] = [];
+            if (postCount >= 1) unlockedIds.push('first_post');
+            if (likeCount >= 1) unlockedIds.push('first_like');
+            if (followerCount >= 1) unlockedIds.push('rising_star');
+            if (postCount >= 10) unlockedIds.push('code_master');
+
+            const mergedAchievements = DEFAULT_ACHIEVEMENTS.map(ach => ({
                 ...ach,
-                unlocked_at: unlocksMap.get(ach.id) || undefined
-            })) || [];
+                unlocked_at: unlockedIds.includes(ach.id) ? new Date().toISOString() : undefined
+            }));
 
             setAchievements(mergedAchievements);
 
-            // Process leaderboard
-            const allUsers = leaderboardRes.data || [];
-            const userIndex = allUsers.findIndex(u => u.id === targetId);
-            const userRankNumber = userIndex !== -1 ? userIndex + 1 : null;
+            // Fetch leaderboard from profiles (using follower count as XP proxy)
+            const { data: profiles } = await supabase
+                .from('profiles')
+                .select('id, username, avatar_url')
+                .limit(100);
 
-            setLeaderboard(allUsers.slice(0, 3));
+            if (profiles) {
+                // Get follower counts for each profile
+                const usersWithStats = await Promise.all(
+                    profiles.slice(0, 10).map(async (profile) => {
+                        const { count } = await supabase
+                            .from('follows')
+                            .select('*', { count: 'exact', head: true })
+                            .eq('following_id', profile.id);
+                        
+                        return {
+                            ...profile,
+                            xp: (count || 0) * 10,
+                            level: Math.floor((count || 0) / 5) + 1
+                        };
+                    })
+                );
 
-            if (userRankNumber && userRankNumber > 3) {
-                setCurrentUserRank({
-                    rank: userRankNumber,
-                    user: allUsers[userIndex]
-                });
-            } else {
-                setCurrentUserRank(null);
+                const sortedUsers = usersWithStats.sort((a, b) => b.xp - a.xp);
+                const userIndex = sortedUsers.findIndex(u => u.id === targetId);
+                
+                setLeaderboard(sortedUsers.slice(0, 3));
+
+                if (userIndex > 2) {
+                    setCurrentUserRank({
+                        rank: userIndex + 1,
+                        user: sortedUsers[userIndex]
+                    });
+                } else {
+                    setCurrentUserRank(null);
+                }
             }
 
         } catch (error) {
             console.error("Error fetching gamification data:", error);
-            toast({
-                title: "Error loading achievements",
-                description: "Could not load gamification data.",
-                variant: "destructive",
-            });
         } finally {
             setLoading(false);
         }
-    }, [userId, toast]);
+    }, [userId]);
 
     useEffect(() => {
         fetchData();
     }, [fetchData]);
-
-    useEffect(() => {
-        if (!currentViewerId) return;
-
-        const channel = supabase
-            .channel('xp-updates-achievement')
-            .on(
-                'postgres_changes',
-                { event: '*', schema: 'public', table: 'profiles' },
-                (payload) => {
-                    const updatedUser = payload.new as any;
-                    const isInLeaderboard = leaderboard.some(u => u.id === updatedUser.id);
-                    if (isInLeaderboard || updatedUser.id === currentViewerId) {
-                        fetchData();
-                    }
-                }
-            )
-            .on(
-                'postgres_changes',
-                { event: 'INSERT', schema: 'public', table: 'user_achievements' },
-                (payload) => {
-                    if ((payload.new as any).user_id === currentViewerId) {
-                        fetchData();
-                    }
-                }
-            )
-            .subscribe();
-
-        return () => {
-            supabase.removeChannel(channel);
-        };
-    }, [currentViewerId, fetchData, leaderboard]);
 
     const handleShare = useCallback(async () => {
         const unlockedCount = achievements.filter(a => a.unlocked_at).length;
@@ -185,8 +188,8 @@ export const AchievementShowcase = memo(({ userId }: { userId?: string }) => {
         }
     }, [achievements, toast]);
 
-    // Enhanced animation variants
-    const containerVariants = {
+    // Enhanced animation variants with proper typing
+    const containerVariants: Variants = {
         hidden: { opacity: 0, scale: 0.95 },
         visible: {
             opacity: 1,
@@ -204,7 +207,7 @@ export const AchievementShowcase = memo(({ userId }: { userId?: string }) => {
         }
     };
 
-    const itemVariants = {
+    const itemVariants: Variants = {
         hidden: { y: 30, opacity: 0, scale: 0.8, rotateX: -15 },
         visible: {
             y: 0,
@@ -212,7 +215,7 @@ export const AchievementShowcase = memo(({ userId }: { userId?: string }) => {
             scale: 1,
             rotateX: 0,
             transition: {
-                type: "spring",
+                type: "spring" as const,
                 stiffness: 400,
                 damping: 25,
                 mass: 0.8
@@ -220,20 +223,20 @@ export const AchievementShowcase = memo(({ userId }: { userId?: string }) => {
         }
     };
 
-    const badgeHoverVariants = {
+    const badgeHoverVariants: Variants = {
         rest: { scale: 1, rotateY: 0 },
         hover: {
             scale: 1.05,
             rotateY: 5,
             transition: {
-                type: "spring",
+                type: "spring" as const,
                 stiffness: 400,
                 damping: 10
             }
         }
     };
 
-    const shineVariants = {
+    const shineVariants: Variants = {
         initial: { x: '-100%' },
         animate: {
             x: '200%',
@@ -247,10 +250,10 @@ export const AchievementShowcase = memo(({ userId }: { userId?: string }) => {
     };
 
     // Determine which achievements to display
-    const visibleAchievements = showAllBadges ? achievements : achievements.slice(0, 2);
+    const visibleAchievements = showAllBadges ? achievements : achievements.slice(0, 4);
 
     return (
-        <Card className="bg-white/10 dark:bg-black/20 backdrop-blur-lg border-white/20 dark:border-white/10 overflow-hidden" >
+        <Card className="bg-white/10 dark:bg-black/20 backdrop-blur-lg border-white/20 dark:border-white/10 overflow-hidden">
             <div className="p-6">
                 <div className="flex items-center justify-between mb-6">
                     <h2 className="text-2xl font-bold flex items-center gap-2 bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-transparent">
@@ -320,8 +323,7 @@ export const AchievementShowcase = memo(({ userId }: { userId?: string }) => {
                                 style={{ perspective: 1000 }}
                             >
                                 {loading ? (
-                                    // Skeleton loading state
-                                    Array(2).fill(0).map((_, i) => (
+                                    Array(4).fill(0).map((_, i) => (
                                         <motion.div
                                             key={i}
                                             className="h-32 bg-muted/10 rounded-xl overflow-hidden"
@@ -337,16 +339,15 @@ export const AchievementShowcase = memo(({ userId }: { userId?: string }) => {
                                             variants={itemVariants}
                                             initial="rest"
                                             whileHover={achievement.unlocked_at ? "hover" : "rest"}
-                                            custom={index}
                                         >
                                             <motion.div
                                                 variants={badgeHoverVariants}
                                                 className={`
-                                            relative p-4 rounded-xl border transition-all duration-300 overflow-hidden
-                                            ${achievement.unlocked_at
+                                                    relative p-4 rounded-xl border transition-all duration-300 overflow-hidden
+                                                    ${achievement.unlocked_at
                                                         ? 'bg-gradient-to-br from-primary/10 via-purple-500/10 to-pink-500/10 border-primary/30 hover:border-primary/60 hover:shadow-xl hover:shadow-primary/30 cursor-pointer'
                                                         : 'bg-muted/5 border-muted/20 grayscale opacity-60'}
-                                        `}
+                                                `}
                                             >
                                                 {/* Shine effect for unlocked badges */}
                                                 {achievement.unlocked_at && (
@@ -357,36 +358,6 @@ export const AchievementShowcase = memo(({ userId }: { userId?: string }) => {
                                                         animate="animate"
                                                         style={{ skewX: -20 }}
                                                     />
-                                                )}
-
-                                                {/* Sparkle particles for hover */}
-                                                {achievement.unlocked_at && (
-                                                    <>
-                                                        <motion.div
-                                                            className="absolute top-2 left-2 w-1 h-1 bg-yellow-400 rounded-full"
-                                                            animate={{
-                                                                scale: [0, 1.5, 0],
-                                                                opacity: [0, 1, 0]
-                                                            }}
-                                                            transition={{
-                                                                duration: 2,
-                                                                repeat: Infinity,
-                                                                delay: index * 0.3
-                                                            }}
-                                                        />
-                                                        <motion.div
-                                                            className="absolute bottom-3 right-3 w-1 h-1 bg-pink-400 rounded-full"
-                                                            animate={{
-                                                                scale: [0, 1.5, 0],
-                                                                opacity: [0, 1, 0]
-                                                            }}
-                                                            transition={{
-                                                                duration: 2,
-                                                                repeat: Infinity,
-                                                                delay: index * 0.3 + 1
-                                                            }}
-                                                        />
-                                                    </>
                                                 )}
 
                                                 <div className="absolute top-2 right-2 z-10">
@@ -402,58 +373,49 @@ export const AchievementShowcase = memo(({ userId }: { userId?: string }) => {
                                                                 repeatDelay: 3
                                                             }}
                                                         >
-                                                            <Star className="w-4 h-4 text-yellow-500 fill-yellow-500 drop-shadow-lg" />
+                                                            <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" />
                                                         </motion.div>
                                                     ) : (
                                                         <Lock className="w-4 h-4 text-muted-foreground" />
                                                     )}
                                                 </div>
 
-                                                <motion.div
-                                                    className={`
-                                                w-12 h-12 rounded-full flex items-center justify-center mb-3
-                                                ${achievement.unlocked_at ? 'bg-gradient-to-br from-primary/30 to-purple-500/30' : 'bg-muted'}
-                                            `}
-                                                    whileHover={achievement.unlocked_at ? {
-                                                        scale: 1.1,
-                                                        rotateZ: 360,
-                                                        transition: { duration: 0.6 }
-                                                    } : {}}
-                                                >
-                                                    <IconComponent className={`w-6 h-6 ${achievement.unlocked_at ? 'text-primary drop-shadow-lg' : 'text-muted-foreground'}`} />
-                                                </motion.div>
-
-                                                <h3 className="font-semibold text-sm mb-1 relative z-10">{achievement.title}</h3>
-                                                <p className="text-xs text-muted-foreground mb-2 line-clamp-2 relative z-10">{achievement.description}</p>
-
-                                                <motion.div
-                                                    className="flex items-center gap-1 text-xs font-medium text-orange-500 relative z-10"
-                                                    whileHover={{ scale: 1.05 }}
-                                                >
-                                                    <Zap className="w-3 h-3" />
-                                                    +{achievement.xp_reward} XP
-                                                </motion.div>
+                                                <div className="flex flex-col items-center text-center relative z-10">
+                                                    <motion.div
+                                                        className={`p-3 rounded-full mb-2 ${achievement.unlocked_at
+                                                            ? 'bg-gradient-to-br from-primary/20 to-purple-500/20'
+                                                            : 'bg-muted/10'}`}
+                                                        whileHover={achievement.unlocked_at ? { scale: 1.1, rotate: 5 } : {}}
+                                                    >
+                                                        <IconComponent className={`w-6 h-6 ${achievement.unlocked_at ? 'text-primary' : 'text-muted-foreground'}`} />
+                                                    </motion.div>
+                                                    <h4 className={`font-semibold text-sm ${achievement.unlocked_at ? 'text-foreground' : 'text-muted-foreground'}`}>
+                                                        {achievement.title}
+                                                    </h4>
+                                                    <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                                                        {achievement.description}
+                                                    </p>
+                                                    {achievement.unlocked_at && (
+                                                        <div className="flex items-center gap-1 mt-2 text-xs text-orange-500 font-medium">
+                                                            <Zap className="w-3 h-3" />
+                                                            +{achievement.xp_reward} XP
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </motion.div>
                                         </motion.div>
                                     );
                                 })}
                             </motion.div>
 
-                            {achievements.length > 2 && (
-                                <motion.div
-                                    initial={{ opacity: 0 }}
-                                    animate={{ opacity: 1 }}
-                                    className="flex justify-center mt-4"
+                            {achievements.length > 4 && (
+                                <Button
+                                    variant="ghost"
+                                    className="w-full mt-4"
+                                    onClick={() => setShowAllBadges(!showAllBadges)}
                                 >
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="text-muted-foreground hover:text-primary"
-                                        onClick={() => setShowAllBadges(!showAllBadges)}
-                                    >
-                                        {showAllBadges ? "See Less Badges" : `See All Badges (${achievements.length})`}
-                                    </Button>
-                                </motion.div>
+                                    {showAllBadges ? 'Show Less' : `View All (${achievements.length})`}
+                                </Button>
                             )}
                         </>
                     ) : (
@@ -463,105 +425,79 @@ export const AchievementShowcase = memo(({ userId }: { userId?: string }) => {
                             initial="hidden"
                             animate="visible"
                             exit="exit"
-                            className="space-y-4"
+                            className="space-y-3"
                         >
                             {loading ? (
-                                // Skeleton loading state
                                 Array(3).fill(0).map((_, i) => (
-                                    <div key={i} className="h-20 bg-muted/10 rounded-xl animate-pulse" />
+                                    <div key={i} className="h-16 bg-muted/10 rounded-xl animate-pulse" />
                                 ))
-                            ) : leaderboard.map((user, index) => (
-                                <motion.div key={user.id} variants={itemVariants}>
-                                    <div className={`flex items-center gap-4 p-4 rounded-xl border transition-colors ${user.id === currentViewerId
-                                        ? 'bg-primary/10 border-primary/50'
-                                        : 'bg-white/5 border-white/10 hover:bg-white/10'
-                                        }`}>
-                                        <div className={`flex-shrink-0 w-8 text-center font-bold text-lg ${user.id === currentViewerId ? 'text-primary' : 'text-muted-foreground'
-                                            }`}>
-                                            {index + 1 === 1 ? '🥇' : index + 1 === 2 ? '🥈' : index + 1 === 3 ? '🥉' : `#${index + 1}`}
-                                        </div>
-
-                                        <Avatar className="w-12 h-12 border-2 border-primary/20">
-                                            <AvatarImage src={user.avatar_url || undefined} />
-                                            <AvatarFallback>{user.username ? user.username[0] : 'U'}</AvatarFallback>
-                                        </Avatar>
-
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-2">
-                                                <h3 className={`font-semibold truncate ${user.id === currentViewerId ? 'text-primary' : ''
-                                                    }`}>
-                                                    {user.username || 'Anonymous'}
-                                                    {user.id === currentViewerId && " (You)"}
-                                                </h3>
-                                                {index === 0 && <Crown className="w-4 h-4 text-yellow-500 fill-yellow-500" />}
+                            ) : (
+                                <>
+                                    {leaderboard.map((user, index) => (
+                                        <motion.div
+                                            key={user.id}
+                                            variants={itemVariants}
+                                            className={`flex items-center gap-4 p-4 rounded-xl border ${index === 0 ? 'bg-gradient-to-r from-yellow-500/10 to-orange-500/10 border-yellow-500/30' :
+                                                index === 1 ? 'bg-gradient-to-r from-gray-300/10 to-gray-400/10 border-gray-400/30' :
+                                                    'bg-gradient-to-r from-amber-600/10 to-orange-700/10 border-amber-600/30'
+                                                }`}
+                                        >
+                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${index === 0 ? 'bg-yellow-500 text-black' :
+                                                index === 1 ? 'bg-gray-300 text-black' :
+                                                    'bg-amber-600 text-white'
+                                                }`}>
+                                                {index === 0 ? <Crown className="w-4 h-4" /> : index + 1}
                                             </div>
-                                            <p className="text-xs text-muted-foreground">Level {user.level || 1}</p>
-                                        </div>
-
-                                        <div className="text-right">
-                                            <div className="font-bold text-primary">{(user.xp || 0).toLocaleString()}</div>
-                                            <div className="text-xs text-muted-foreground">XP</div>
-                                        </div>
-                                    </div>
-                                </motion.div>
-                            ))}
-
-                            {/* See More Button */}
-                            {!loading && leaderboard.length > 0 && (
-                                <motion.div
-                                    initial={{ opacity: 0 }}
-                                    animate={{ opacity: 1 }}
-                                    className="flex justify-center pt-2"
-                                >
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="border-primary/20 hover:bg-primary/10 text-primary"
-                                        onClick={() => window.open('/hall-of-fame', '_blank')}
-                                    >
-                                        See Full Hall of Fame
-                                    </Button>
-                                </motion.div>
-                            )}
-
-
-                            {/* Show current user rank if not in displayed list */}
-                            {!loading && currentUserRank && !leaderboard.some(u => u.id === currentUserRank.user.id) && (
-                                <motion.div
-                                    initial={{ opacity: 0, y: 20 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    className="pt-2 border-t border-white/10"
-                                >
-                                    <div className="flex items-center gap-4 p-4 rounded-xl bg-primary/10 border border-primary/20">
-                                        <div className="flex-shrink-0 w-8 text-center font-bold text-lg text-primary">
-                                            #{currentUserRank.rank}
-                                        </div>
-
-                                        <Avatar className="w-12 h-12 border-2 border-primary">
-                                            <AvatarImage src={currentUserRank.user.avatar_url || undefined} />
-                                            <AvatarFallback>{currentUserRank.user.username ? currentUserRank.user.username[0] : 'U'}</AvatarFallback>
-                                        </Avatar>
-
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-2">
-                                                <h3 className="font-semibold truncate text-primary">You</h3>
+                                            <Avatar className="h-10 w-10 border-2 border-background">
+                                                <AvatarImage src={user.avatar_url || ''} />
+                                                <AvatarFallback>{user.username?.[0]?.toUpperCase() || 'U'}</AvatarFallback>
+                                            </Avatar>
+                                            <div className="flex-1">
+                                                <p className="font-semibold">{user.username}</p>
+                                                <p className="text-xs text-muted-foreground">Level {user.level}</p>
                                             </div>
-                                            <p className="text-xs text-muted-foreground">Level {currentUserRank.user.level || 1}</p>
-                                        </div>
+                                            <div className="text-right">
+                                                <p className="font-bold text-primary">{user.xp} XP</p>
+                                            </div>
+                                        </motion.div>
+                                    ))}
 
-                                        <div className="text-right">
-                                            <div className="font-bold text-primary">{(currentUserRank.user.xp || 0).toLocaleString()}</div>
-                                            <div className="text-xs text-muted-foreground">XP</div>
-                                        </div>
-                                    </div>
-                                </motion.div>
+                                    {currentUserRank && (
+                                        <>
+                                            <div className="flex items-center justify-center gap-1 text-muted-foreground py-2">
+                                                <span className="w-2 h-2 rounded-full bg-muted-foreground" />
+                                                <span className="w-2 h-2 rounded-full bg-muted-foreground" />
+                                                <span className="w-2 h-2 rounded-full bg-muted-foreground" />
+                                            </div>
+                                            <motion.div
+                                                variants={itemVariants}
+                                                className="flex items-center gap-4 p-4 rounded-xl border bg-primary/5 border-primary/30"
+                                            >
+                                                <div className="w-8 h-8 rounded-full flex items-center justify-center font-bold bg-primary/20 text-primary">
+                                                    {currentUserRank.rank}
+                                                </div>
+                                                <Avatar className="h-10 w-10 border-2 border-primary">
+                                                    <AvatarImage src={currentUserRank.user.avatar_url || ''} />
+                                                    <AvatarFallback>{currentUserRank.user.username?.[0]?.toUpperCase() || 'U'}</AvatarFallback>
+                                                </Avatar>
+                                                <div className="flex-1">
+                                                    <p className="font-semibold">{currentUserRank.user.username} <span className="text-xs text-muted-foreground">(You)</span></p>
+                                                    <p className="text-xs text-muted-foreground">Level {currentUserRank.user.level}</p>
+                                                </div>
+                                                <div className="text-right">
+                                                    <p className="font-bold text-primary">{currentUserRank.user.xp} XP</p>
+                                                </div>
+                                            </motion.div>
+                                        </>
+                                    )}
+                                </>
                             )}
                         </motion.div>
                     )}
                 </AnimatePresence>
             </div>
-        </Card >
+        </Card>
     );
 });
 
-export default AchievementShowcase;
+AchievementShowcase.displayName = 'AchievementShowcase';

@@ -8,26 +8,36 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 const FIREBASE_SERVER_KEY = Deno.env.get('FIREBASE_SERVER_KEY');
 const FCM_ENDPOINT = 'https://fcm.googleapis.com/fcm/send';
 
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
 interface NotificationRequest {
     tokens: string[];
     title: string;
     body: string;
-    data?: Record<string, any>;
+    data?: Record<string, unknown>;
 }
 
 interface FCMResponse {
     success: number;
     failure: number;
-    results: any[];
+    results: { error?: string }[];
 }
 
 serve(async (req) => {
+    // Handle CORS preflight
+    if (req.method === 'OPTIONS') {
+        return new Response(null, { headers: corsHeaders });
+    }
+
     try {
         // Only allow POST requests
         if (req.method !== 'POST') {
             return new Response(
                 JSON.stringify({ error: 'Method not allowed' }),
-                { status: 405, headers: { 'Content-Type': 'application/json' } }
+                { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             );
         }
 
@@ -36,7 +46,7 @@ serve(async (req) => {
         if (!authHeader) {
             return new Response(
                 JSON.stringify({ error: 'Missing authorization header' }),
-                { status: 401, headers: { 'Content-Type': 'application/json' } }
+                { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             );
         }
 
@@ -47,14 +57,14 @@ serve(async (req) => {
         if (!tokens || !Array.isArray(tokens) || tokens.length === 0) {
             return new Response(
                 JSON.stringify({ error: 'Invalid tokens array' }),
-                { status: 400, headers: { 'Content-Type': 'application/json' } }
+                { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             );
         }
 
         if (!title || !body) {
             return new Response(
                 JSON.stringify({ error: 'Title and body are required' }),
-                { status: 400, headers: { 'Content-Type': 'application/json' } }
+                { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             );
         }
 
@@ -63,7 +73,7 @@ serve(async (req) => {
             console.error('FIREBASE_SERVER_KEY not configured');
             return new Response(
                 JSON.stringify({ error: 'Server configuration error' }),
-                { status: 500, headers: { 'Content-Type': 'application/json' } }
+                { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             );
         }
 
@@ -100,12 +110,13 @@ serve(async (req) => {
                 results.push(result);
 
                 console.log(`Notification sent to token: ${token.substring(0, 20)}...`, result);
-            } catch (error) {
+            } catch (error: unknown) {
+                const errorMessage = error instanceof Error ? error.message : 'Unknown error';
                 console.error(`Error sending to token ${token.substring(0, 20)}...`, error);
                 results.push({
                     success: 0,
                     failure: 1,
-                    results: [{ error: error.message }],
+                    results: [{ error: errorMessage }],
                 });
             }
         }
@@ -124,18 +135,19 @@ serve(async (req) => {
             }),
             {
                 status: 200,
-                headers: { 'Content-Type': 'application/json' }
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
             }
         );
 
-    } catch (error) {
+    } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         console.error('Error in send-fcm-notification:', error);
         return new Response(
             JSON.stringify({
                 error: 'Internal server error',
-                details: error.message
+                details: errorMessage
             }),
-            { status: 500, headers: { 'Content-Type': 'application/json' } }
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
     }
 });

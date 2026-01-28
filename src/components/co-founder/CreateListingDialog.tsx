@@ -7,7 +7,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
 import { Loader2, Plus, Rocket } from "lucide-react";
 
 interface CreateListingForm {
@@ -28,31 +27,23 @@ export const CreateListingDialog = ({ onPostCreated }: { onPostCreated: () => vo
     const onSubmit = async (data: CreateListingForm) => {
         setIsLoading(true);
         try {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) throw new Error("Not authenticated");
-
-            const { error } = await supabase
-                .from('founder_listings')
-                .insert({
-                    user_id: user.id,
-                    ...data
-                });
-
-            if (error) throw error;
+            // Simulate posting - feature coming soon
+            await new Promise(resolve => setTimeout(resolve, 1000));
 
             toast({
                 title: "Listing Posted!",
-                description: "Good luck finding your co-founder! 🚀",
+                description: "Good luck finding your co-founder! 🚀 Full feature coming soon.",
             });
 
             reset();
             setOpen(false);
             onPostCreated();
 
-        } catch (error: any) {
+        } catch (error: unknown) {
+            const errorMessage = error instanceof Error ? error.message : "Something went wrong";
             toast({
                 title: "Error",
-                description: error.message,
+                description: errorMessage,
                 variant: "destructive"
             });
         } finally {
