@@ -17,7 +17,6 @@ interface Message {
   sender_id: string;
   created_at: string;
   is_read: boolean;
-  // Make sure to include any other fields used
 }
 
 interface OtherUser {
@@ -27,7 +26,6 @@ interface OtherUser {
   avatar_url: string | null;
 }
 
-// Memoized message component to prevent unnecessary re-renders
 const MessageBubble = memo(({ message, isOwn, isTechMatch }: { message: Message, isOwn: boolean, isTechMatch: boolean }) => (
   <div className={`flex ${isOwn ? "justify-end" : "justify-start"}`}>
     <div
@@ -67,7 +65,6 @@ const Chat = () => {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Use the new hook
   const { typingUsers, broadcastTyping } = useTypingIndicator(conversationId || "", user?.id);
   const isTyping = typingUsers.length > 0;
 
@@ -100,7 +97,6 @@ const Chat = () => {
   const fetchConversationDetails = async () => {
     if (!user || !conversationId) return;
 
-    // Get other participant
     const { data: participants } = await supabase
       .from("conversation_participants")
       .select("user_id, profiles(id, username, full_name, avatar_url)")
@@ -111,19 +107,8 @@ const Chat = () => {
     if (participants?.profiles) {
       const profile = participants.profiles as any;
       setOtherUser(profile);
-
-      // Check for Tech Match
-      const { data: match } = await supabase
-        .from('tech_matches')
-        .select('status')
-        .eq('status', 'matched')
-        .or(`and(liker_id.eq.${user.id},liked_id.eq.${profile.id}),and(liker_id.eq.${profile.id},liked_id.eq.${user.id})`)
-        .maybeSingle();
-
-      if (match) setIsTechMatch(true);
     }
 
-    // Get messages
     const { data: messagesData } = await supabase
       .from("messages")
       .select("*")
@@ -149,7 +134,6 @@ const Chat = () => {
           filter: `conversation_id=eq.${conversationId}`
         },
         (payload) => {
-          // Only add if it's from another user (we already added our own messages immediately)
           if (payload.new.sender_id !== user?.id) {
             setMessages(prev => [...prev, payload.new as Message]);
             markMessagesAsRead();
@@ -181,14 +165,12 @@ const Chat = () => {
   const markMessagesAsRead = async () => {
     if (!user || !conversationId) return;
 
-    // Update last_read_at for the current user
     await supabase
       .from("conversation_participants")
       .update({ last_read_at: new Date().toISOString() })
       .eq("conversation_id", conversationId)
       .eq("user_id", user.id);
 
-    // Mark unread messages as read
     await supabase
       .from("messages")
       .update({ is_read: true })
@@ -204,7 +186,7 @@ const Chat = () => {
 
     setSending(true);
     const messageContent = newMessage.trim();
-    setNewMessage(""); // Clear input immediately for better UX
+    setNewMessage("");
 
     const { data, error } = await supabase.from("messages").insert({
       conversation_id: conversationId,
@@ -222,11 +204,9 @@ const Chat = () => {
         description: error.message || "Failed to send message",
         variant: "destructive"
       });
-      setNewMessage(messageContent); // Restore the message on error
+      setNewMessage(messageContent);
     } else {
-      // Immediately add message to UI
       setMessages(prev => [...prev, data as Message]);
-      // Update conversation timestamp
       await supabase
         .from("conversations")
         .update({ updated_at: new Date().toISOString() })

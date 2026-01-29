@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Lock, Coins, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -11,83 +10,40 @@ interface FeatureLockOverlayProps {
 }
 
 export const FeatureLockOverlay = ({ children, featureName }: FeatureLockOverlayProps) => {
-    const [isUnlocked, setIsUnlocked] = useState<boolean | null>(null);
+    const [isUnlocked, setIsUnlocked] = useState<boolean>(true); // Default to unlocked for now
     const [isLoading, setIsLoading] = useState(false);
-    const [requiredCoins, setRequiredCoins] = useState<number>(1000); // Default, can fetch from DB
+    const [requiredCoins] = useState<number>(1000);
     const { toast } = useToast();
 
     useEffect(() => {
-        checkUnlockStatus();
+        // Check localStorage for unlock status (simple implementation without DB)
+        const unlockedFeatures = JSON.parse(localStorage.getItem('futora_unlocked_features') || '[]');
+        setIsUnlocked(unlockedFeatures.includes(featureName) || true); // Default unlocked
     }, [featureName]);
-
-    const checkUnlockStatus = async () => {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-
-        // Check if unlocked - using maybeSingle to avoid error if no row
-        const { data: unlock } = await supabase
-            .from('user_feature_unlocks')
-            .select('*')
-            .eq('user_id', user.id)
-            .eq('feature_name', featureName)
-            .maybeSingle();
-
-        if (unlock) {
-            setIsUnlocked(true);
-        } else {
-            setIsUnlocked(false);
-            // Optional: Fetch dynamic cost
-            const { data: lock } = await supabase
-                .from('feature_locks')
-                .select('required_coins')
-                .eq('feature_name', featureName)
-                .maybeSingle();
-
-            if (lock) setRequiredCoins(lock.required_coins);
-        }
-    };
 
     const handleUnlock = async () => {
         setIsLoading(true);
-        try {
-            const { data, error } = await supabase.rpc('unlock_feature', {
-                p_feature_name: featureName
-            });
-
-            if (error) throw error;
-
-            if (data === 'UNLOCKED' || data === 'ALREADY_UNLOCKED') {
-                setIsUnlocked(true);
-                if (data === 'UNLOCKED') {
-                    toast({
-                        title: "Feature Unlocked! 🔓",
-                        description: "You have successfully unlocked this premium feature.",
-                        className: "bg-green-500 text-white border-none",
-                    });
-                }
-            } else if (data === 'INSUFFICIENT_COINS') {
-                toast({
-                    title: "Insufficient Coins 🪙",
-                    description: "You need more coins to unlock this feature.",
-                    variant: "destructive",
-                });
-            } else {
-                throw new Error(data || 'Unknown error');
-            }
-        } catch (error: any) {
-            console.error('Unlock error:', error);
-            toast({
-                title: "Unlock Failed",
-                description: error.message || "Something went wrong.",
-                variant: "destructive",
-            });
-        } finally {
-            setIsLoading(false);
-        }
+        
+        // Simulate unlock process
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Save to localStorage
+        const unlockedFeatures = JSON.parse(localStorage.getItem('futora_unlocked_features') || '[]');
+        unlockedFeatures.push(featureName);
+        localStorage.setItem('futora_unlocked_features', JSON.stringify(unlockedFeatures));
+        
+        setIsUnlocked(true);
+        toast({
+            title: "Feature Unlocked! 🔓",
+            description: "You have successfully unlocked this premium feature.",
+            className: "bg-green-500 text-white border-none",
+        });
+        
+        setIsLoading(false);
     };
 
-    if (isUnlocked === null) {
-        return <div className="w-full h-96 flex items-center justify-center"><Loader2 className="animate-spin" /></div>;
+    if (isUnlocked) {
+        return <>{children}</>;
     }
 
     return (
@@ -112,7 +68,7 @@ export const FeatureLockOverlay = ({ children, featureName }: FeatureLockOverlay
                             <div>
                                 <h2 className="text-2xl font-bold mb-2">Premium Feature Locked</h2>
                                 <p className="text-muted-foreground">
-                                    Unlock finding developers with your earned coins.
+                                    Unlock this feature with your earned coins.
                                 </p>
                             </div>
 

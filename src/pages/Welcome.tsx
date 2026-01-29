@@ -1,11 +1,11 @@
 import { memo } from "react";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/Logo";
-import { motion } from "framer-motion";
+import { motion, Variants, Easing } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { ArrowRight, Code, Cpu, Globe, Zap } from "lucide-react";
 
-const containerVariants = {
+const containerVariants: Variants = {
   hidden: { opacity: 0 },
   visible: {
     opacity: 1,
@@ -15,9 +15,9 @@ const containerVariants = {
   }
 };
 
-const itemVariants = {
+const itemVariants: Variants = {
   hidden: { opacity: 0, y: 20 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: "easeOut" } }
+  visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: "easeOut" as Easing } }
 };
 
 const Welcome = () => {

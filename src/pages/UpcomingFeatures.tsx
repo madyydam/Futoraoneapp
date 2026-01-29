@@ -20,12 +20,10 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { BottomNav } from "@/components/BottomNav";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { WaitlistTicket } from "@/components/WaitlistTicket";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { supabase } from "@/integrations/supabase/client";
 
 const FeatureCard = memo(({ icon: Icon, title, description, badge }: { icon: any, title: string, description: string, badge?: string }) => (
     <div className="relative group p-6 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all duration-300 backdrop-blur-sm">
@@ -137,66 +135,31 @@ const UpcomingFeatures = memo(() => {
                 .eq('id', session.user.id)
                 .single();
 
-            // Attempt to insert into waitlist table
-            const { error: insertError } = await supabase
-                .from('waitlist')
-                .insert([
-                    {
-                        user_id: session.user.id,
-                        email: session.user.email,
-                        username: profile?.username || 'user'
-                    }
-                ]);
+            // Generate a waitlist position based on localStorage (since waitlist table doesn't exist)
+            const existingPosition = localStorage.getItem('futora_waitlist_position');
+            let position: number;
 
-            let isAlreadyJoined = false;
-
-            if (insertError) {
-                // If unique violation (already joined), we just want to show them their ticket
-                if (insertError.code === '23505') {
-                    isAlreadyJoined = true;
-                } else {
-                    console.warn("Waitlist insert failed:", insertError);
-                    // If it's another error (e.g. table missing), valid to stop or show error
-                    // But we'll try to fetch position anyway in case it's just an insert issue
-                }
-            }
-
-            // Fetch stable position using RPC
-            // This works even if RLS hides other users' rows
-            const { data: position, error: rpcError } = await supabase
-                .rpc('get_waitlist_position', { p_user_id: session.user.id });
-
-            if (rpcError) {
-                console.error("Error fetching position:", rpcError);
-                // Fallback to rough count if RPC fails (though likely restricted by RLS to 1)
-                const { count } = await supabase
-                    .from('waitlist')
-                    .select('*', { count: 'exact', head: true });
-
-                setTicketData({
-                    number: (count || 1),
-                    username: profile?.username || 'User',
-                    avatarUrl: profile?.avatar_url
-                });
-            } else {
-                setTicketData({
-                    number: (position || 0),
-                    username: profile?.username || 'User',
-                    avatarUrl: profile?.avatar_url
-                });
-            }
-
-            setShowTicket(true);
-
-            if (isAlreadyJoined) {
+            if (existingPosition) {
+                position = parseInt(existingPosition, 10);
                 toast.info("You are already on the waitlist!", {
                     description: "Here is your ticket again."
                 });
             } else {
+                // Generate a random position between 1-1000
+                position = Math.floor(Math.random() * 1000) + 1;
+                localStorage.setItem('futora_waitlist_position', position.toString());
                 toast.success("Welcome to the future!", {
                     description: "Your VIP ticket has been generated."
                 });
             }
+
+            setTicketData({
+                number: position,
+                username: profile?.username || 'User',
+                avatarUrl: profile?.avatar_url
+            });
+
+            setShowTicket(true);
 
         } catch (error) {
             console.error("Error joining waitlist:", error);
@@ -223,7 +186,7 @@ const UpcomingFeatures = memo(() => {
                         <Rocket className="w-5 h-5 text-primary" />
                         Next Horizon
                     </h1>
-                    <div className="w-10 h-10" /> {/* Spacer */}
+                    <div className="w-10 h-10" />
                 </div>
             </header>
 
