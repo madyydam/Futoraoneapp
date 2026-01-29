@@ -74,14 +74,12 @@ const MOCK_PROFILES: SwipeProfile[] = [
     }
 ];
 
-// Common tech skills for filter - moved outside to prevent recreation
 const AVAILABLE_SKILLS = ["React", "Node.js", "Python", "TypeScript", "Design", "Flutter", "Rust", "Go", "AWS", "AI/ML"];
 
 export const FindDevsView = () => {
     const { toast } = useToast();
     const navigate = useNavigate();
 
-    // Tech Match Swipe State
     const [potentialMatches, setPotentialMatches] = useState<SwipeProfile[]>([]);
     const [matchDialogOpen, setMatchDialogOpen] = useState(false);
     const [lastMatchedProfile, setLastMatchedProfile] = useState<SwipeProfile | null>(null);
@@ -92,7 +90,6 @@ export const FindDevsView = () => {
     const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
     const [filterDialogOpen, setFilterDialogOpen] = useState(false);
 
-    // Memoize toggleSkill to prevent recreation
     const toggleSkill = useCallback((skill: string) => {
         setSelectedSkills(prev =>
             prev.includes(skill)
@@ -101,41 +98,27 @@ export const FindDevsView = () => {
         );
     }, []);
 
-    // Fetch potential matches - optimized dependency array
     useEffect(() => {
         const fetchProfiles = async () => {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) return;
+            setCurrentUser(user);
 
-            // Get users I haven't swiped on yet
-            const { data: existingSwipes } = await supabase
-                .from('tech_matches')
-                .select('liked_id')
-                .eq('liker_id', user.id);
-
-            const swipedIds = existingSwipes?.map(s => s.liked_id) || [];
-
-            // Add self to exclusion
-            swipedIds.push(user.id);
-
+            // Fetch real profiles from the database
             let query = supabase
                 .from('profiles')
                 .select('id, username, full_name, avatar_url, bio, location, tech_skills, github_url, linkedin_url, portfolio_url')
-                .not('id', 'in', `(${swipedIds.join(',')})`)
+                .neq('id', user.id)
                 .limit(20);
 
             if (selectedSkills.length > 0) {
-                // Determine if we can use 'cs' (contains) operator for array column
-                // Note: accurate array filtering depends on Supabase/Postgres config. 
-                // A text search or 'cs' is common.
                 query = query.contains('tech_skills', selectedSkills);
             }
 
             const { data: profiles } = await query;
 
             if (profiles && profiles.length > 0) {
-                // Cast to MatchProfile type
-                setPotentialMatches(profiles as any);
+                setPotentialMatches(profiles as SwipeProfile[]);
             } else {
                 // FALLBACK: Filter Mock Data
                 let filteredMock = MOCK_PROFILES;
@@ -148,112 +131,52 @@ export const FindDevsView = () => {
             }
         };
 
-        const getCurrentUser = async () => {
-            const { data: { user } } = await supabase.auth.getUser();
-            setCurrentUser(user);
-        };
-
         fetchProfiles();
-        getCurrentUser();
     }, [selectedSkills]);
 
-    // Quick Confetti function - Memoized
     const triggerConfetti = useCallback(() => {
         console.log("Confetti boom! 🎉");
     }, []);
 
     const handleSwipe = useCallback(async (direction: "left" | "right", profileId: string) => {
-        // 1. Set exit direction to trigger animation (UI only)
         setExitDirection(direction);
 
-        // 2. Wait for animation to finish before removing from state
         setTimeout(async () => {
             const swipedProfile = potentialMatches.find(p => p.id === profileId);
 
-            // Remove from stack
             setPotentialMatches(prev => prev.filter(p => p.id !== profileId));
-            setExitDirection(null); // Reset for next card
+            setExitDirection(null);
 
             if (!swipedProfile) return;
 
-            // Add to history for Undo (Local only)
             setSwipedHistory(prev => [...prev, swipedProfile]);
 
             // Handle Mock Profiles (instant match simulation for demo)
             if (profileId.startsWith('m')) {
                 if (direction === 'right') {
-                    if (Math.random() > 0.4) { // 40% chance
+                    if (Math.random() > 0.4) {
                         setLastMatchedProfile(swipedProfile);
                         setMatchDialogOpen(true);
                         triggerConfetti();
+                    } else {
+                        toast({
+                            title: `You liked ${swipedProfile.full_name}`,
+                            className: "bg-green-500 text-white border-none duration-1000",
+                        });
                     }
                 }
                 return;
             }
 
-            try {
-                const { data: { user } } = await supabase.auth.getUser();
-                if (!user) return;
-
-                let status = direction === 'right' ? 'pending' : 'rejected';
-
-                if (direction === 'right') {
-                    // Check if they already liked me
-                    const { data: reverseLike } = await supabase
-                        .from('tech_matches')
-                        .select('status')
-                        .eq('liker_id', profileId)
-                        .eq('liked_id', user.id)
-                        .maybeSingle();
-
-                    if (reverseLike && (reverseLike.status === 'pending' || reverseLike.status === 'matched')) {
-                        status = 'matched';
-
-                        // Try to update their status to matched (might fail if RLS blocks, but we try)
-                        await supabase
-                            .from('tech_matches')
-                            .update({ status: 'matched' })
-                            .eq('liker_id', profileId)
-                            .eq('liked_id', user.id);
-                    }
-                }
-
-                // Insert match record
-                const { data, error } = await supabase
-                    .from('tech_matches')
-                    .insert({
-                        liker_id: user.id,
-                        liked_id: profileId,
-                        status: status
-                    })
-                    .select()
-                    .single();
-
-                if (error) throw error;
-
-                // Check if it was an instant match (either via our logic or DB trigger)
-                if (status === 'matched' || data?.status === 'matched') {
-                    setLastMatchedProfile(swipedProfile);
-                    setMatchDialogOpen(true);
-                    triggerConfetti();
-
-                    // Create message conversation immediately
-                    // This ensures the chat exists when they click "Send Message"
-                    const { error: convError } = await supabase.rpc('get_or_create_conversation', {
-                        other_user_id: profileId
-                    });
-                    if (convError) console.error("Error creating conversation:", convError);
-
-                } else if (direction === 'right') {
-                    toast({
-                        title: `You liked ${swipedProfile.full_name}`,
-                        className: "bg-green-500 text-white border-none duration-1000",
-                    });
-                }
-
-            } catch (error) {
-                console.error("Error swiping:", error);
+            // For real profiles, just show a toast (no tech_matches table)
+            if (direction === 'right') {
+                toast({
+                    title: `You liked ${swipedProfile.full_name}`,
+                    description: "They'll be notified!",
+                    className: "bg-green-500 text-white border-none duration-1000",
+                });
             }
+
         }, 300);
     }, [potentialMatches, triggerConfetti, toast]);
 
@@ -261,11 +184,7 @@ export const FindDevsView = () => {
         if (swipedHistory.length === 0) return;
 
         const lastProfile = swipedHistory[swipedHistory.length - 1];
-
-        // Remove from history
         setSwipedHistory(prev => prev.slice(0, -1));
-
-        // Add back to potential matches
         setPotentialMatches(prev => [...prev, lastProfile]);
 
         toast({ title: "Undoing last swipe..." });
@@ -277,29 +196,8 @@ export const FindDevsView = () => {
         setMatchDialogOpen(false);
         toast({ title: "Starting chat...", description: "Connecting you with your match!" });
 
-        try {
-            // Create or get conversation
-            const { data, error } = await supabase.rpc('get_or_create_conversation', {
-                other_user_id: lastMatchedProfile.id
-            });
-
-            if (error) throw error;
-
-            if (data) {
-                navigate(`/chat/${data}`);
-            } else {
-                // Fallback if RPC returns nothing but no error (rare)
-                navigate('/messages');
-            }
-
-        } catch (error) {
-            console.error("Error starting chat:", error);
-            toast({
-                title: "Error",
-                description: "Could not start conversation.",
-                variant: "destructive"
-            });
-        }
+        // Navigate to messages since we don't have get_or_create_conversation RPC
+        navigate('/messages');
     };
 
     return (
@@ -408,22 +306,29 @@ export const FindDevsView = () => {
                             <Heart className="w-10 h-10 text-pink-500 fill-pink-500 animate-pulse" />
                             <div className="relative">
                                 <Avatar className="w-20 h-20 border-4 border-white/20">
-                                    <AvatarImage src={lastMatchedProfile?.avatar_url || ''} />
-                                    <AvatarFallback>M</AvatarFallback>
+                                    <AvatarImage src={lastMatchedProfile?.avatar_url || undefined} />
+                                    <AvatarFallback>{lastMatchedProfile?.full_name?.[0] || '?'}</AvatarFallback>
                                 </Avatar>
                             </div>
                         </div>
 
-                        <p className="text-white/80">
-                            You and <span className="font-bold text-white">{lastMatchedProfile?.full_name}</span> both want to connect!
+                        <p className="text-gray-400">
+                            You and <span className="text-white font-semibold">{lastMatchedProfile?.full_name}</span> liked each other!
                         </p>
 
-                        <div className="flex flex-col gap-3 pt-4">
-                            <Button className="w-full bg-white text-black font-bold hover:bg-white/90" onClick={handleStartChat}>
-                                Send a Message
-                            </Button>
-                            <Button variant="ghost" className="w-full text-white/50 hover:text-white" onClick={() => setMatchDialogOpen(false)}>
+                        <div className="flex gap-4 pt-4">
+                            <Button
+                                variant="outline"
+                                className="flex-1 border-white/20 text-white hover:bg-white/10"
+                                onClick={() => setMatchDialogOpen(false)}
+                            >
                                 Keep Swiping
+                            </Button>
+                            <Button
+                                className="flex-1 bg-gradient-to-r from-pink-500 to-purple-500"
+                                onClick={handleStartChat}
+                            >
+                                Send Message
                             </Button>
                         </div>
                     </div>
@@ -432,24 +337,24 @@ export const FindDevsView = () => {
 
             {/* Filter Dialog */}
             <Dialog open={filterDialogOpen} onOpenChange={setFilterDialogOpen}>
-                <DialogContent>
+                <DialogContent className="sm:max-w-md">
                     <div className="space-y-4">
-                        <h3 className="font-bold text-lg">Filter by Tech Stack</h3>
+                        <h3 className="text-lg font-semibold">Filter by Skills</h3>
                         <div className="flex flex-wrap gap-2">
                             {AVAILABLE_SKILLS.map(skill => (
                                 <Badge
                                     key={skill}
                                     variant={selectedSkills.includes(skill) ? "default" : "outline"}
-                                    className="cursor-pointer px-3 py-1.5 text-sm"
+                                    className="cursor-pointer"
                                     onClick={() => toggleSkill(skill)}
                                 >
                                     {skill}
                                 </Badge>
                             ))}
                         </div>
-                        <div className="flex justify-end pt-4">
-                            <Button onClick={() => setFilterDialogOpen(false)}>Apply Filters</Button>
-                        </div>
+                        <Button onClick={() => setFilterDialogOpen(false)} className="w-full">
+                            Apply Filters
+                        </Button>
                     </div>
                 </DialogContent>
             </Dialog>

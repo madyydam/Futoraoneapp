@@ -1,62 +1,42 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Coins, History } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
+interface Transaction {
+    id: string;
+    reason: string;
+    coins: number;
+    type: 'EARN' | 'SPEND';
+    created_at: string;
+}
+
+// Mock transactions for demo
+const MOCK_TRANSACTIONS: Transaction[] = [
+    { id: '1', reason: 'Welcome Bonus', coins: 1000, type: 'EARN', created_at: new Date().toISOString() },
+    { id: '2', reason: 'Daily Login', coins: 50, type: 'EARN', created_at: new Date().toISOString() },
+    { id: '3', reason: 'Post Created', coins: 25, type: 'EARN', created_at: new Date().toISOString() },
+];
+
 export const WalletCard = () => {
-    const [coins, setCoins] = useState(0);
-    const [transactions, setTransactions] = useState<any[]>([]);
+    const [coins, setCoins] = useState(1000);
+    const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        fetchWallet();
-        const subscription = supabase
-            .channel('wallet_changes')
-            .on('postgres_changes', {
-                event: '*',
-                schema: 'public',
-                table: 'user_wallet'
-            }, () => {
-                fetchWallet();
-            })
-            .subscribe();
-
-        return () => {
-            subscription.unsubscribe();
-        };
-    }, []);
-
-    const fetchWallet = async () => {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-
-        const { data: wallet } = await supabase
-            .from('user_wallet')
-            .select('coins')
-            .eq('id', user.id)
-            .single();
-
-        if (wallet) {
-            setCoins(wallet.coins);
+        // Load coins from localStorage or use default
+        const savedCoins = localStorage.getItem('futora_coins');
+        if (savedCoins) {
+            setCoins(parseInt(savedCoins, 10));
         }
         setLoading(false);
-    };
+    }, []);
 
     const fetchTransactions = async () => {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-
-        const { data } = await supabase
-            .from('coin_transactions')
-            .select('*')
-            .eq('user_id', user.id)
-            .order('created_at', { ascending: false })
-            .limit(10);
-
-        if (data) setTransactions(data);
+        // Use mock transactions for now
+        setTransactions(MOCK_TRANSACTIONS);
     };
 
     return (

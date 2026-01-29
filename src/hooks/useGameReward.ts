@@ -1,4 +1,3 @@
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import confetti from "canvas-confetti";
 
@@ -10,45 +9,36 @@ interface RewardResponse {
 }
 
 export const useGameReward = () => {
-    // We now strictly reward WINS as per the engagement engine design
-    const processWin = async (gameKey: string) => {
+    // Simple local reward system (no database dependency)
+    const processWin = async (gameKey: string): Promise<number> => {
         try {
-            // @ts-ignore - RPC types might lag
-            const { data, error } = await supabase.rpc("reward_game_win", {
-                p_game_key: gameKey,
+            // Get current coins from localStorage
+            const currentCoins = parseInt(localStorage.getItem('futora_coins') || '1000', 10);
+            
+            // Award coins based on game
+            const rewardAmount = 10; // Fixed reward for now
+            const newBalance = currentCoins + rewardAmount;
+            
+            // Save to localStorage
+            localStorage.setItem('futora_coins', newBalance.toString());
+
+            // Visual Feedback
+            toast.success(`+${rewardAmount} Coins!`, {
+                description: "Victory Reward",
+                duration: 3000,
+                className: "bg-yellow-500/10 border-yellow-500/50 text-yellow-500",
+                icon: "🪙"
             });
 
-            if (error) {
-                console.error("Reward RPC Error:", error);
-                return 0;
-            }
+            // Confetti for the win
+            confetti({
+                particleCount: 30,
+                spread: 60,
+                origin: { y: 0.7 },
+                colors: ['#FFD700', '#FFA500']
+            });
 
-            const response = data as RewardResponse;
-
-            if (response && response.success && response.coins) {
-                // Engagement Engine: Visual Feedback
-                toast.success(`+${response.coins} Coins!`, {
-                    description: response.message || "Victory Reward",
-                    duration: 3000,
-                    className: "bg-yellow-500/10 border-yellow-500/50 text-yellow-500",
-                    icon: "🪙"
-                });
-
-                // Extra confetti for the coin win
-                confetti({
-                    particleCount: 30,
-                    spread: 60,
-                    origin: { y: 0.7 },
-                    colors: ['#FFD700', '#FFA500'] // Gold colors
-                });
-
-                return response.coins;
-            } else if (response && !response.success && response.message) {
-                // Daily limit or other info
-                toast.info(response.message, {
-                    icon: "⏳"
-                });
-            }
+            return rewardAmount;
         } catch (e) {
             console.error("Reward System Error:", e);
         }
@@ -57,4 +47,3 @@ export const useGameReward = () => {
 
     return { processWin };
 };
-

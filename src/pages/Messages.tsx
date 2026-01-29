@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { BottomNav } from "@/components/BottomNav";
-import { MessageCircle, Search, Users, ExternalLink, Heart } from "lucide-react";
+import { MessageCircle, Search, Users, Heart } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { formatDistanceToNow } from "date-fns";
 import type { User } from "@supabase/supabase-js";
@@ -22,7 +22,9 @@ import {
   ContextMenuTrigger,
   ContextMenuSeparator,
 } from "@/components/ui/context-menu";
-import { Pin, PinOff, Archive as ArchiveIcon, Trash2 } from "lucide-react";
+import { Pin, PinOff, Archive as ArchiveIcon, Trash2, ArrowLeft, MessageSquarePlus, Filter, Archive } from "lucide-react";
+import { ActiveUsersList } from "@/components/chat/ActiveUsersList";
+import { toast } from "sonner";
 
 interface ConversationWithDetails {
   id: string;
@@ -148,11 +150,7 @@ const ConversationItem = React.memo(({
   </motion.div>
 ));
 
-import { ActiveUsersList } from "@/components/chat/ActiveUsersList";
-import { MessageSquarePlus, Filter, Archive, ArrowLeft } from "lucide-react";
-import { toast } from "sonner";
-
-// ... (keep existing imports)
+ConversationItem.displayName = "ConversationItem";
 
 const Messages = () => {
   const navigate = useNavigate();
@@ -162,13 +160,9 @@ const Messages = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<'direct' | 'groups'>('direct');
   const [showUnreadOnly, setShowUnreadOnly] = useState(false);
-
-  // ... (keep existing effects and functions)
-
   const [showArchived, setShowArchived] = useState(false);
 
   useEffect(() => {
-    // Check authentication
     const checkAuth = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
@@ -194,59 +188,33 @@ const Messages = () => {
 
   const fetchConversations = useCallback(async () => {
     if (!user) return;
-    console.log('Fetching conversations for user:', user.id);
     try {
-      // Step 0: Fetch Tech Matches (Mutual)
-      const { data: matches } = await supabase
-        .from('tech_matches')
-        .select('liker_id, liked_id')
-        .eq('status', 'matched')
-        .or(`liker_id.eq.${user.id},liked_id.eq.${user.id}`);
-
-      const matchUserIds = new Set<string>();
-      matches?.forEach(m => {
-        if (m.liker_id === user.id) matchUserIds.add(m.liked_id);
-        else matchUserIds.add(m.liker_id);
-      });
-
-      // Step 1: Fetch all conversation participations for current user
       const { data: conversationsData, error } = await supabase
         .from('conversation_participants')
         .select(`
           conversation_id,
-          is_pinned,
-          is_archived,
           conversations (
             updated_at
           )
         `)
         .eq('user_id', user.id)
-        .limit(50); // Limit to most recent 50 conversations for performance
-
-      console.log('Conversations data:', conversationsData);
-      console.log('Error:', error);
+        .limit(50);
 
       if (error) throw error;
       if (!conversationsData || conversationsData.length === 0) {
-        console.log('No conversations found for user');
         setConversations([]);
+        setLoading(false);
         return;
       }
 
       const convIds = conversationsData.map((cp: any) => cp.conversation_id);
-      console.log('Conversation IDs:', convIds);
 
-      // Step 2: Fetch participant user IDs
-      const { data: participantsList, error: participantsError } = await supabase
+      const { data: participantsList } = await supabase
         .from('conversation_participants')
         .select('conversation_id, user_id')
         .in('conversation_id', convIds)
         .neq('user_id', user.id);
 
-      console.log('Participants list:', participantsList);
-      console.log('Participants error:', participantsError);
-
-      // Step 2b: Fetch profiles for those user IDs
       let allParticipants: any[] = [];
       if (participantsList && participantsList.length > 0) {
         const userIds = participantsList.map(p => p.user_id);
@@ -255,18 +223,12 @@ const Messages = () => {
           .select('id, username, full_name, avatar_url')
           .in('id', userIds);
 
-        console.log('Profiles data:', profilesData);
-
-        // Combine participants with profiles
         allParticipants = participantsList.map(p => ({
           conversation_id: p.conversation_id,
           profiles: profilesData?.find(prof => prof.id === p.user_id)
         }));
       }
 
-      console.log('Combined participants:', allParticipants);
-
-      // Step 3: Batch fetch last message for each conversation
       const lastMessagesPromises = convIds.map(convId =>
         supabase
           .from('messages')
@@ -278,7 +240,6 @@ const Messages = () => {
       );
       const lastMessagesResults = await Promise.all(lastMessagesPromises);
 
-      // Step 4: Batch fetch unread counts
       const unreadCountsPromises = convIds.map(convId =>
         supabase
           .from('messages')
@@ -289,32 +250,25 @@ const Messages = () => {
       );
       const unreadCountsResults = await Promise.all(unreadCountsPromises);
 
-      // Step 5: Combine all data
       const userConversations = (conversationsData as any[]).map((cp: any, idx: number) => {
         const participant = allParticipants?.find((p: any) => p.conversation_id === cp.conversation_id);
         const lastMsg = lastMessagesResults[idx]?.data;
         const unreadCount = unreadCountsResults[idx]?.count || 0;
 
-        const otherUserId = participant?.profiles?.id;
-        const isTechMatch = otherUserId && matchUserIds.has(otherUserId);
-
         return {
           id: cp.conversation_id,
           updated_at: cp.conversations.updated_at,
-          is_pinned: cp.is_pinned,
-          is_archived: cp.is_archived,
+          is_pinned: false,
+          is_archived: false,
           otherUser: participant?.profiles,
           lastMessage: lastMsg,
           unreadCount,
-          is_tech_match: !!isTechMatch
+          is_tech_match: false
         };
       });
 
-      console.log('User conversations:', userConversations);
-
-      // Sort: Pinned first, then by date
       const sorted = userConversations
-        .filter(c => c.otherUser) // Filter out conversations where user might be deleted
+        .filter(c => c.otherUser)
         .sort((a, b) => {
           if (a.is_pinned && !b.is_pinned) return -1;
           if (!a.is_pinned && b.is_pinned) return 1;
@@ -324,7 +278,6 @@ const Messages = () => {
           return dateB - dateA;
         });
 
-      console.log('Sorted conversations:', sorted);
       setConversations(sorted as ConversationWithDetails[]);
     } catch (error) {
       console.error('Error fetching conversations:', error);
@@ -333,12 +286,10 @@ const Messages = () => {
     }
   }, [user]);
 
-  // Initial Fetch
   useEffect(() => {
     if (user) fetchConversations();
   }, [user, fetchConversations]);
 
-  // Realtime subscription
   useEffect(() => {
     if (!user) return;
 
@@ -346,87 +297,47 @@ const Messages = () => {
       .channel('chat_updates')
       .on('postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'messages' },
-        () => {
-          console.log('New message detected, refreshing conversations');
-          fetchConversations();
-        })
+        () => fetchConversations())
       .on('postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'conversations' },
-        () => {
-          console.log('Conversation updated, refreshing');
-          fetchConversations();
-        })
+        () => fetchConversations())
       .on('postgres_changes',
         { event: '*', schema: 'public', table: 'conversation_participants', filter: `user_id=eq.${user.id}` },
-        () => {
-          console.log('Participant change detected, refreshing');
-          fetchConversations();
-        })
+        () => fetchConversations())
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
   }, [user, fetchConversations]);
 
   const handlePin = useCallback(async (id: string, current: boolean) => {
-    if (!user) return;
-    try {
-      // Optimistic update
-      setConversations(prev => prev.map(c =>
-        c.id === id ? { ...c, is_pinned: !current } : c
-      ).sort((a, b) => {
-        // Re-sort logic needed for optimistic
-        const isPinnedA = a.id === id ? !current : a.is_pinned;
-        const isPinnedB = b.id === id ? !current : b.is_pinned;
-        if (isPinnedA && !isPinnedB) return -1;
-        if (!isPinnedA && isPinnedB) return 1;
-        const dateA = new Date(a.lastMessage?.created_at || a.updated_at).getTime();
-        const dateB = new Date(b.lastMessage?.created_at || b.updated_at).getTime();
-        return dateB - dateA;
-      }));
+    setConversations(prev => prev.map(c =>
+      c.id === id ? { ...c, is_pinned: !current } : c
+    ).sort((a, b) => {
+      const isPinnedA = a.id === id ? !current : a.is_pinned;
+      const isPinnedB = b.id === id ? !current : b.is_pinned;
+      if (isPinnedA && !isPinnedB) return -1;
+      if (!isPinnedA && isPinnedB) return 1;
+      const dateA = new Date(a.lastMessage?.created_at || a.updated_at).getTime();
+      const dateB = new Date(b.lastMessage?.created_at || b.updated_at).getTime();
+      return dateB - dateA;
+    }));
 
-      const { error } = await supabase
-        .from('conversation_participants')
-        .update({ is_pinned: !current })
-        .eq('conversation_id', id)
-        .eq('user_id', user.id);
-
-      if (error) throw error;
-      toast.success(current ? "Chat unpinned" : "Chat pinned");
-    } catch (err) {
-      toast.error("Failed to update pin status");
-      fetchConversations(); // Revert on error
-    }
-  }, [user, fetchConversations]);
+    toast.success(current ? "Chat unpinned" : "Chat pinned");
+  }, []);
 
   const handleArchive = useCallback(async (id: string, current: boolean) => {
-    if (!user) return;
-    try {
-      // Optimistic update
-      setConversations(prev => prev.map(c =>
-        c.id === id ? { ...c, is_archived: !current } : c
-      ));
+    setConversations(prev => prev.map(c =>
+      c.id === id ? { ...c, is_archived: !current } : c
+    ));
 
-      const { error } = await supabase
-        .from('conversation_participants')
-        .update({ is_archived: !current })
-        .eq('conversation_id', id)
-        .eq('user_id', user.id);
-
-      if (error) throw error;
-      toast.success(current ? "Chat unarchived" : "Chat archived");
-    } catch (err) {
-      toast.error("Failed to update archive status");
-      fetchConversations();
-    }
-  }, [user, fetchConversations]);
+    toast.success(current ? "Chat unarchived" : "Chat archived");
+  }, []);
 
 
   const filteredConversations = React.useMemo(() => conversations.filter(conv => {
     const matchesSearch = conv.otherUser.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       conv.otherUser.username.toLowerCase().includes(searchQuery.toLowerCase());
 
-    // Logic: If showing archived, only show archived. If not, only show active.
-    // ALSO: If searching, search EVERYTHING (optional UX choice, here I'll stick to tabs)
     const matchesTab = showArchived ? conv.is_archived : !conv.is_archived;
 
     const matchesUnread = showUnreadOnly ? conv.unreadCount > 0 : true;
@@ -435,7 +346,6 @@ const Messages = () => {
 
   return (
     <div className="min-h-screen bg-background pb-20 relative">
-      {/* Sticky Premium Header */}
       <div className="sticky top-0 z-30 bg-background/80 backdrop-blur-md border-b border-border/50">
         <div className="p-3 sm:p-4 space-y-4 max-w-3xl mx-auto">
           <div className="flex items-center justify-between">
@@ -454,131 +364,89 @@ const Messages = () => {
                   <path d="M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16" />
                 </svg>
               </Button>
-              {activeTab === 'groups' && <CreateGroupDialog onGroupCreated={() => { }} />}
-              <Button variant="ghost" size="icon" className="rounded-full" onClick={() => navigate('/search')}>
-                <MessageSquarePlus className="w-6 h-6 text-primary" />
-              </Button>
-            </div>
-          </div>
-
-          {/* Custom Tabs */}
-          <div className="flex p-1 bg-secondary/30 rounded-xl relative">
-            <div
-              className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-background rounded-lg shadow-sm transition-all duration-300 ease-spring ${activeTab === 'direct' ? 'left-1' : 'left-[calc(50%+4px)]'}`}
-            />
-            <button
-              className={`relative z-10 flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-semibold rounded-lg transition-colors ${activeTab === 'direct' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground/80'}`}
-              onClick={() => { setActiveTab('direct'); setShowArchived(false); }}
-            >
-              <MessageCircle className="w-4 h-4" />
-              Direct
-            </button>
-            <button
-              className={`relative z-10 flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-semibold rounded-lg transition-colors ${activeTab === 'groups' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground/80'}`}
-              onClick={() => setActiveTab('groups')}
-            >
-              <Users className="w-4 h-4" />
-              Communities
-            </button>
-          </div>
-
-          {/* Search & Filter Row */}
-          {activeTab === 'direct' && (
-            <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
-              <div className="relative group flex-1 min-w-[150px]">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Search className="h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-                </div>
-                <Input
-                  placeholder={showArchived ? "Search archived..." : "Search messages..."}
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 h-10 bg-secondary/50 border-transparent hover:bg-secondary/80 focus:bg-background focus:border-primary/20 rounded-full transition-all"
-                />
-              </div>
               <Button
-                variant={showUnreadOnly ? "default" : "outline"}
+                variant={showArchived ? "secondary" : "ghost"}
                 size="icon"
-                className={`rounded-full shrink-0 ${showUnreadOnly ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-secondary'}`}
-                onClick={() => setShowUnreadOnly(!showUnreadOnly)}
-                title="Filter Unread"
-              >
-                <Filter className={`w-4 h-4 ${showUnreadOnly ? 'fill-current' : ''}`} />
-              </Button>
-              <Button
-                variant={showArchived ? "default" : "outline"}
-                size="icon"
-                className={`rounded-full shrink-0 ${showArchived ? 'bg-orange-500 text-white hover:bg-orange-600' : 'bg-background hover:bg-secondary text-muted-foreground'}`}
+                className="rounded-full"
                 onClick={() => setShowArchived(!showArchived)}
-                title={showArchived ? "View Inbox" : "View Archived"}
               >
-                <ArchiveIcon className={`w-4 h-4 ${showArchived ? 'fill-current' : ''}`} />
+                <Archive className="w-5 h-5" />
               </Button>
             </div>
-          )}
+          </div>
+
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              placeholder="Search chats..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10 bg-muted/50 border-0 focus-visible:ring-1 focus-visible:ring-primary/50"
+            />
+          </div>
+
+          <div className="flex gap-2 border-b border-border/50 -mb-4 pb-0">
+            <button
+              onClick={() => setActiveTab('direct')}
+              className={`pb-3 px-4 text-sm font-medium transition-all border-b-2 ${activeTab === 'direct' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+            >
+              <MessageCircle className="w-4 h-4 inline-block mr-2" /> Direct
+            </button>
+            <button
+              onClick={() => setActiveTab('groups')}
+              className={`pb-3 px-4 text-sm font-medium transition-all border-b-2 ${activeTab === 'groups' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+            >
+              <Users className="w-4 h-4 inline-block mr-2" /> Groups
+            </button>
+          </div>
         </div>
       </div>
 
-      <div className="p-3 sm:p-4 max-w-3xl mx-auto">
-        {activeTab === 'direct' ? (
-          loading ? (
-            <div className="pt-8">
-              <CartoonLoader />
-            </div>
-          ) : (
-            <>
-              {/* Active Users Bar */}
-              <ActiveUsersList currentUserId={user?.id || ""} />
+      <div className="max-w-3xl mx-auto p-3 sm:p-4">
+        <ActiveUsersList currentUserId={user?.id} />
 
-              {/* Messages List */}
-              {filteredConversations.length === 0 ? (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="text-center py-12"
-                >
-                  <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-6">
-                    <MessageCircle className="w-10 h-10 text-primary" />
-                  </div>
-                  <h3 className="text-xl font-semibold mb-2">
-                    {showUnreadOnly ? "No unread messages" : "No messages yet"}
-                  </h3>
-                  <p className="text-muted-foreground mb-6 max-w-xs mx-auto">
-                    {showUnreadOnly ? "You're all caught up!" : "Start a conversation to see it here."}
-                  </p>
-                  {!showUnreadOnly && (
-                    <Button onClick={() => navigate("/search")} className="rounded-full px-8 shadow-lg">
-                      Find People
-                    </Button>
-                  )}
-                </motion.div>
-              ) : (
-                <div className="space-y-1 pb-4">
-                  <AnimatePresence initial={false}>
-                    {filteredConversations.map((conv) => (
-                      <ConversationItem
-                        key={conv.id}
-                        conv={conv}
-                        onClick={(id) => navigate(`/chat/${id}`)}
-                        onPin={handlePin}
-                        onArchive={handleArchive}
-                      />
-                    ))}
-                  </AnimatePresence>
+        {loading ? (
+          <CartoonLoader />
+        ) : activeTab === 'direct' ? (
+          <div className="space-y-2 mt-4">
+            {filteredConversations.length === 0 ? (
+              <div className="text-center py-16 space-y-4">
+                <div className="w-20 h-20 bg-muted/50 rounded-full mx-auto flex items-center justify-center">
+                  <MessageCircle className="w-10 h-10 text-muted-foreground" />
                 </div>
-              )}
-            </>
-          )
+                <h3 className="font-semibold text-lg">No conversations yet</h3>
+                <p className="text-muted-foreground text-sm max-w-xs mx-auto">
+                  Start chatting with developers you follow or match with on TechMatch!
+                </p>
+              </div>
+            ) : (
+              <AnimatePresence>
+                {filteredConversations.map(conv => (
+                  <ConversationItem
+                    key={conv.id}
+                    conv={conv}
+                    onClick={(id) => navigate(`/chat/${id}`)}
+                    onPin={handlePin}
+                    onArchive={handleArchive}
+                  />
+                ))}
+              </AnimatePresence>
+            )}
+          </div>
         ) : (
-          <GroupsList currentUserId={user?.id || ""} />
+          <div className="mt-4">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="font-semibold">Your Groups</h2>
+              <CreateGroupDialog />
+            </div>
+            <GroupsList />
+          </div>
         )}
       </div>
-
-
 
       <BottomNav />
     </div>
   );
 };
 
-export default React.memo(Messages);
+export default Messages;
