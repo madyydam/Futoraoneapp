@@ -1,102 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Inbox, Send, Briefcase, Zap } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
-import { Badge } from "@/components/ui/badge";
-import { ViewFounderApplicationsDialog } from "@/components/co-founder/ViewFounderApplicationsDialog";
-import { ViewGigApplicationsDialog } from "@/components/gigs/ViewGigApplicationsDialog";
-import { supabase } from "@/integrations/supabase/client";
+import { ArrowLeft, Inbox, Send, Briefcase, Zap, Construction } from "lucide-react";
 import { BottomNav } from "@/components/BottomNav";
-import { CreateReviewDialog } from "@/components/CreateReviewDialog";
 
 const ApplicationsDashboard = () => {
     const navigate = useNavigate();
-    const [loading, setLoading] = useState(true);
-    const [founderListings, setFounderListings] = useState<any[]>([]);
-    const [gigListings, setGigListings] = useState<any[]>([]);
-    const [sentFounderApps, setSentFounderApps] = useState<any[]>([]);
-    const [sentGigApps, setSentGigApps] = useState<any[]>([]);
-    const { toast } = useToast();
-
-    useEffect(() => {
-        fetchReceivedData();
-    }, []);
-
-    const fetchReceivedData = async () => {
-        setLoading(true);
-        try {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) {
-                setLoading(false);
-                return;
-            }
-
-            // Fetch all data in parallel
-            const [founderResult, gigResult, sentFounderResult, sentGigResult] = await Promise.all([
-                // Fetch founder listings with application counts
-                supabase
-                    .from('founder_listings')
-                    .select(`
-                        *,
-                        applications:founder_applications(count)
-                    `)
-                    .eq('user_id', user.id),
-
-                // Fetch gigs with application counts
-                supabase
-                    .from('gig_listings')
-                    .select(`
-                        *,
-                        applications:gig_applications(count)
-                    `)
-                    .eq('user_id', user.id),
-
-                // Fetch sent founder applications
-                supabase
-                    .from('founder_applications')
-                    .select(`
-                        *,
-                        listing:founder_listings(*)
-                    `)
-                    .eq('applicant_id', user.id),
-
-                // Fetch sent gig applications
-                supabase
-                    .from('gig_applications')
-                    .select(`
-                        *,
-                        listing:gig_listings(*)
-                    `)
-                    .eq('applicant_id', user.id)
-            ]);
-
-            if (founderResult.error) throw founderResult.error;
-            setFounderListings(founderResult.data || []);
-
-            if (gigResult.error) throw gigResult.error;
-            setGigListings(gigResult.data || []);
-
-            if (sentFounderResult.error) throw sentFounderResult.error;
-            setSentFounderApps(sentFounderResult.data || []);
-
-            if (sentGigResult.error) throw sentGigResult.error;
-            setSentGigApps(sentGigResult.data || []);
-
-
-        } catch (error) {
-            console.error("Error fetching dashboard data:", error);
-            toast({
-                title: "Error",
-                description: "Failed to load dashboard data.",
-                variant: "destructive"
-            });
-        } finally {
-            setLoading(false);
-        }
-    };
 
     return (
         <div className="min-h-screen bg-background pb-20">
@@ -127,189 +38,31 @@ const ApplicationsDashboard = () => {
                     </TabsList>
 
                     <TabsContent value="received" className="space-y-4">
-                        <div className="grid gap-6">
-                            {/* Founder Listings Section */}
-                            <div>
-                                <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
-                                    <span className="bg-primary/10 text-primary p-1 rounded">
-                                        <Inbox className="w-4 h-4" />
-                                    </span>
-                                    Founder Listings
-                                </h3>
-                                {loading ? (
-                                    <p className="text-muted-foreground">Loading...</p>
-                                ) : founderListings.length === 0 ? (
-                                    <Card className="bg-muted/30 border-dashed">
-                                        <CardContent className="py-8 text-center text-muted-foreground">
-                                            No founder listings posted yet.
-                                        </CardContent>
-                                    </Card>
-                                ) : (
-                                    <div className="grid gap-4">
-                                        {founderListings.map(listing => (
-                                            <Card key={listing.id} className="overflow-hidden">
-                                                <CardContent className="p-4 flex items-center justify-between">
-                                                    <div>
-                                                        <h4 className="font-semibold truncate">{listing.role_needed}</h4>
-                                                        <p className="text-sm text-muted-foreground truncate">{listing.industry} • {listing.location}</p>
-                                                    </div>
-                                                    <Badge variant={(listing.applications?.[0]?.count || 0) > 0 ? "default" : "secondary"}>
-                                                        {listing.applications?.[0]?.count || 0} Applicants
-                                                    </Badge>
-                                                </CardContent>
-                                                <div className="bg-muted/50 p-2 flex justify-end">
-                                                    <ViewFounderApplicationsDialog
-                                                        listingId={listing.id}
-                                                        listingRole={listing.role_needed}
-                                                    />
-                                                </div>
-                                            </Card>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Gigs Section */}
-                            <div>
-                                <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
-                                    <span className="bg-yellow-500/10 text-yellow-600 p-1 rounded">
-                                        <Zap className="w-4 h-4" />
-                                    </span>
-                                    Gig Listings
-                                </h3>
-                                {loading ? (
-                                    <p className="text-muted-foreground">Loading...</p>
-                                ) : gigListings.length === 0 ? (
-                                    <Card className="bg-muted/30 border-dashed">
-                                        <CardContent className="py-8 text-center text-muted-foreground">
-                                            No gigs posted yet.
-                                        </CardContent>
-                                    </Card>
-                                ) : (
-                                    <div className="grid gap-4">
-                                        {gigListings.map(gig => (
-                                            <Card key={gig.id} className="overflow-hidden">
-                                                <CardContent className="p-4 flex items-center justify-between">
-                                                    <div>
-                                                        <h4 className="font-semibold truncate">{gig.title}</h4>
-                                                        <p className="text-sm text-muted-foreground truncate">₹{gig.price} • {gig.status}</p>
-                                                    </div>
-                                                    <Badge variant={(gig.applications?.[0]?.count || 0) > 0 ? "default" : "secondary"} className={(gig.applications?.[0]?.count || 0) > 0 ? "bg-yellow-500 hover:bg-yellow-600" : ""}>
-                                                        {gig.applications?.[0]?.count || 0} Proposals
-                                                    </Badge>
-                                                </CardContent>
-                                                <div className="bg-muted/50 p-2 flex justify-end">
-                                                    <ViewGigApplicationsDialog
-                                                        gigId={gig.id}
-                                                        gigTitle={gig.title}
-                                                    />
-                                                </div>
-                                            </Card>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                        </div>
+                        <Card className="bg-muted/30">
+                            <CardContent className="py-12 text-center">
+                                <div className="w-16 h-16 mx-auto bg-primary/10 rounded-full flex items-center justify-center mb-4">
+                                    <Construction className="w-8 h-8 text-primary" />
+                                </div>
+                                <h3 className="text-xl font-semibold mb-2">Coming Soon</h3>
+                                <p className="text-muted-foreground max-w-sm mx-auto">
+                                    Founder and Gig listing applications will appear here once the marketplace is live.
+                                </p>
+                            </CardContent>
+                        </Card>
                     </TabsContent>
 
                     <TabsContent value="sent" className="space-y-4">
-                        <div className="grid gap-6">
-                            {/* Sent Founder Apps */}
-                            <div>
-                                <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
-                                    <span className="bg-primary/10 text-primary p-1 rounded">
-                                        <Briefcase className="w-4 h-4" />
-                                    </span>
-                                    Founder Roles Applied
-                                </h3>
-                                {loading ? (
-                                    <p className="text-muted-foreground">Loading...</p>
-                                ) : sentFounderApps.length === 0 ? (
-                                    <Card className="bg-muted/30 border-dashed">
-                                        <CardContent className="py-8 text-center text-muted-foreground">
-                                            You haven't applied to any co-founder roles yet.
-                                        </CardContent>
-                                    </Card>
-                                ) : (
-                                    <div className="grid gap-4">
-                                        {sentFounderApps.map(app => (
-                                            <Card key={app.id} className="overflow-hidden">
-                                                <CardContent className="p-4">
-                                                    <div className="flex justify-between items-start mb-2">
-                                                        <div>
-                                                            <h4 className="font-semibold">{app.listing?.role_needed || "Unknown Role"}</h4>
-                                                            <p className="text-sm text-muted-foreground">{app.listing?.industry}</p>
-                                                        </div>
-                                                        <div className="flex flex-col items-end gap-2">
-                                                            <Badge variant={app.status === 'accepted' ? "default" : "outline"} className={app.status === 'accepted' ? "bg-green-500 hover:bg-green-600" : ""}>
-                                                                {app.status === 'accepted' ? "Accepted" : new Date(app.created_at).toLocaleDateString()}
-                                                            </Badge>
-                                                            {app.status === 'accepted' && (
-                                                                <CreateReviewDialog
-                                                                    revieweeId={app.listing?.user_id}
-                                                                    revieweeName="Founder"
-                                                                />
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                    <div className="bg-muted p-3 rounded-md text-sm italic">
-                                                        "{app.message}"
-                                                    </div>
-                                                </CardContent>
-                                            </Card>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Sent Gig Apps */}
-                            <div>
-                                <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
-                                    <span className="bg-yellow-500/10 text-yellow-600 p-1 rounded">
-                                        <Zap className="w-4 h-4" />
-                                    </span>
-                                    Gigs Applied
-                                </h3>
-                                {loading ? (
-                                    <p className="text-muted-foreground">Loading...</p>
-                                ) : sentGigApps.length === 0 ? (
-                                    <Card className="bg-muted/30 border-dashed">
-                                        <CardContent className="py-8 text-center text-muted-foreground">
-                                            You haven't applied to any gigs yet.
-                                        </CardContent>
-                                    </Card>
-                                ) : (
-                                    <div className="grid gap-4">
-                                        {sentGigApps.map(app => (
-                                            <Card key={app.id} className="overflow-hidden">
-                                                <CardContent className="p-4">
-                                                    <div className="flex justify-between items-start mb-2">
-                                                        <div>
-                                                            <h4 className="font-semibold">{app.listing?.title || "Unknown Gig"}</h4>
-                                                            <p className="text-sm text-muted-foreground">Bid: ₹{app.bid_amount}</p>
-                                                        </div>
-                                                        <div className="flex flex-col items-end gap-2">
-                                                            <Badge variant={app.status === 'accepted' ? "default" : "outline"} className={app.status === 'accepted' ? "bg-green-500 hover:bg-green-600" : ""}>
-                                                                {app.status === 'accepted' ? "Accepted" : new Date(app.created_at).toLocaleDateString()}
-                                                            </Badge>
-                                                            {app.status === 'accepted' && (
-                                                                <CreateReviewDialog
-                                                                    revieweeId={app.listing?.user_id}
-                                                                    revieweeName="Client"
-                                                                />
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                    <div className="bg-muted p-3 rounded-md text-sm italic">
-                                                        "{app.proposal}"
-                                                    </div>
-                                                </CardContent>
-                                            </Card>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                        </div>
+                        <Card className="bg-muted/30">
+                            <CardContent className="py-12 text-center">
+                                <div className="w-16 h-16 mx-auto bg-primary/10 rounded-full flex items-center justify-center mb-4">
+                                    <Construction className="w-8 h-8 text-primary" />
+                                </div>
+                                <h3 className="text-xl font-semibold mb-2">Coming Soon</h3>
+                                <p className="text-muted-foreground max-w-sm mx-auto">
+                                    Your sent applications will appear here once the marketplace is live.
+                                </p>
+                            </CardContent>
+                        </Card>
                     </TabsContent>
                 </Tabs>
             </div>

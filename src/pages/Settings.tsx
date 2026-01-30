@@ -8,9 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
-import { ArrowLeft, User, Lock, Bell, Palette, LogOut, ChevronRight, Eye } from "lucide-react";
+import { ArrowLeft, User, Lock, Bell, ChevronRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { ModeToggle } from "@/components/mode-toggle";
 import { BottomNav } from "@/components/BottomNav";
 import { CartoonLoader } from "@/components/CartoonLoader";
 import {
@@ -34,7 +33,6 @@ const Settings = () => {
         theme: { accent_color: "default" }
     });
 
-    // Account State
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
@@ -52,18 +50,14 @@ const Settings = () => {
         setUser(user);
         setEmail(user.email || "");
 
-        const { data: profile } = await supabase
-            .from('profiles')
-            .select('settings')
-            .eq('id', user.id)
-            .single();
-
-        if (profile?.settings) {
-            // Merge with defaults to ensure structure exists
-            setSettings((prev: any) => ({
-                ...prev,
-                ...profile.settings as object
-            }));
+        // Load settings from localStorage as fallback since settings column doesn't exist
+        const savedSettings = localStorage.getItem('futora_settings');
+        if (savedSettings) {
+            try {
+                setSettings(JSON.parse(savedSettings));
+            } catch (e) {
+                console.error("Error parsing settings:", e);
+            }
         }
         setLoading(false);
     };
@@ -77,18 +71,10 @@ const Settings = () => {
             }
         };
 
-        // Optimistic update
         setSettings(newSettings);
-
-        const { error } = await supabase
-            .from('profiles')
-            .update({ settings: newSettings })
-            .eq('id', user.id);
-
-        if (error) {
-            toast({ title: "Error", description: "Failed to update settings", variant: "destructive" });
-            fetchSettings(); // Revert
-        }
+        localStorage.setItem('futora_settings', JSON.stringify(newSettings));
+        
+        toast({ title: "Settings updated", description: "Your preferences have been saved." });
     };
 
     const handlePasswordUpdate = async () => {
@@ -112,11 +98,9 @@ const Settings = () => {
     };
 
     const handleDeleteAccount = async () => {
-        // Google Play Policy compliance: allow user to initiate deletion.
         const subject = encodeURIComponent("Account Deletion Request");
         const body = encodeURIComponent(`Please delete my account associated with:\nEmail: ${email}\nUser ID: ${user?.id}\n\nI understand this action is irreversible.`);
 
-        // Open default email client
         window.location.href = `mailto:support@futoraone.com?subject=${subject}&body=${body}`;
 
         toast({
@@ -158,11 +142,9 @@ const Settings = () => {
                         >
                             <Bell className="w-4 h-4 mr-3" /> Notifications
                         </TabsTrigger>
-
                     </TabsList>
 
                     <div className="flex-1 space-y-6">
-                        {/* Account Settings */}
                         <TabsContent value="account" className="space-y-4 m-0">
                             <Card>
                                 <CardHeader>
@@ -172,7 +154,7 @@ const Settings = () => {
                                 <CardContent className="space-y-4">
                                     <div className="space-y-2">
                                         <Label>Email</Label>
-                                        <Input value={email} disabled /> {/* Changing email usually requires re-confirmation flow */}
+                                        <Input value={email} disabled />
                                         <p className="text-xs text-muted-foreground">Contact support to change email.</p>
                                     </div>
                                 </CardContent>
@@ -224,7 +206,7 @@ const Settings = () => {
                                                 </DialogDescription>
                                             </DialogHeader>
                                             <DialogFooter>
-                                                <Button variant="outline" onClick={() => { }}>Cancel</Button>
+                                                <Button variant="outline">Cancel</Button>
                                                 <Button variant="destructive" onClick={handleDeleteAccount}>Delete Account</Button>
                                             </DialogFooter>
                                         </DialogContent>
@@ -233,7 +215,6 @@ const Settings = () => {
                             </Card>
                         </TabsContent>
 
-                        {/* Privacy Settings */}
                         <TabsContent value="privacy" className="space-y-4 m-0">
                             <Card>
                                 <CardHeader>
@@ -274,7 +255,6 @@ const Settings = () => {
                             </Card>
                         </TabsContent>
 
-                        {/* Notifications Settings */}
                         <TabsContent value="notifications" className="space-y-4 m-0">
                             <Card>
                                 <CardHeader>
@@ -306,9 +286,6 @@ const Settings = () => {
                                 </CardContent>
                             </Card>
                         </TabsContent>
-
-
-
                     </div>
                 </Tabs>
             </div>

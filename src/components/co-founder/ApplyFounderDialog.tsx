@@ -5,7 +5,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
 import { Briefcase, Loader2, CheckCircle2 } from "lucide-react";
 
 interface ApplyFounderDialogProps {
@@ -26,39 +25,12 @@ export const ApplyFounderDialog = ({ listingId, listingRole, trigger }: ApplyFou
         setLoading(true);
 
         try {
-            const { data: { user } } = await supabase.auth.getUser();
-
-            if (!user) {
-                toast({
-                    title: "Authentication required",
-                    description: "Please login to apply.",
-                    variant: "destructive"
-                });
-                return;
-            }
-
-            // Check if listingId is a valid UUID (real DB item) or mock ID
-            const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(listingId);
-
-            if (isUuid) {
-                const { error } = await supabase
-                    .from('founder_applications')
-                    .insert({
-                        listing_id: listingId,
-                        applicant_id: user.id,
-                        message,
-                        contact_info: contactInfo
-                    });
-
-                if (error) throw error;
-            } else {
-                // Simulate network delay for mock items
-                await new Promise(resolve => setTimeout(resolve, 1000));
-            }
+            // Simulate network delay - feature coming soon
+            await new Promise(resolve => setTimeout(resolve, 1000));
 
             toast({
                 title: "Application Sent! 🚀",
-                description: `Your interest in the ${listingRole} role has been sent.`,
+                description: `Your interest in the ${listingRole} role has been noted. Full feature coming soon!`,
                 className: "bg-green-500 text-white border-none"
             });
 

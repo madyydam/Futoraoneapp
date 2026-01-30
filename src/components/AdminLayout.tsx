@@ -2,15 +2,6 @@ import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
-    msg_layout_dashboard,
-    msg_layout_users,
-    msg_layout_shield,
-    msg_layout_chart_bar,
-    msg_layout_settings,
-    msg_layout_log_out,
-    msg_layout_menu,
-    msg_layout_bell,
-    msg_layout_search,
     LayoutDashboard,
     Users,
     Shield,

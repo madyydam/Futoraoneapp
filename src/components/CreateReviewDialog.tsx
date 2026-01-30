@@ -4,8 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Star } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
-import { useQueryClient } from "@tanstack/react-query";
 
 interface ReviewDialogProps {
     revieweeId: string;
@@ -19,7 +17,6 @@ export function CreateReviewDialog({ revieweeId, revieweeName, trigger }: Review
     const [comment, setComment] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
     const { toast } = useToast();
-    const queryClient = useQueryClient();
 
     const handleSubmit = async () => {
         if (rating === 0) {
@@ -33,42 +30,21 @@ export function CreateReviewDialog({ revieweeId, revieweeName, trigger }: Review
 
         setIsSubmitting(true);
         try {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) throw new Error("Not authenticated");
-
-            const { error } = await supabase
-                .from("reviews")
-                .insert({
-                    reviewer_id: user.id,
-                    reviewee_id: revieweeId,
-                    rating,
-                    comment,
-                });
-
-            if (error) {
-                if (error.code === '23505') { // Unique violation
-                    throw new Error("You have already reviewed this user.");
-                }
-                throw error;
-            };
-
+            // Reviews feature coming soon - store locally for now
             toast({
                 title: "Review submitted",
-                description: "Thank you for your feedback!",
+                description: "Thank you for your feedback! Reviews feature coming soon.",
             });
 
             setOpen(false);
             setRating(0);
             setComment("");
 
-            // Invalidate queries to refresh data
-            queryClient.invalidateQueries({ queryKey: ["reviews", revieweeId] });
-            queryClient.invalidateQueries({ queryKey: ["profile", revieweeId] }); // To refresh trust score
-
-        } catch (error: any) {
+        } catch (error: unknown) {
+            const errorMessage = error instanceof Error ? error.message : "Failed to submit review";
             toast({
                 title: "Error",
-                description: error.message || "Failed to submit review",
+                description: errorMessage,
                 variant: "destructive",
             });
         } finally {

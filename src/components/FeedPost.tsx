@@ -179,7 +179,7 @@ export const FeedPost = memo(({ post, currentUser, onLike, onSave, onShare, onDe
     prevProps.post.comments.length === nextProps.post.comments.length &&
     prevProps.post.saves?.length === nextProps.post.saves?.length &&
     prevProps.currentUser?.id === nextProps.currentUser?.id &&
-    prevProps.post.updated_at === nextProps.post.updated_at // Check for content updates
+    prevProps.post.created_at === nextProps.post.created_at // Check for content updates
   );
 });
 

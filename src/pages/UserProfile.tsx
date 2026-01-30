@@ -17,7 +17,6 @@ import { BlockUserDialog } from "@/components/BlockUserDialog";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { CartoonLoader } from "@/components/CartoonLoader";
 
-// New Components
 import { ProfileHeader } from "@/components/profile/ProfileHeader";
 import { ProfileStats } from "@/components/profile/ProfileStats";
 import { ProfileTabs } from "@/components/profile/ProfileTabs";
@@ -32,7 +31,6 @@ interface Profile {
     location: string | null;
     github_url: string | null;
     linkedin_url: string | null;
-    instagram_url: string | null;
     portfolio_url: string | null;
     tech_skills: string[] | null;
     is_verified?: boolean | null;
@@ -125,7 +123,7 @@ const UserProfile = () => {
             .select('*')
             .eq('blocker_id', currentUser.id)
             .eq('blocked_id', userId)
-            .maybeSingle(); // optimized from single()
+            .maybeSingle();
 
         setIsBlocked(!!data);
     };
@@ -198,7 +196,6 @@ const UserProfile = () => {
                 description: "The user has been successfully verified.",
             });
 
-            // Refresh profile to show verification badge
             const { data: updatedProfile } = await supabase
                 .from("profiles")
                 .select("*")
@@ -206,7 +203,7 @@ const UserProfile = () => {
                 .single();
 
             if (updatedProfile) {
-                setProfile(prev => ({ ...prev, ...updatedProfile }));
+                setProfile(prev => prev ? { ...prev, ...updatedProfile } : null);
             }
         } catch (error) {
             console.error('Error verifying user:', error);
@@ -237,7 +234,6 @@ const UserProfile = () => {
                 description: "The user's verification has been removed.",
             });
 
-            // Refresh profile
             const { data: updatedProfile } = await supabase
                 .from("profiles")
                 .select("*")
@@ -245,7 +241,7 @@ const UserProfile = () => {
                 .single();
 
             if (updatedProfile) {
-                setProfile(prev => ({ ...prev, ...updatedProfile }));
+                setProfile(prev => prev ? { ...prev, ...updatedProfile } : null);
             }
         } catch (error) {
             console.error('Error removing verification:', error);
@@ -285,15 +281,24 @@ const UserProfile = () => {
         // Sanu's special profile customization
         const isSanu = profileData.username?.toLowerCase() === 'sanu';
         const enhancedProfile: Profile = {
-            ...profileData,
+            id: profileData.id,
+            username: profileData.username,
+            full_name: profileData.full_name,
+            avatar_url: profileData.avatar_url,
+            bio: profileData.bio,
+            location: profileData.location,
+            github_url: profileData.github_url,
+            linkedin_url: profileData.linkedin_url,
+            portfolio_url: profileData.portfolio_url,
+            tech_skills: profileData.tech_skills,
             verification_category: isSanu ? 'creator' : profileData.verification_category,
             is_verified: isSanu ? true : profileData.is_verified,
-            theme_color: isSanu ? '#FFE6EA' : profileData.theme_color, // Light pink theme for Sanu
+            theme_color: isSanu ? '#FFE6EA' : undefined,
         };
         setProfile(enhancedProfile);
 
         // Fetch all data in parallel for better performance
-        const [projectsResult, postsResult, reviewsResult] = await Promise.all([
+        const [projectsResult, postsResult] = await Promise.all([
             supabase
                 .from("projects")
                 .select(`
@@ -310,20 +315,12 @@ const UserProfile = () => {
                     comments(id)
                 `)
                 .eq("user_id", userId)
-                .order('created_at', { ascending: false }),
-            supabase
-                .from("reviews")
-                .select(`
-                    id, rating, comment, created_at,
-                    reviewer:reviewer_id(username, avatar_url)
-                `)
-                .eq("reviewee_id", userId)
                 .order('created_at', { ascending: false })
         ]);
 
         setProjects((projectsResult.data as unknown as Project[]) || []);
         setPosts((postsResult.data as unknown as Post[]) || []);
-        setReviews((reviewsResult.data as unknown as Review[]) || []);
+        setReviews([]); // Reviews table doesn't exist, so empty array
 
         await fetchFollowerCounts();
         setLoading(false);
@@ -383,10 +380,8 @@ const UserProfile = () => {
                         onUnblockUser={handleUnblock}
                     />
 
-                    {/* Stats Section with embedded navigation Logic included in header originally, separated here */}
                     <Card className="bg-card/80 backdrop-blur-sm border-border">
                         <CardContent className="p-4">
-                            {/* Re-using ProfileStats inside this card for consistency with old layout */}
                             <ProfileStats
                                 projectsCount={projects.length}
                                 followerCount={followerCount}
@@ -482,4 +477,4 @@ const UserProfile = () => {
     );
 };
 
-export default React.memo(UserProfile);
+export default UserProfile;

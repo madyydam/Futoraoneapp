@@ -1,5 +1,6 @@
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { MapPin, Clock } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ApplyGigDialog } from "./ApplyGigDialog";
@@ -39,100 +40,33 @@ export const GigCard = ({ gig, currentUserId }: GigCardProps) => {
                             <AvatarFallback>{gig.profiles?.full_name?.[0] || 'U'}</AvatarFallback>
                         </Avatar>
                         <div>
-                            <h3 className="font-bold text-lg leading-tight group-hover:text-yellow-600 transition-colors">
-                                {gig.title}
-                            </h3>
-                            <p className="text-xs text-muted-foreground">
-                                Posted by {gig.profiles?.full_name}
-                            </p>
+                            <h3 className="font-bold text-lg leading-tight group-hover:text-yellow-600 transition-colors">{gig.title}</h3>
+                            <p className="text-xs text-muted-foreground">Posted by {gig.profiles?.full_name}</p>
                         </div>
                     </div>
                     <Badge className="bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-400 border-green-200 dark:border-green-800 text-sm font-bold px-3 py-1">
                         ₹{gig.price}
                     </Badge>
                 </div>
-
-                <p className="text-sm text-muted-foreground line-clamp-2 mb-4">
-                    {gig.description}
-                </p>
-
+                <p className="text-sm text-muted-foreground line-clamp-2 mb-4">{gig.description}</p>
                 <div className="flex flex-wrap gap-2 mb-4">
                     {gig.skills_required?.slice(0, 3).map((skill) => (
-                        <Badge key={skill} variant="secondary" className="text-xs">
-                            {skill}
-                        </Badge>
+                        <Badge key={skill} variant="secondary" className="text-xs">{skill}</Badge>
                     ))}
                     {gig.skills_required?.length > 3 && (
                         <Badge variant="outline" className="text-xs">+{gig.skills_required.length - 3}</Badge>
                     )}
                 </div>
-
                 <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                    <div className="flex items-center gap-1">
-                        <MapPin className="w-3 h-3" />
-                        {gig.location}
-                    </div>
-                    <div className="flex items-center gap-1">
-                        <Clock className="w-3 h-3" />
-                        {new Date(gig.created_at).toLocaleDateString()}
-                    </div>
+                    <div className="flex items-center gap-1"><MapPin className="w-3 h-3" />{gig.location}</div>
+                    <div className="flex items-center gap-1"><Clock className="w-3 h-3" />{new Date(gig.created_at).toLocaleDateString()}</div>
                 </div>
             </CardContent>
-
             <CardFooter className="pt-0 pb-4">
                 {currentUserId === gig.user_id ? (
-                    gig.status === 'assigned' ? (
-                        <Button
-                            className="w-full bg-green-600 hover:bg-green-700 text-white"
-                            onClick={async () => {
-                                if (!confirm("Mark this gig as complete and release payment?")) return;
-
-                                try {
-                                    const { error: txError } = await import("@/integrations/supabase/client")
-                                        .then(({ supabase }) => supabase.from('transactions').insert({
-                                            amount: gig.price,
-                                            platform_fee: gig.price * 0.02, // 2% Fee
-                                            net_amount: gig.price * 0.98,
-                                            currency: gig.currency,
-                                            status: 'completed',
-                                            type: 'gig_payment',
-                                            sender_id: currentUserId,
-                                            description: `Payment for gig: ${gig.title}`,
-                                            // receiver_id would be the hired applicant, simplification for now as we don't have it in props easily without fetching
-                                        }));
-
-                                    if (txError) throw txError;
-
-                                    const { error: updateError } = await import("@/integrations/supabase/client")
-                                        .then(({ supabase }) => supabase.from('gig_listings').update({ status: 'completed' }).eq('id', gig.id));
-
-                                    if (updateError) throw updateError;
-
-                                    window.location.reload();
-                                } catch (e) {
-                                    console.error("Error completing gig:", e);
-                                    alert("Failed to complete gig");
-                                }
-                            }}
-                        >
-                            Mark as Complete & Pay
-                        </Button>
-                    ) : gig.status === 'completed' ? (
-                        <Button variant="outline" disabled className="w-full border-green-500/30 text-green-600 bg-green-50">
-                            Completed
-                        </Button>
-                    ) : (
-                        <ViewGigApplicationsDialog
-                            gigId={gig.id}
-                            gigTitle={gig.title}
-                        />
-                    )
+                    <ViewGigApplicationsDialog gigId={gig.id} gigTitle={gig.title} />
                 ) : (
-                    <ApplyGigDialog
-                        gigId={gig.id}
-                        gigTitle={gig.title}
-                        gigBudget={gig.price}
-                    />
+                    <ApplyGigDialog gigId={gig.id} gigTitle={gig.title} gigBudget={gig.price} />
                 )}
             </CardFooter>
         </Card>

@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import confetti from "canvas-confetti";
-import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Coins } from "lucide-react";
@@ -10,19 +9,19 @@ export const CoinRewardPopup = () => {
     const [isOpen, setIsOpen] = useState(false);
 
     useEffect(() => {
-        const checkRewardStatus = async () => {
-            // Atomic Check & Claim
-            // This RPC will return TRUE only once (the first time).
-            // Subsequent calls will return FALSE.
-            const { data: shouldShow } = await supabase.rpc('claim_launch_reward_popup');
-
-            if (shouldShow) {
+        // Check if user has seen the welcome popup using localStorage
+        const hasSeenPopup = localStorage.getItem('futora_welcome_popup_seen');
+        
+        if (!hasSeenPopup) {
+            // Show popup for first-time users after a short delay
+            const timer = setTimeout(() => {
                 setIsOpen(true);
                 triggerConfetti();
-            }
-        };
-
-        checkRewardStatus();
+                localStorage.setItem('futora_welcome_popup_seen', 'true');
+            }, 2000);
+            
+            return () => clearTimeout(timer);
+        }
     }, []);
 
     const triggerConfetti = () => {
@@ -83,7 +82,7 @@ export const CoinRewardPopup = () => {
                         transition={{ delay: 0.5 }}
                     >
                         <h2 className="text-3xl font-bold bg-gradient-to-r from-yellow-200 to-yellow-500 bg-clip-text text-transparent mb-2">
-                            Congratulations! 🎉
+                            Welcome to Futora! 🎉
                         </h2>
                         <p className="text-gray-300 mb-6 text-lg">
                             You've earned <span className="font-bold text-white">₹1</span>
