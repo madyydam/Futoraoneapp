@@ -439,7 +439,7 @@ const Messages = () => {
               <h2 className="font-semibold">Your Groups</h2>
               <CreateGroupDialog />
             </div>
-            <GroupsList />
+            <GroupsList currentUserId={user?.id || ''} />
           </div>
         )}
       </div>

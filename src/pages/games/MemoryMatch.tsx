@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, memo } from "react";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, RotateCcw, Sparkles, Trophy, Timer, Hash, Globe, Users, Copy } from "lucide-react";
 import { useNavigate } from "react-router-dom";

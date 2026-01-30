@@ -460,6 +460,7 @@ export type Database = {
           bio: string | null
           created_at: string
           digest_mode: boolean | null
+          fcm_token: string | null
           full_name: string
           github_url: string | null
           id: string
@@ -480,6 +481,7 @@ export type Database = {
           bio?: string | null
           created_at?: string
           digest_mode?: boolean | null
+          fcm_token?: string | null
           full_name: string
           github_url?: string | null
           id: string
@@ -500,6 +502,7 @@ export type Database = {
           bio?: string | null
           created_at?: string
           digest_mode?: boolean | null
+          fcm_token?: string | null
           full_name?: string
           github_url?: string | null
           id?: string
