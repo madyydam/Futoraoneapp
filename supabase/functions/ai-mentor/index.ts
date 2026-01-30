@@ -86,21 +86,30 @@ Keep it practical, actionable, and structured. Do not add conversational filler 
       console.error("Lovable AI Error:", response.status, errText);
       
       if (response.status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again in a moment." }), {
-          status: 429,
+        return new Response(JSON.stringify({ 
+          error: "AI is experiencing high demand. Please wait a moment and try again.",
+          generatedText: "🔄 AI is currently busy. Please try again in a few seconds." 
+        }), {
+          status: 200, // Return 200 so frontend can handle gracefully
           headers: { ...corsHeaders, "Content-Type": "application/json" }
         });
       }
       
       if (response.status === 402) {
-        return new Response(JSON.stringify({ error: "AI usage limit reached. Please try again later." }), {
-          status: 402,
+        return new Response(JSON.stringify({ 
+          error: "AI usage limit reached. Please try again later.",
+          generatedText: "⏳ AI usage limit reached. Please try again later." 
+        }), {
+          status: 200,
           headers: { ...corsHeaders, "Content-Type": "application/json" }
         });
       }
 
-      return new Response(JSON.stringify({ error: "AI service temporarily unavailable. Please try again." }), {
-        status: 500,
+      return new Response(JSON.stringify({ 
+        error: "AI service temporarily unavailable. Please try again.",
+        generatedText: "⚠️ AI service is temporarily unavailable. Please try again shortly." 
+      }), {
+        status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
