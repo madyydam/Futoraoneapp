@@ -11,7 +11,6 @@ import { HowToPlay } from "@/components/games/HowToPlay";
 import { useMultiplayerGame } from "@/hooks/useMultiplayerGame";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { useGameReward } from "@/hooks/useGameReward";
 
 type Player = "X" | "O" | null;
 type GameMode = "PVP" | "AI" | "ONLINE";
@@ -155,7 +154,6 @@ const TicTacToe = () => {
     const [roomId, setRoomId] = useState("");
     const [showRoomDialog, setShowRoomDialog] = useState(false);
     const [isHost, setIsHost] = useState(false);
-    const { processWin } = useGameReward();
 
     // Join room from URL
     useEffect(() => {
@@ -260,13 +258,6 @@ const TicTacToe = () => {
                     setScores(prev => ({ ...prev, [calculatedWinner]: prev[calculatedWinner as keyof typeof prev] + 1 }));
                 }
 
-                // Reward Logic
-                if (gameMode === 'AI') {
-                    if (calculatedWinner === 'X') {
-                        processWin('tic_tac_toe');
-                    }
-                }
-
                 if ((calculatedWinner === 'X' && isHost) || (calculatedWinner === 'O' && !isHost) || gameMode !== 'AI') {
                     confetti({
                         particleCount: 150,
@@ -279,7 +270,7 @@ const TicTacToe = () => {
                 playSound('draw');
             }
         }
-    }, [board, gameMode, isHost, playSound, winner, processWin]);
+    }, [board, gameMode, isHost, playSound, winner]);
 
     const makeAiMove = useCallback(() => {
         if (winner) return;

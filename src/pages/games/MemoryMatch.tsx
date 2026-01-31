@@ -10,7 +10,6 @@ import { HowToPlay } from "@/components/games/HowToPlay";
 import { Card } from "@/components/ui/card";
 import { useMultiplayerGame } from "@/hooks/useMultiplayerGame";
 import { Input } from "@/components/ui/input";
-import { useGameReward } from "@/hooks/useGameReward";
 
 const CARDS_DATA = [
     { id: 1, icon: "🐶", matchId: 1 },
@@ -114,7 +113,6 @@ PvPStatCard.displayName = "PvPStatCard";
 const MemoryMatch = () => {
     const navigate = useNavigate();
     const playSound = useGameSounds();
-    const { processWin } = useGameReward();
     const [cards, setCards] = useState<CardType[]>([]);
     const [flippedCards, setFlippedCards] = useState<CardType[]>([]);
     const [isLock, setIsLock] = useState(false);
@@ -182,7 +180,7 @@ const MemoryMatch = () => {
             // For this refactor, we assume sendMove is stable or its changes don't require re-creating initializeGame.
             // If sendMove is not stable, it should be added to the dependency array.
             // For now, we follow the provided example's dependency list.
-             
+
             sendMove({
                 cards: gameCards,
                 currentPlayer: 1,
@@ -199,7 +197,7 @@ const MemoryMatch = () => {
         playSound('win');
 
         if (gameMode === 'ONLINE') {
-             
+
             sendMove({ isWon: true });
 
             // Determine winner for confetti
@@ -209,16 +207,13 @@ const MemoryMatch = () => {
 
             if (amIWinner) {
                 triggerConfetti();
-                processWin('memory_match');
             } else if (isDraw) {
                 triggerConfetti();
             } else {
                 // Loss - nothing
             }
 
-        } else {
             // Solo Win
-            processWin('memory_match');
 
             if (!bestScore || moves + 1 < bestScore) {
                 setBestScore(moves + 1);
@@ -229,7 +224,7 @@ const MemoryMatch = () => {
             }
             triggerConfetti();
         }
-    }, [bestScore, gameMode, isHost, moves, playSound, processWin, scores, triggerConfetti]); // sendMove omitted as per instruction example
+    }, [bestScore, gameMode, isHost, moves, playSound, scores, triggerConfetti]); // sendMove omitted as per instruction example
 
     const { isConnected, playerCount, sendMove } = useMultiplayerGame({
         gameId: 'memory',

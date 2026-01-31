@@ -1,103 +1,123 @@
-import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
+import React, { useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Coins, History } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-
-interface Transaction {
-    id: string;
-    reason: string;
-    coins: number;
-    type: 'EARN' | 'SPEND';
-    created_at: string;
-}
-
-// Mock transactions for demo
-const MOCK_TRANSACTIONS: Transaction[] = [
-    { id: '1', reason: 'Welcome Bonus', coins: 1000, type: 'EARN', created_at: new Date().toISOString() },
-    { id: '2', reason: 'Daily Login', coins: 50, type: 'EARN', created_at: new Date().toISOString() },
-    { id: '3', reason: 'Post Created', coins: 25, type: 'EARN', created_at: new Date().toISOString() },
-];
+import { Wallet, ExternalLink, ChevronRight, Loader2 } from "lucide-react";
+import { motion } from "framer-motion";
+import { walletSupabase } from "@/integrations/supabase/walletClient";
+import { supabase } from "@/integrations/supabase/client";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 
 export const WalletCard = () => {
-    const [coins, setCoins] = useState(1000);
-    const [transactions, setTransactions] = useState<Transaction[]>([]);
-    const [loading, setLoading] = useState(true);
+    const navigate = useNavigate();
+    const queryClient = useQueryClient();
 
+    const { data: wallet, isLoading } = useQuery({
+        queryKey: ["futora_wallet_balance"],
+        queryFn: async () => {
+            try {
+                const { data: { user } } = await supabase.auth.getUser();
+                if (!user || !user.email) return null;
+
+                const { data, error } = await (walletSupabase as any)
+                    .from("wallets")
+                    .select("id, balance_paise")
+                    .ilike("email", user.email.trim())
+                    .maybeSingle();
+
+                if (error) {
+                    console.error("Fetch Error:", error);
+                    return { balance_paise: 0 };
+                }
+                return data || { balance_paise: 0 };
+            } catch (err) {
+                return { balance_paise: 0 };
+            }
+        },
+    });
+
+    // Real-time subscription
     useEffect(() => {
-        // Load coins from localStorage or use default
-        const savedCoins = localStorage.getItem('futora_coins');
-        if (savedCoins) {
-            setCoins(parseInt(savedCoins, 10));
+        if (!wallet?.id) {
+            console.log("Sync: Wallet ID not available yet for subscription");
+            return;
         }
-        setLoading(false);
-    }, []);
 
-    const fetchTransactions = async () => {
-        // Use mock transactions for now
-        setTransactions(MOCK_TRANSACTIONS);
+        console.log("Sync: Subscribing to wallet updates for ID:", wallet.id);
+
+        const channel = walletSupabase
+            .channel('wallet-sync-channel')
+            .on(
+                'postgres_changes',
+                {
+                    event: 'UPDATE',
+                    schema: 'public',
+                    table: 'wallets',
+                    filter: `id=eq.${wallet.id}`
+                },
+                (payload) => {
+                    console.log("Sync: Real-time update received!", payload);
+                    if (payload.new && payload.new.balance_paise !== undefined) {
+                        queryClient.setQueryData(["futora_wallet_balance"], payload.new);
+                    }
+                }
+            )
+            .subscribe((status, err) => {
+                console.log(`Sync: Subscription status for ${wallet.id}:`, status);
+                if (err) console.error("Sync: Subscription Error:", err);
+            });
+
+        return () => {
+            console.log("Sync: Cleaning up subscription for ID:", wallet.id);
+            walletSupabase.removeChannel(channel);
+        };
+    }, [wallet?.id, queryClient]);
+
+    const handleRedirect = () => {
+        navigate("/wallet-connect");
     };
 
     return (
-        <Card className="bg-gradient-to-br from-gray-900 to-black border-yellow-500/30 overflow-hidden relative">
-            <div className="absolute top-0 right-0 p-4 opacity-10">
-                <Coins className="w-32 h-32" />
-            </div>
-
-            <CardContent className="p-6 relative z-10">
-                <div className="flex items-center justify-between mb-2">
-                    <h3 className="font-semibold text-gray-400">Futora Wallet</h3>
-                    <Dialog onOpenChange={(open) => open && fetchTransactions()}>
-                        <DialogTrigger asChild>
-                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-muted-foreground hover:text-white">
-                                <History className="w-4 h-4" />
-                            </Button>
-                        </DialogTrigger>
-                        <DialogContent className="bg-gray-900 border-white/10 text-white">
-                            <DialogHeader>
-                                <DialogTitle>Transaction History</DialogTitle>
-                            </DialogHeader>
-                            <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
-                                {transactions.length > 0 ? (
-                                    transactions.map((tx) => (
-                                        <div key={tx.id} className="flex justify-between items-center bg-white/5 p-3 rounded-lg">
-                                            <div>
-                                                <p className="font-medium text-sm">{tx.reason}</p>
-                                                <p className="text-xs text-gray-400">{new Date(tx.created_at).toLocaleDateString()}</p>
-                                            </div>
-                                            <span className={`font-bold ${tx.type === 'EARN' ? 'text-green-500' : 'text-red-500'}`}>
-                                                {tx.type === 'EARN' ? '+' : '-'}{tx.coins}
-                                            </span>
-                                        </div>
-                                    ))
-                                ) : (
-                                    <p className="text-center text-gray-500 py-4">No transactions yet</p>
-                                )}
+        <motion.div
+            whileHover={{ scale: 1.01 }}
+            whileTap={{ scale: 0.99 }}
+            onClick={handleRedirect}
+            className="cursor-pointer"
+        >
+            <Card className="bg-[#0A0A0A] border-yellow-500/20 hover:border-yellow-500/50 transition-all shadow-[0_4px_20px_rgba(0,0,0,0.4)] hover:shadow-[0_8px_30px_rgba(234,179,8,0.1)] overflow-hidden group relative">
+                <div className="absolute inset-0 bg-gradient-to-br from-yellow-500/[0.03] via-transparent to-transparent pointer-events-none" />
+                <CardContent className="p-5 sm:p-6 flex items-center justify-between relative z-10 gap-4">
+                    <div className="flex items-center gap-4 sm:gap-6 min-w-0">
+                        <div className="flex-shrink-0 w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-br from-yellow-400 to-yellow-600 p-[1px]">
+                            <div className="w-full h-full rounded-2xl bg-[#0F0F0F] flex items-center justify-center">
+                                <Wallet className="w-6 h-6 sm:w-7 sm:h-7 text-yellow-500" />
                             </div>
-                        </DialogContent>
-                    </Dialog>
-                </div>
-
-                <div className="flex items-center gap-4">
-                    <motion.div
-                        animate={{ rotateY: 360 }}
-                        transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
-                        className="w-12 h-12 rounded-full bg-yellow-500/20 flex items-center justify-center border-2 border-yellow-500 text-yellow-500"
-                    >
-                        <span className="text-2xl">🪙</span>
-                    </motion.div>
-
-                    <div>
-                        <div className={`text-3xl font-bold text-white transition-opacity ${loading ? 'opacity-50' : 'opacity-100'}`}>
-                            {coins.toLocaleString()}
                         </div>
-                        <div className="text-xs text-yellow-500/80 font-medium">
-                            ₹1.00 = 1000 Coins
+                        <div className="min-w-0">
+                            <div className="flex items-center gap-2 mb-0.5">
+                                <h3 className="font-bold text-white text-base sm:text-lg whitespace-nowrap">Futora Wallet</h3>
+                                <ExternalLink className="w-3 h-3 text-yellow-500/40 group-hover:text-yellow-500 transition-colors flex-shrink-0" />
+                            </div>
+                            <div className="flex items-baseline gap-2">
+                                {isLoading ? (
+                                    <Loader2 className="w-4 h-4 animate-spin text-yellow-500" />
+                                ) : (
+                                    <span className="text-2xl sm:text-3xl font-black bg-gradient-to-r from-yellow-100 via-yellow-400 to-yellow-600 bg-clip-text text-transparent">
+                                        {((wallet as any)?.balance_paise / 100 || 0).toLocaleString()}
+                                    </span>
+                                )}
+                                <span className="text-[10px] sm:text-[11px] font-bold text-yellow-500/30 uppercase tracking-[0.2em] whitespace-nowrap">Coins balance</span>
+                            </div>
                         </div>
                     </div>
-                </div>
-            </CardContent>
-        </Card>
+                    <div className="flex flex-col items-end gap-1.5 text-right flex-shrink-0">
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-yellow-500/5 border border-yellow-500/10 group-hover:bg-yellow-500/20 group-hover:border-yellow-500/30 transition-all">
+                            <span className="text-[9px] sm:text-[10px] font-black text-yellow-500 uppercase tracking-widest px-0.5">Explore</span>
+                            <ChevronRight className="w-3 h-3 text-yellow-500" />
+                        </div>
+                    </div>
+                </CardContent>
+                <div className="absolute bottom-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-yellow-500/20 to-transparent" />
+            </Card>
+        </motion.div>
     );
 };

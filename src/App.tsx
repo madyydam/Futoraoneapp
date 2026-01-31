@@ -17,7 +17,6 @@ import { OfflineIndicator } from "@/components/pwa/OfflineIndicator";
 import { UserPresenceProvider } from "@/contexts/UserPresenceContext";
 import { GlobalErrorBoundary } from "@/components/GlobalErrorBoundary";
 import { SectionErrorBoundary } from "@/components/SectionErrorBoundary";
-import { CoinRewardPopup } from "@/components/rewards/CoinRewardPopup";
 
 // Core pages - Eager loaded for speed
 import Index from "./pages/Index";
@@ -84,6 +83,7 @@ const LeaderboardFull = lazy(() => import("./pages/LeaderboardFull"));
 const HallOfFameFull = lazy(() => import("./pages/HallOfFameFull"));
 const SelectAvatar = lazy(() => import("./pages/SelectAvatar"));
 const CodeDuel = lazy(() => import("./pages/games/CodeDuel"));
+const WalletConnect = lazy(() => import("./pages/WalletRedirect"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -115,7 +115,6 @@ const App = () => {
           <OfflineIndicator />
           <AchievementListener />
           <UserPresenceProvider>
-            <CoinRewardPopup />
             <GlobalErrorBoundary>
               <BrowserRouter>
                 <ScrollToTop />
@@ -275,6 +274,7 @@ const App = () => {
                     <Route path="/leaderboard" element={<LeaderboardFull />} />
                     <Route path="/hall-of-fame" element={<HallOfFameFull />} />
                     <Route path="/select-avatar" element={<SelectAvatar />} />
+                    <Route path="/wallet-connect" element={<WalletConnect />} />
 
                     {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                     <Route path="*" element={<NotFound />} />

@@ -4,7 +4,6 @@ import { PostSkeleton } from "@/components/PostSkeleton";
 import { BottomNav } from "@/components/BottomNav";
 import { FeedPost } from "@/components/FeedPost";
 import { useInView } from "react-intersection-observer";
-import GamificationWidget from "@/components/GamificationWidget";
 import AIMentor from "@/components/AIMentor";
 import { FeedHeader } from "@/components/feed/FeedHeader";
 import { FeedSkeleton } from "@/components/feed/FeedSkeleton";
@@ -36,15 +35,6 @@ const Feed = () => {
     }
   }, [inView, hasMore, loading, loadMore]);
 
-  // Optimize static widgets with useMemo
-  const gamificationWidget = useMemo(() => (
-    <GamificationWidget
-      userXP={userProfile?.xp || 0}
-      userLevel={userProfile?.level || 1}
-      streak={userProfile?.current_streak || 0}
-    />
-  ), [userProfile]);
-
   const aiMentor = useMemo(() => <AIMentor />, []);
 
   if (loading && posts.length === 0) {
@@ -62,11 +52,6 @@ const Feed = () => {
           <Suspense fallback={<div className="h-24 bg-muted/50 rounded-lg animate-pulse" />}>
             <Stories />
           </Suspense>
-        </div>
-
-        {/* Gamification Widget */}
-        <div className="mb-6">
-          {gamificationWidget}
         </div>
 
         {/* Posts */}

@@ -10,7 +10,6 @@ import { HowToPlay } from "@/components/games/HowToPlay";
 import { useMultiplayerGame } from "@/hooks/useMultiplayerGame";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { useGameReward } from "@/hooks/useGameReward";
 
 type Choice = "rock" | "paper" | "scissors" | null;
 type GameMode = "AI" | "LOCAL" | "ONLINE";
@@ -42,7 +41,6 @@ ChoiceButton.displayName = "ChoiceButton";
 const RockPaperScissors = () => {
     const navigate = useNavigate();
     const playSound = useGameSounds();
-    const { processWin } = useGameReward();
     const [p1Choice, setP1Choice] = useState<Choice>(null);
     const [p2Choice, setP2Choice] = useState<Choice>(null);
     const [turn, setTurn] = useState<1 | 2>(1); // For Stats/Turn display
@@ -88,7 +86,6 @@ const RockPaperScissors = () => {
                     playSound('win');
                     if (gameMode === 'AI' || isHost || gameMode === 'LOCAL') triggerWin(); // P1 Win
 
-                    if (gameMode === 'AI') processWin('rock_paper_scissors');
 
                 } else {
                     resultText = gameMode === 'AI' ? "AI Wins" : "Player 2 Wins";
@@ -110,7 +107,7 @@ const RockPaperScissors = () => {
                 // But we are inside component, so it's fine.
                 // However, wait. sendMove is from useMultiplayerGame.
                 // We'll need to pass it or accessible.
-                 
+
                 sendMove({ p1Choice: c1, p2Choice: c2, scores: newScores });
             } else if (gameMode === 'ONLINE') {
                 // Client just updates local display, actual sync comes from host usually but for responsive UI we update
@@ -118,7 +115,7 @@ const RockPaperScissors = () => {
             }
 
         }, 100);
-    }, [gameMode, isHost, playSound, processWin, scores, triggerWin]); // sendMove added via eslint-disable-next-line hack or we need to include it.
+    }, [gameMode, isHost, playSound, scores, triggerWin]); // sendMove added via eslint-disable-next-line hack or we need to include it.
 
     const { isConnected, playerCount, sendMove } = useMultiplayerGame({
         gameId: 'rps',

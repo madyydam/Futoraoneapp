@@ -5,7 +5,6 @@ import { Code, Cuboid as Cube } from "lucide-react";
 
 import { FindDevsView } from "@/components/tech-match/FindDevsView";
 import { AICompanionView } from "@/components/tech-match/AICompanionView";
-import { FeatureLockOverlay } from "@/components/rewards/FeatureLockOverlay";
 
 const TechMatch = () => {
     const [activeTab, setActiveTab] = useState("find-devs");
@@ -26,9 +25,7 @@ const TechMatch = () => {
                 </div>
 
                 <TabsContent value="find-devs">
-                    <FeatureLockOverlay featureName="tech_match">
-                        <FindDevsView />
-                    </FeatureLockOverlay>
+                    <FindDevsView />
                 </TabsContent>
 
                 {/* AI Companion Tab */}
