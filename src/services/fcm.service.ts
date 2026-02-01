@@ -6,6 +6,7 @@
 import { initializeApp } from 'firebase/app';
 import { getMessaging, getToken, onMessage } from 'firebase/messaging';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 // Firebase configuration - Replace with your Firebase project credentials
 const firebaseConfig = {
@@ -106,13 +107,21 @@ export const initializeFCM = async (userId: string): Promise<void> => {
             // Save token to database
             await saveFCMToken(userId, token);
             console.log('FCM: Token saved to Supabase profile.');
+            toast.success("Push notifications enabled! 🚀");
 
             // Listen for foreground messages
             if (messaging) {
                 onMessage(messaging, (payload) => {
                     console.log('FCM: Foreground message received:', payload);
 
-                    // Show notification
+                    // Show in-app notification if title exists
+                    if (payload.notification?.title) {
+                        toast(payload.notification.title, {
+                            description: payload.notification.body,
+                        });
+                    }
+
+                    // Show browser notification
                     if (payload.notification) {
                         new Notification(payload.notification.title || 'FutoraOne', {
                             body: payload.notification.body,
@@ -125,9 +134,14 @@ export const initializeFCM = async (userId: string): Promise<void> => {
             }
         } else {
             console.warn('FCM: No token generated. Check console for errors or permission status.');
+            // Only toast if permission was explicitly granted but token failed
+            if (Notification.permission === 'granted') {
+                toast.error("FCM Token failed. Refresh and try again.");
+            }
         }
     } catch (error) {
         console.error('FCM: Initialization failed:', error);
+        toast.error("Failed to setup notifications. Check console.");
     }
 };
 

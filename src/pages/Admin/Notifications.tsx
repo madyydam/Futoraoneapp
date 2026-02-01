@@ -135,6 +135,47 @@ const AdminNotifications = () => {
                     <div className="space-y-6">
                         <Card className="border-slate-200 bg-blue-50/50">
                             <CardHeader className="pb-2">
+                                <CardTitle className="text-sm font-bold text-blue-800 uppercase">Test Tools</CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-3">
+                                <Button
+                                    onClick={async () => {
+                                        try {
+                                            const { data: { user } } = await supabase.auth.getUser();
+                                            if (!user) return toast.error("Log in first");
+
+                                            // Get my own token
+                                            const { data: profile } = await supabase
+                                                .from('profiles')
+                                                .select('fcm_token')
+                                                .eq('id', user.id)
+                                                .single();
+
+                                            if (!profile?.fcm_token) {
+                                                return toast.error("Your device has no token saved. Refresh app.");
+                                            }
+
+                                            await sendBulkNotifications({
+                                                userIds: [user.id],
+                                                title: "Test Alert! 🔔",
+                                                body: "This is a direct test notification to your device.",
+                                                data: { type: 'test' }
+                                            });
+                                            toast.success("Test sent to your device!");
+                                        } catch (e) {
+                                            toast.error("Test failed");
+                                        }
+                                    }}
+                                    variant="outline"
+                                    className="w-full text-xs font-bold gap-2"
+                                >
+                                    <Bell size={14} /> Test My Device
+                                </Button>
+                            </CardContent>
+                        </Card>
+
+                        <Card className="border-slate-200 bg-blue-50/50">
+                            <CardHeader className="pb-2">
                                 <CardTitle className="text-sm font-bold text-blue-800 uppercase">Pro Tips</CardTitle>
                             </CardHeader>
                             <CardContent className="text-sm text-blue-700 space-y-3">

@@ -214,11 +214,21 @@ const Chat = () => {
 
       // Trigger push notification
       if (otherUser && user) {
+        console.log("Triggering push notification for:", otherUser.id);
         sendMessageNotification(
           otherUser.id,
           user.user_metadata?.full_name || user.email || "Someone",
           messageContent
-        ).catch(err => console.error("Failed to send push:", err));
+        ).then(() => {
+          console.log("Push notification request sent to Edge Function");
+        }).catch(err => {
+          console.error("Failed to send push:", err);
+          toast({
+            title: "Notification Error",
+            description: "Failed to trigger push notification.",
+            variant: "destructive"
+          });
+        });
       }
     }
 

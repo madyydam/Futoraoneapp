@@ -132,7 +132,6 @@ export const sendMessageNotification = async (
         body: messageContent,
         data: {
             type: 'message',
-            senderId: receiverId,
         },
     });
 };
