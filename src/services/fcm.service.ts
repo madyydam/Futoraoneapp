@@ -25,21 +25,23 @@ const app = initializeApp(firebaseConfig);
 let messaging: any = null;
 
 // Diagnostic log for config keys
-console.log('FCM: Core Config:', {
-    projectId: firebaseConfig.projectId,
-    hasApiKey: !!firebaseConfig.apiKey,
-    hasAppId: !!firebaseConfig.appId,
-    vapidKeySet: !!import.meta.env.VITE_FIREBASE_VAPID_KEY
-});
+const key = firebaseConfig.apiKey || '';
+const pId = firebaseConfig.projectId || '';
+console.log('--- FCM CONFIG DIAGNOSTICS ---');
+console.log('Project ID:', pId);
+console.log('API Key (start...end):', `${key.substring(0, 5)}...${key.substring(key.length - 4)}`);
+console.log('Sender ID:', firebaseConfig.messagingSenderId);
+console.log('Vapid Key Set:', !!import.meta.env.VITE_FIREBASE_VAPID_KEY);
+console.log('------------------------------');
 
 try {
-    if (firebaseConfig.apiKey && firebaseConfig.projectId) {
+    if (key && pId && pId !== 'undefined') {
         messaging = getMessaging(app);
     } else {
-        console.warn('FCM: Cannot initialize - Missing API Key or Project ID');
+        console.warn('FCM: Initialization blocked - Missing/Invalid Config');
     }
 } catch (error) {
-    console.log('FCM not supported in this environment:', error);
+    console.log('FCM not supported:', error);
 }
 
 /**
