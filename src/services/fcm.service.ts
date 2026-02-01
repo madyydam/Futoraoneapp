@@ -25,11 +25,11 @@ const app = initializeApp(firebaseConfig);
 let messaging: any = null;
 
 // Diagnostic log for config keys
-console.log('FCM: Config Check:', {
+console.log('FCM: Core Config:', {
+    projectId: firebaseConfig.projectId,
     hasApiKey: !!firebaseConfig.apiKey,
-    hasProjectId: !!firebaseConfig.projectId,
     hasAppId: !!firebaseConfig.appId,
-    hasVapidKey: !!import.meta.env.VITE_FIREBASE_VAPID_KEY
+    vapidKeySet: !!import.meta.env.VITE_FIREBASE_VAPID_KEY
 });
 
 try {
