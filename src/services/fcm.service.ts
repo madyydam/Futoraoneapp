@@ -76,8 +76,10 @@ export const requestNotificationPermission = async (): Promise<string | null> =>
         // Register service worker explicitly for more reliability
         if ('serviceWorker' in navigator) {
             try {
-                const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
-                console.log('FCM: Service Worker registered/found:', registration.scope);
+                // FORCE RE-REGISTER: Append a timestamp to bypass worker cache
+                const swUrl = `/firebase-messaging-sw.js?v=${Date.now()}`;
+                const registration = await navigator.serviceWorker.register(swUrl);
+                console.log('FCM: Service Worker Registered with Buster:', swUrl);
 
                 const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY;
                 const token = await getToken(messaging, {
@@ -86,8 +88,8 @@ export const requestNotificationPermission = async (): Promise<string | null> =>
                 });
                 return token;
             } catch (swError) {
-                console.error('FCM: Service Worker registration failed:', swError);
-                toast.error("Service Worker failed. Notifications may not work.");
+                console.error('FCM: Service Worker Link Error:', swError);
+                toast.error("FCM: SW registration failed.");
                 return null;
             }
         } else {
