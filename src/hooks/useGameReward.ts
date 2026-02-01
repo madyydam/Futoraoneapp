@@ -25,16 +25,30 @@ export const useGameReward = () => {
             }
 
             // 2. Fetch current wallet
-            const { data: wallet, error: fetchError } = await (walletSupabase as any)
+            let { data: wallet, error: fetchError } = await (walletSupabase as any)
                 .from("wallets")
                 .select("id, balance_paise")
                 .eq("email", user.email)
-                .single();
+                .maybeSingle();
 
-            if (fetchError || !wallet) {
-                console.error("Reward Error: Wallet not found", fetchError);
-                toast.error("Could not sync wallet for reward.");
-                return;
+            if (!wallet) {
+                console.log("Reward: Creating new wallet for", user.email);
+                const { data: newWallet, error: createError } = await (walletSupabase as any)
+                    .from("wallets")
+                    .insert({
+                        email: user.email,
+                        balance_paise: 0,
+                        full_name: user.user_metadata?.full_name || user.email.split('@')[0]
+                    })
+                    .select()
+                    .single();
+
+                if (createError) {
+                    console.error("Reward Error: Could not create wallet", createError);
+                    toast.error("Could not initialize your wallet.");
+                    return;
+                }
+                wallet = newWallet;
             }
 
             // 3. Update Balance (Add 10 coins = 1000 paise if logic assumes paise, or simple units)

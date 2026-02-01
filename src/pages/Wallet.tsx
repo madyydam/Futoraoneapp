@@ -22,9 +22,8 @@ export default function Wallet() {
             const baseUrl = "https://futorawallet.vercel.app";
             const params = new URLSearchParams({
                 sso_email: user.email,
+                sso_name: user.user_metadata?.full_name || "",
                 sso_source: "futora_one_app",
-                // If the other app supports token based login, we would pass it here
-                // sso_token: session.access_token 
             });
             // Providing root URL, assuming app redirects or handles logic
             setIframeUrl(`${baseUrl}/?${params.toString()}`);
