@@ -8,41 +8,50 @@ import { getMessaging, getToken, onMessage } from 'firebase/messaging';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
-// Firebase configuration - Replace with your Firebase project credentials
-const firebaseConfig = {
-    apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-    appId: import.meta.env.VITE_FIREBASE_APP_ID,
+// Helper to get trimmed env vars
+const getTrimmedEnv = (key: string) => {
+    const val = import.meta.env[key];
+    return typeof val === 'string' ? val.trim() : val;
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-
-// Initialize Firebase Cloud Messaging
+// Lazy initialized Firebase app
+let firebaseApp: any = null;
 let messaging: any = null;
 
-// Diagnostic log for config keys
-const key = firebaseConfig.apiKey || '';
-const pId = firebaseConfig.projectId || '';
-console.log('--- FCM CONFIG DIAGNOSTICS ---');
-console.log('Project ID:', pId);
-console.log('API Key (start...end):', `${key.substring(0, 5)}...${key.substring(key.length - 4)}`);
-console.log('Sender ID:', firebaseConfig.messagingSenderId);
-console.log('Vapid Key Set:', !!import.meta.env.VITE_FIREBASE_VAPID_KEY);
-console.log('------------------------------');
+const initFirebase = () => {
+    if (firebaseApp) return { app: firebaseApp, messaging };
 
-try {
-    if (key && pId && pId !== 'undefined') {
-        messaging = getMessaging(app);
-    } else {
-        console.warn('FCM: Initialization blocked - Missing/Invalid Config');
+    const config = {
+        apiKey: getTrimmedEnv('VITE_FIREBASE_API_KEY'),
+        authDomain: getTrimmedEnv('VITE_FIREBASE_AUTH_DOMAIN'),
+        projectId: getTrimmedEnv('VITE_FIREBASE_PROJECT_ID'),
+        storageBucket: getTrimmedEnv('VITE_FIREBASE_STORAGE_BUCKET'),
+        messagingSenderId: getTrimmedEnv('VITE_FIREBASE_MESSAGING_SENDER_ID'),
+        appId: getTrimmedEnv('VITE_FIREBASE_APP_ID'),
+    };
+
+    console.log('--- FCM CONFIG INITIALIZING ---');
+    console.log('Project:', config.projectId);
+    console.log('Key Check:', {
+        length: config.apiKey?.length,
+        starts: config.apiKey?.substring(0, 5),
+        ends: config.apiKey?.substring(config.apiKey.length - 4)
+    });
+
+    try {
+        if (config.apiKey && config.projectId && config.projectId !== 'undefined') {
+            firebaseApp = initializeApp(config);
+            messaging = getMessaging(firebaseApp);
+            console.log('FCM: Firebase App & Messaging initialized.');
+            return { app: firebaseApp, messaging };
+        } else {
+            console.warn('FCM: Init blocked - Incomplete config');
+        }
+    } catch (error) {
+        console.error('FCM: Initialization error:', error);
     }
-} catch (error) {
-    console.log('FCM not supported:', error);
-}
+    return { app: null, messaging: null };
+};
 
 /**
  * Request notification permission and get FCM token
@@ -67,12 +76,11 @@ export const requestNotificationPermission = async (): Promise<string | null> =>
             return null;
         }
 
+        const { messaging } = initFirebase();
+
         // Get FCM token
         if (!messaging) {
-            console.warn('FCM: Messaging not initialized. Config keys:', {
-                apiKey: firebaseConfig.apiKey?.substring(0, 10) + '...',
-                projectId: firebaseConfig.projectId
-            });
+            console.warn('FCM: Messaging not initialized. Check Vercel Env Vars.');
             return null;
         }
 
