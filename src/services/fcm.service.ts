@@ -89,8 +89,8 @@ export const requestNotificationPermission = async (): Promise<string | null> =>
             try {
                 const swUrl = `/firebase-messaging-sw.js?v=${Date.now()}`;
                 console.log('FCM: Final Step! Registering SW:', swUrl);
-                console.log('FCM: Using Project ID:', firebaseConfig.projectId);
-                console.log('FCM: Using API Key:', firebaseConfig.apiKey?.substring(0, 10) + '...');
+                console.log('FCM: Using Project ID:', getTrimmedEnv('VITE_FIREBASE_PROJECT_ID'));
+                console.log('FCM: Using API Key:', getTrimmedEnv('VITE_FIREBASE_API_KEY')?.substring(0, 5) + '...');
 
                 const registration = await navigator.serviceWorker.register(swUrl);
                 console.log('FCM: Service Worker Registered with Buster:', swUrl);
