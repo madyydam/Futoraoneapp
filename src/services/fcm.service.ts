@@ -69,15 +69,21 @@ export const requestNotificationPermission = async (): Promise<string | null> =>
 
         // Get FCM token
         if (!messaging) {
-            console.log('Messaging not initialized');
+            console.warn('FCM: Messaging not initialized. Config keys:', {
+                apiKey: firebaseConfig.apiKey?.substring(0, 10) + '...',
+                projectId: firebaseConfig.projectId
+            });
             return null;
         }
 
-        // Register service worker explicitly for more reliability
+        // Register service worker explicitly
         if ('serviceWorker' in navigator) {
             try {
-                // FORCE RE-REGISTER: Append a timestamp to bypass worker cache
                 const swUrl = `/firebase-messaging-sw.js?v=${Date.now()}`;
+                console.log('FCM: Final Step! Registering SW:', swUrl);
+                console.log('FCM: Using Project ID:', firebaseConfig.projectId);
+                console.log('FCM: Using API Key:', firebaseConfig.apiKey?.substring(0, 10) + '...');
+
                 const registration = await navigator.serviceWorker.register(swUrl);
                 console.log('FCM: Service Worker Registered with Buster:', swUrl);
 
