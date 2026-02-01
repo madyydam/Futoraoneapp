@@ -104,8 +104,19 @@ export const requestNotificationPermission = async (): Promise<string | null> =>
             return token;
         }
 
-    } catch (error) {
+    } catch (error: any) {
         console.error('Error getting FCM token:', error);
+
+        // If it's a 400 or API Key error, try clearing IndexedDB which often stores old project state
+        if (error?.message?.includes('API key not valid') || error?.message?.includes('400')) {
+            console.warn('FCM: Attempting to clear stale IndexedDB...');
+            try {
+                window.indexedDB.deleteDatabase('firebase-installations-database');
+                window.indexedDB.deleteDatabase('firebase-messaging-database');
+            } catch (e) {
+                console.error('FCM: Failed to clear IDB:', e);
+            }
+        }
         return null;
     }
 };

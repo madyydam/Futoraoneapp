@@ -350,7 +350,7 @@ const Messages = () => {
         <div className="p-3 sm:p-4 space-y-4 max-w-3xl mx-auto">
           <div className="flex items-center justify-between">
             <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent flex items-center gap-2">
-              Messages
+              Messages (Sync Verified)
             </h1>
             <div className="flex gap-2">
               <Button
