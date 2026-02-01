@@ -24,7 +24,17 @@ const WalletRedirect = () => {
     }, []);
 
     const handleContinue = () => {
-        window.open("https://futorawallet.vercel.app/", "_blank", "noopener,noreferrer");
+        if (userEmail) {
+            const baseUrl = "https://futorawallet.vercel.app/";
+            const params = new URLSearchParams({
+                sso_email: userEmail,
+                sso_name: userEmail.split('@')[0],
+                sso_secure_init: "true"
+            });
+            window.open(`${baseUrl}?${params.toString()}`, "_blank", "noopener,noreferrer");
+        } else {
+            window.open("https://futorawallet.vercel.app/", "_blank", "noopener,noreferrer");
+        }
     };
 
     if (loading) return <CartoonLoader />;
