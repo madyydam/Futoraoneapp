@@ -47,6 +47,9 @@ export const requestNotificationPermission = async (): Promise<string | null> =>
 
         if (permission !== 'granted') {
             console.log('Notification permission denied');
+            toast.error("Notifications were blocked. Please enable them in browser settings.", {
+                description: "Click the lock icon in the URL bar to reset."
+            });
             return null;
         }
 
@@ -56,10 +59,28 @@ export const requestNotificationPermission = async (): Promise<string | null> =>
             return null;
         }
 
-        const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY;
-        const token = await getToken(messaging, { vapidKey });
+        // Register service worker explicitly for more reliability
+        if ('serviceWorker' in navigator) {
+            try {
+                const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+                console.log('FCM: Service Worker registered/found:', registration.scope);
 
-        return token;
+                const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY;
+                const token = await getToken(messaging, {
+                    vapidKey,
+                    serviceWorkerRegistration: registration
+                });
+                return token;
+            } catch (swError) {
+                console.error('FCM: Service Worker registration failed:', swError);
+                toast.error("Service Worker failed. Notifications may not work.");
+                return null;
+            }
+        } else {
+            const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY;
+            const token = await getToken(messaging, { vapidKey });
+            return token;
+        }
 
     } catch (error) {
         console.error('Error getting FCM token:', error);
