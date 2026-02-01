@@ -24,8 +24,20 @@ const app = initializeApp(firebaseConfig);
 // Initialize Firebase Cloud Messaging
 let messaging: any = null;
 
+// Diagnostic log for config keys
+console.log('FCM: Config Check:', {
+    hasApiKey: !!firebaseConfig.apiKey,
+    hasProjectId: !!firebaseConfig.projectId,
+    hasAppId: !!firebaseConfig.appId,
+    hasVapidKey: !!import.meta.env.VITE_FIREBASE_VAPID_KEY
+});
+
 try {
-    messaging = getMessaging(app);
+    if (firebaseConfig.apiKey && firebaseConfig.projectId) {
+        messaging = getMessaging(app);
+    } else {
+        console.warn('FCM: Cannot initialize - Missing API Key or Project ID');
+    }
 } catch (error) {
     console.log('FCM not supported in this environment:', error);
 }
