@@ -68,7 +68,7 @@ export const useUnreadMessages = (userId: string | undefined) => {
           event: 'UPDATE',
           schema: 'public',
           table: 'conversation_participants',
-          filter: `user_id=eq.${userId}`
+          filter: userId ? `user_id=eq.${userId}` : undefined
         },
         () => {
           debouncedFetch();
