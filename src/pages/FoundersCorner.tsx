@@ -35,7 +35,7 @@ const FoundersCorner = () => {
             if (listingsError) throw listingsError;
 
             if (!listingsData || listingsData.length === 0) {
-                setListings(MOCK_FOUNDER_LISTINGS);
+                setListings([]);
                 return;
             }
 
@@ -69,14 +69,12 @@ const FoundersCorner = () => {
 
         } catch (error: any) {
             console.error("Error in fetchListings:", error);
-            // Only fallback to mock if it's a "table not found" type error or critical failure
-            // But prefer showing real error if possible, or fallback with toast
+            setListings([]);
             toast({
                 title: "Error loading listings",
-                description: "Using offline demo data. " + error.message,
+                description: error.message,
                 variant: "destructive"
             });
-            setListings(MOCK_FOUNDER_LISTINGS);
         } finally {
             setLoading(false);
         }
@@ -96,168 +94,7 @@ const FoundersCorner = () => {
         setActiveTab("listings");
     };
 
-    const MOCK_FOUNDER_LISTINGS: FounderListing[] = [
-        {
-            id: "1",
-            user_id: "u1",
-            role_needed: "CTO / Tech Lead",
-            idea_description: "Building a decentralized marketplace for freelance designers. I handle business & marketing, need someone who can build the MVP on Solana/Polkadot.",
-            equity_range: "30-40%",
-            stage: "Idea Phase",
-            industry: "Fintech",
-            location: "Remote",
-            created_at: new Date().toISOString(),
-            profiles: {
-                full_name: "Aisha Verma",
-                avatar_url: "https://api.dicebear.com/7.x/avataaars/svg?seed=Aisha",
-                username: "aisha_v"
-            }
-        },
-        {
-            id: "2",
-            user_id: "u2",
-            role_needed: "Marketing Co-founder",
-            idea_description: "An AI-powered edtech platform that personalizes curriculum for ADHD students. MVP is ready, need someone to drive user acquisition.",
-            equity_range: "15-25%",
-            stage: "MVP Ready",
-            industry: "Edtech",
-            location: "Bangalore",
-            created_at: new Date(Date.now() - 86400000).toISOString(),
-            profiles: {
-                full_name: "Rohan Das",
-                avatar_url: "https://api.dicebear.com/7.x/avataaars/svg?seed=Rohan",
-                username: "rohan_d"
-            }
-        },
-        {
-            id: "3",
-            user_id: "u3",
-            role_needed: "Full Stack Dev",
-            idea_description: "SaaS tool for automated legal document review for Indian SMBs. Need a strong developer with NLP experience.",
-            equity_range: "20-30%",
-            stage: "Early Revenue",
-            industry: "SaaS",
-            location: "Mumbai / Remote",
-            created_at: new Date(Date.now() - 172800000).toISOString(),
-            profiles: {
-                full_name: "Priya Nair",
-                avatar_url: "https://api.dicebear.com/7.x/avataaars/svg?seed=Priya",
-                username: "priya_n"
-            }
-        },
-        {
-            id: "4",
-            user_id: "u4",
-            role_needed: "Product Designer (UI/UX)",
-            idea_description: "Revolutionizing the chai-drinking experience with a smart IoT tea maker and subscription app.",
-            equity_range: "10-20%",
-            stage: "Prototype",
-            industry: "IoT / FoodTech",
-            location: "Delhi",
-            created_at: new Date(Date.now() - 259200000).toISOString(),
-            profiles: {
-                full_name: "Vikram Singh",
-                avatar_url: "https://api.dicebear.com/7.x/avataaars/svg?seed=Vikram",
-                username: "vikram_s"
-            }
-        },
-        {
-            id: "5",
-            user_id: "u5",
-            role_needed: "AI Researcher / Engineer",
-            idea_description: "Developing a generative AI model specifically for Indian regional languages to help rural education.",
-            equity_range: "25-35%",
-            stage: "Research",
-            industry: "AI/ML",
-            location: "Remote",
-            created_at: new Date(Date.now() - 345600000).toISOString(),
-            profiles: {
-                full_name: "Dr. Anjali Gupta",
-                avatar_url: "https://api.dicebear.com/7.x/avataaars/svg?seed=Anjali",
-                username: "anjali_ai"
-            }
-        },
-        {
-            id: "6",
-            user_id: "u6",
-            role_needed: "Sales Head",
-            idea_description: "B2B SaaS platform for warehouse logistics optimization. We have the product, need someone to close enterprise deals.",
-            equity_range: "10-15% + Comm",
-            stage: "Growth",
-            industry: "SaaS",
-            location: "Pune",
-            created_at: new Date(Date.now() - 432000000).toISOString(),
-            profiles: {
-                full_name: "Karthik R",
-                avatar_url: "https://api.dicebear.com/7.x/avataaars/svg?seed=Karthik",
-                username: "karthik_logistics"
-            }
-        },
-        {
-            id: "7",
-            user_id: "u7",
-            role_needed: "Mobile App Dev (Flutter)",
-            idea_description: "Social fitness app connecting gym buddies in Tier 2 cities. Designs ready, backend ready.",
-            equity_range: "5-10%",
-            stage: "Development",
-            industry: "HealthTech",
-            location: "Hyderabad",
-            created_at: new Date(Date.now() - 518400000).toISOString(),
-            profiles: {
-                full_name: "Sneha Reddy",
-                avatar_url: "https://api.dicebear.com/7.x/avataaars/svg?seed=Sneha",
-                username: "sneha_fit"
-            }
-        },
-        {
-            id: "8",
-            user_id: "u8",
-            role_needed: "Blockchain Dev",
-            idea_description: "Secure medical record storage on blockchain to give patients full control of their data.",
-            equity_range: "30-40%",
-            stage: "Idea Phase",
-            industry: "MedTech / Web3",
-            location: "Remote",
-            created_at: new Date(Date.now() - 604800000).toISOString(),
-            profiles: {
-                full_name: "Arun Kumar",
-                avatar_url: "https://api.dicebear.com/7.x/avataaars/svg?seed=Arun",
-                username: "arun_med3"
-            }
-        },
-        {
-            id: "9",
-            user_id: "u9",
-            role_needed: "Operations Lead",
-            idea_description: "Aggregator for EV charging stations across India. Need someone to manage partnerships and ground ops.",
-            equity_range: "10-20%",
-            stage: "Seed Funded",
-            industry: "CleanTech",
-            location: "Bangalore",
-            created_at: new Date(Date.now() - 691200000).toISOString(),
-            profiles: {
-                full_name: "Meera Patel",
-                avatar_url: "https://api.dicebear.com/7.x/avataaars/svg?seed=Meera",
-                username: "meera_ev"
-            }
-        },
-        {
-            id: "10",
-            user_id: "u10",
-            role_needed: "Game Developer (Unity)",
-            idea_description: "Building a mythology-based RPG game rooted in Indian history. Need a passionate Unity dev.",
-            equity_range: "20-30%",
-            stage: "Pre-Production",
-            industry: "Gaming",
-            location: "Remote",
-            created_at: new Date(Date.now() - 777600000).toISOString(),
-            profiles: {
-                full_name: "Siddharth M",
-                avatar_url: "https://api.dicebear.com/7.x/avataaars/svg?seed=Siddharth",
-                username: "sid_games"
-            }
-        }
-    ];
+    // Mock data deleted - now using real database listings
 
     const filteredListings = listings.filter(listing => {
         const matchesSearch =
@@ -298,7 +135,7 @@ const FoundersCorner = () => {
                                 <Users className="w-4 h-4" /> Listings
                             </TabsTrigger>
                             <TabsTrigger value="ai-advisor" className="gap-2 data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-500/10 data-[state=active]:to-pink-600/10 data-[state=active]:text-pink-600">
-                                <Bot className="w-4 h-4" /> AI Co-Founder
+                                <Bot className="w-4 h-4" /> AI Founder
                             </TabsTrigger>
                         </TabsList>
 

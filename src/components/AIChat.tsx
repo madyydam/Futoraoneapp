@@ -57,7 +57,7 @@ const AIChat = memo(({
                         >
                             {msg.sender === 'ai' && (
                                 <Avatar className={`w-10 h-10 border-2 border-${themeColor}-500/50 shadow-[0_0_15px_rgba(255,255,255,0.2)]`}>
-                                    <AvatarImage src={aiGender === 'female' ? "/ai-3d-model.png" : "/arjun-avatar.png"} className="object-cover" />
+                                    <AvatarImage src={aiGender === 'female' ? "/ai-avatar.png" : "/arjun-avatar.png"} className="object-cover" />
                                     <AvatarFallback>{aiName[0]}</AvatarFallback>
                                 </Avatar>
                             )}
@@ -76,7 +76,7 @@ const AIChat = memo(({
                     {isTyping && (
                         <div className="flex gap-3 justify-start">
                             <Avatar className={`w-10 h-10 border-2 border-${themeColor}-500/50 shadow-[0_0_15px_rgba(255,255,255,0.2)]`}>
-                                <AvatarImage src={aiGender === 'female' ? "/ai-3d-model.png" : "/arjun-avatar.png"} className="object-cover" />
+                                <AvatarImage src={aiGender === 'female' ? "/ai-avatar.png" : "/arjun-avatar.png"} className="object-cover" />
                                 <AvatarFallback>{aiName[0]}</AvatarFallback>
                             </Avatar>
                             <div className="bg-black/40 text-white rounded-2xl rounded-tl-sm border border-white/10 px-5 py-3 flex items-center gap-1">

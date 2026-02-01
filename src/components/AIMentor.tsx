@@ -86,8 +86,8 @@ const AIMentor = () => {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 100, scale: 0.9 }}
             className={`fixed z-50 bg-card border border-border rounded-2xl shadow-2xl overflow-hidden flex flex-col ${isExpanded
-                ? 'inset-4 md:inset-8'
-                : 'bottom-24 right-4 w-[calc(100%-2rem)] md:w-96 h-[500px] max-h-[70vh]'
+              ? 'inset-4 md:inset-8'
+              : 'bottom-24 right-4 w-[calc(100%-2rem)] md:w-96 h-[500px] max-h-[70vh]'
               }`}
           >
             {/* Header */}
@@ -137,8 +137,8 @@ const AIMentor = () => {
                     key={m}
                     onClick={() => setMode(m)}
                     className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${mode === m
-                        ? 'bg-white text-primary'
-                        : 'bg-white/20 hover:bg-white/30'
+                      ? 'bg-white text-primary'
+                      : 'bg-white/20 hover:bg-white/30'
                       }`}
                   >
                     {m === 'mentor' ? '💡 Mentor' : m === 'enhance' ? '✨ Enhance' : '🚀 Ideas'}
@@ -148,78 +148,93 @@ const AIMentor = () => {
             </div>
 
             {/* Messages */}
-            <ScrollArea className="flex-1 p-4" ref={scrollRef}>
-              {messages.length === 0 ? (
-                <div className="space-y-4">
-                  <div className="text-center py-6">
-                    <div className="w-16 h-16 mx-auto rounded-full bg-primary/10 flex items-center justify-center mb-4">
-                      <Bot className="w-8 h-8 text-primary" />
+            <div className="relative flex-1 overflow-hidden">
+              <ScrollArea className="h-full p-4" ref={scrollRef}>
+                {messages.length === 0 ? (
+                  <div className="space-y-4">
+                    <div className="text-center py-6">
+                      <div className="w-16 h-16 mx-auto rounded-full bg-primary/10 flex items-center justify-center mb-4">
+                        <Bot className="w-8 h-8 text-primary" />
+                      </div>
+                      <h4 className="font-semibold text-foreground">Hi! I'm your AI Tech Mentor</h4>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Ask me anything about code, tech, or get project ideas!
+                      </p>
                     </div>
-                    <h4 className="font-semibold text-foreground">Hi! I'm your AI Tech Mentor</h4>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Ask me anything about code, tech, or get project ideas!
-                    </p>
-                  </div>
 
-                  <div className="space-y-2">
-                    <p className="text-xs text-muted-foreground uppercase tracking-wide">Quick prompts</p>
-                    {quickPrompts.map((prompt, i) => (
-                      <button
-                        key={i}
-                        onClick={() => {
-                          setMode(prompt.mode);
-                          sendMessage(prompt.text, prompt.mode);
-                        }}
-                        className="w-full flex items-center gap-3 p-3 rounded-xl bg-secondary/50 hover:bg-secondary transition-colors text-left"
-                      >
-                        <div className={`w-8 h-8 rounded-lg ${modeColors[prompt.mode]} flex items-center justify-center`}>
-                          <prompt.icon className="w-4 h-4" />
-                        </div>
-                        <span className="text-sm font-medium">{prompt.text}</span>
-                      </button>
-                    ))}
+                    <div className="space-y-2">
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Quick prompts</p>
+                      {quickPrompts.map((prompt, i) => (
+                        <button
+                          key={i}
+                          onClick={() => {
+                            setMode(prompt.mode);
+                            sendMessage(prompt.text, prompt.mode);
+                          }}
+                          className="w-full flex items-center gap-3 p-3 rounded-xl bg-secondary/50 hover:bg-secondary transition-colors text-left"
+                        >
+                          <div className={`w-8 h-8 rounded-lg ${modeColors[prompt.mode]} flex items-center justify-center`}>
+                            <prompt.icon className="w-4 h-4" />
+                          </div>
+                          <span className="text-sm font-medium">{prompt.text}</span>
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {messages.map((msg, i) => (
-                    <motion.div
-                      key={i}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                    >
-                      <div
-                        className={`max-w-[85%] p-3 rounded-2xl ${msg.role === 'user'
+                ) : (
+                  <div className="space-y-4">
+                    {messages.map((msg, i) => (
+                      <motion.div
+                        key={i}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                      >
+                        <div
+                          className={`max-w-[85%] p-3 rounded-2xl ${msg.role === 'user'
                             ? 'bg-primary text-primary-foreground rounded-br-md'
                             : 'bg-secondary text-secondary-foreground rounded-bl-md'
-                          }`}
+                            }`}
+                        >
+                          <p className="text-sm whitespace-pre-wrap break-words">{msg.content}</p>
+                        </div>
+                      </motion.div>
+                    ))}
+                    {isLoading && (
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        className="flex items-center gap-2 text-muted-foreground"
                       >
-                        <p className="text-sm whitespace-pre-wrap break-words">{msg.content}</p>
-                      </div>
-                    </motion.div>
-                  ))}
-                  {isLoading && (
-                    <motion.div
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      className="flex items-center gap-2 text-muted-foreground"
-                    >
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      <span className="text-sm">Thinking...</span>
-                    </motion.div>
-                  )}
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span className="text-sm">Thinking...</span>
+                      </motion.div>
+                    )}
+                  </div>
+                )}
+                {error && (
+                  <div className="mt-2 p-3 bg-destructive/10 text-destructive rounded-lg text-sm">
+                    {error}
+                  </div>
+                )}
+              </ScrollArea>
+
+              {/* Coming Soon Overlay */}
+              <div className="absolute inset-0 z-20 bg-background/60 backdrop-blur-[2px] flex items-center justify-center p-6 text-center">
+                <div className="bg-card/90 border border-border p-6 rounded-2xl shadow-xl max-w-[240px] animate-in fade-in zoom-in duration-300">
+                  <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Sparkles className="w-6 h-6 text-primary" />
+                  </div>
+                  <h4 className="font-bold text-lg mb-1">Coming Soon</h4>
+                  <p className="text-sm text-muted-foreground leading-tight">
+                    Our AI Tech Mentor is getting a massive brain upgrade. Stay tuned!
+                  </p>
                 </div>
-              )}
-              {error && (
-                <div className="mt-2 p-3 bg-destructive/10 text-destructive rounded-lg text-sm">
-                  {error}
-                </div>
-              )}
-            </ScrollArea>
+              </div>
+            </div>
 
             {/* Input */}
-            <form onSubmit={handleSubmit} className="p-4 border-t border-border bg-background/50">
+            <form onSubmit={handleSubmit} className="p-4 border-t border-border bg-background/50 opacity-50 pointer-events-none">
               <div className="flex gap-2">
                 <Textarea
                   ref={inputRef}

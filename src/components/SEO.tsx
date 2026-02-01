@@ -8,9 +8,9 @@ interface SEOProps {
 }
 
 export const SEO = ({ title, description, image, url }: SEOProps) => {
-    const siteTitle = "Futora";
+    const siteTitle = "FutoraOne";
     const fullTitle = `${title} | ${siteTitle}`;
-    const defaultDescription = "Futora - Your ultimate developer community and innovation hub.";
+    const defaultDescription = "FutoraOne - Your ultimate developer community and innovation hub.";
     const metaDescription = description || defaultDescription;
     const metaImage = image || "/og-image.png"; // Assuming a default OG image exists or will exist
 

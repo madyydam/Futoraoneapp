@@ -43,7 +43,7 @@ export const PostHeader = memo(({
                 whileHover={{ x: 2 }}
                 transition={{ type: "spring", stiffness: 300 }}
             >
-                <Avatar className="w-12 h-12 border-2 border-primary ring-2 ring-primary/10 hover:ring-primary/30 transition-all">
+                <Avatar className="w-14 h-14 border-2 border-background ring-2 ring-border hover:ring-primary/40 transition-all">
                     <AvatarImage
                         src={profile.avatar_url || undefined}
                         loading={index < 2 ? "eager" : "lazy"}

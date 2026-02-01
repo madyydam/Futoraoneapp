@@ -142,9 +142,7 @@ const CreatePost = () => {
 
         let compressedFile = imageFile;
         try {
-          console.log('Compressing image...', imageFile.size / 1024 / 1024, 'MB');
           compressedFile = await imageCompression(imageFile, options);
-          console.log('Compressed image:', compressedFile.size / 1024 / 1024, 'MB');
         } catch (error) {
           console.error("Image compression failed:", error);
           // Fallback to original file if compression fails

@@ -6,23 +6,20 @@ import { VitePWA } from "vite-plugin-pwa";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
-  // Load env vars from process.env (Lovable Cloud injects them directly)
+  // Load env vars from process.env (Vite handles VITE_ prefixed vars automatically from .env)
   const env = loadEnv(mode, process.cwd(), "");
 
-  // Lovable Cloud project - hardcoded fallbacks to prevent runtime crashes
-  const LOVABLE_CLOUD_URL = "https://forxnefbbsqwhdfadvkk.supabase.co";
-  const LOVABLE_CLOUD_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZvcnhuZWZiYnNxd2hkZmFkdmtrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM5NjE0MzUsImV4cCI6MjA3OTUzNzQzNX0.YO9cEWBmWjjtrnxwlIQ_1S-8c3vltB3i5XmLwRd4QRo";
-
-  // Get Supabase config - prefer env vars, fallback to Lovable Cloud values
-  const SUPABASE_URL = env.VITE_SUPABASE_URL || process.env.VITE_SUPABASE_URL || LOVABLE_CLOUD_URL;
-  const SUPABASE_KEY = env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || LOVABLE_CLOUD_KEY;
+  // Use values from .env or process.env, with empty string as safe default
+  const SUPABASE_URL = env.VITE_SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
+  const SUPABASE_KEY = env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || "";
 
   return {
     server: {
       host: "::",
       port: 8080,
     },
-    // Force inline these values so they're never undefined at runtime
+    // Only define value if we want to force them (useful for certain deployment environments)
+    // but typically Vite handles this. We'll keep it but point to the correct variables.
     define: {
       "import.meta.env.VITE_SUPABASE_URL": JSON.stringify(SUPABASE_URL),
       "import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY": JSON.stringify(SUPABASE_KEY),
@@ -32,10 +29,10 @@ export default defineConfig(({ mode }) => {
       mode === "development" && componentTagger(),
       VitePWA({
         registerType: "autoUpdate",
-        includeAssets: ["favicon.ico", "robots.txt", "app-icon.png"],
+        includeAssets: ["favicon.png", "robots.txt", "app-icon.png"],
         manifest: {
-          name: "FutoraFlow",
-          short_name: "FutoraFlow",
+          name: "FutoraOne",
+          short_name: "FutoraOne",
           description: "The Future of Social Networking for Developers",
           theme_color: "#0f172a",
           background_color: "#0f172a",
@@ -80,6 +77,11 @@ export default defineConfig(({ mode }) => {
           navigateFallback: "index.html",
           navigateFallbackDenylist: [/^\/api/],
         },
+        devOptions: {
+          enabled: true,
+          type: 'module',
+          navigateFallback: 'index.html',
+        },
       }),
     ].filter(Boolean),
     build: {
@@ -92,10 +94,11 @@ export default defineConfig(({ mode }) => {
             ui: ["@radix-ui/react-dialog", "@radix-ui/react-popover", "@radix-ui/react-tooltip", "framer-motion"],
             utils: ["date-fns", "clsx", "tailwind-merge"],
             supabase: ["@supabase/supabase-js"],
+            firebase: ["firebase/app", "firebase/auth", "firebase/messaging"],
           },
         },
       },
-      chunkSizeWarningLimit: 1000,
+      chunkSizeWarningLimit: 1200,
     },
     resolve: {
       alias: {
@@ -103,7 +106,7 @@ export default defineConfig(({ mode }) => {
       },
     },
     optimizeDeps: {
-      include: ["react", "react-dom", "react-router-dom", "@supabase/supabase-js"],
+      include: ["react", "react-dom", "react-router-dom", "@supabase/supabase-js", "firebase/app", "firebase/auth"],
     },
   };
 });

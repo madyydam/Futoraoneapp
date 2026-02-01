@@ -10,178 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { BottomNav } from "@/components/BottomNav";
 import { useToast } from "@/hooks/use-toast";
 
-const MOCK_GIG_LISTINGS: GigListing[] = [
-    {
-        id: "1",
-        user_id: "u1",
-        title: "Build a Landing Page in React",
-        description: "Need a responsive landing page for my SaaS product. Designs are ready in Figma. Deadline: 3 days.",
-        price: 5000,
-        currency: "INR",
-        status: "open",
-        location: "Remote",
-        skills_required: ["React", "Tailwind CSS", "Figma"],
-        created_at: new Date().toISOString(),
-        profiles: {
-            full_name: "Rahul Gupta",
-            avatar_url: "https://api.dicebear.com/7.x/avataaars/svg?seed=Rahul",
-            username: "rahul_g"
-        }
-    },
-    {
-        id: "2",
-        user_id: "u2",
-        title: "Logo Design for EdTech Startup",
-        description: "Looking for a modern, minimalistic logo for an education platform. Need source files and branding guidelines.",
-        price: 2500,
-        currency: "INR",
-        status: "open",
-        location: "Remote",
-        skills_required: ["Graphic Design", "Illustrator", "Branding"],
-        created_at: new Date(Date.now() - 86400000).toISOString(),
-        profiles: {
-            full_name: "Priya Sharma",
-            avatar_url: "https://api.dicebear.com/7.x/avataaars/svg?seed=Priya",
-            username: "priya_s"
-        }
-    },
-    {
-        id: "3",
-        user_id: "u3",
-        title: "Fix Authentication Bug in Node.js App",
-        description: "We are facing an issue with JWT token refresh expiration. Need an expert to debug and fix it ASAP.",
-        price: 3000,
-        currency: "INR",
-        status: "open",
-        location: "Remote",
-        skills_required: ["Node.js", "Express", "JWT"],
-        created_at: new Date(Date.now() - 172800000).toISOString(),
-        profiles: {
-            full_name: "Amit Patel",
-            avatar_url: "https://api.dicebear.com/7.x/avataaars/svg?seed=Amit",
-            username: "amit_backend"
-        }
-    },
-    {
-        id: "4",
-        user_id: "u4",
-        title: "Write 5 SEO Blog Posts for Tech Niche",
-        description: "Need high-quality, technical blog posts about Cloud Computing and AI. Each post 1000 words.",
-        price: 1500,
-        currency: "INR",
-        status: "open",
-        location: "Remote",
-        skills_required: ["Content Writing", "SEO", "Technical Writing"],
-        created_at: new Date(Date.now() - 259200000).toISOString(),
-        profiles: {
-            full_name: "Sneha Kapoor",
-            avatar_url: "https://api.dicebear.com/7.x/avataaars/svg?seed=Sneha",
-            username: "sneha_writer"
-        }
-    },
-    {
-        id: "5",
-        user_id: "u5",
-        title: "Convert Website to Mobile App (Flutter)",
-        description: "We have a website and need a basic wrapper app or simple Flutter app with webview and notifications.",
-        price: 8000,
-        currency: "INR",
-        status: "open",
-        location: "Remote",
-        skills_required: ["Flutter", "Android", "iOS"],
-        created_at: new Date(Date.now() - 345600000).toISOString(),
-        profiles: {
-            full_name: "Vikram Singh",
-            avatar_url: "https://api.dicebear.com/7.x/avataaars/svg?seed=Vikram",
-            username: "vikram_app"
-        }
-    },
-    {
-        id: "6",
-        user_id: "u6",
-        title: "Setup CI/CD Pipeline on GitHub Actions",
-        description: "Need to automate deployment to AWS EC2 whenever code is pushed to main branch.",
-        price: 4000,
-        currency: "INR",
-        status: "open",
-        location: "Remote",
-        skills_required: ["DevOps", "AWS", "GitHub Actions"],
-        created_at: new Date(Date.now() - 432000000).toISOString(),
-        profiles: {
-            full_name: "Arjun Reddy",
-            avatar_url: "https://api.dicebear.com/7.x/avataaars/svg?seed=Arjun",
-            username: "arun_devops"
-        }
-    },
-    {
-        id: "7",
-        user_id: "u7",
-        title: "Video Editing for YouTube Tech Channel",
-        description: "Edit a 10-minute tech review video. Add subtitles, transitions, and background music.",
-        price: 2000,
-        currency: "INR",
-        status: "open",
-        location: "Remote",
-        skills_required: ["Video Editing", "Premiere Pro", "After Effects"],
-        created_at: new Date(Date.now() - 518400000).toISOString(),
-        profiles: {
-            full_name: "Anjali Das",
-            avatar_url: "https://api.dicebear.com/7.x/avataaars/svg?seed=Anjali",
-            username: "anjali_yt"
-        }
-    },
-    {
-        id: "8",
-        user_id: "u8",
-        title: "Python Script for Web Scraping",
-        description: "Scrape product prices from 3 e-commerce sites and save to CSV. Must handle anti-bot measures.",
-        price: 3500,
-        currency: "INR",
-        status: "open",
-        location: "Remote",
-        skills_required: ["Python", "Selenium", "BeautifulSoup"],
-        created_at: new Date(Date.now() - 604800000).toISOString(),
-        profiles: {
-            full_name: "Karthik M",
-            avatar_url: "https://api.dicebear.com/7.x/avataaars/svg?seed=Karthik",
-            username: "karthik_data"
-        }
-    },
-    {
-        id: "9",
-        user_id: "u9",
-        title: "Social Media Manager for Startup",
-        description: "Manage Twitter and LinkedIn for a month. Create 3 posts/week and engage with audience.",
-        price: 6000,
-        currency: "INR",
-        status: "open",
-        location: "Remote",
-        skills_required: ["Social Media", "Marketing", "Copywriting"],
-        created_at: new Date(Date.now() - 691200000).toISOString(),
-        profiles: {
-            full_name: "Meera Nair",
-            avatar_url: "https://api.dicebear.com/7.x/avataaars/svg?seed=Meera",
-            username: "meera_social"
-        }
-    },
-    {
-        id: "10",
-        user_id: "u10",
-        title: "Teach Me Docker Basics",
-        description: "Looking for a 1-hour 1:1 session to understand Docker, Containers, and Docker Compose.",
-        price: 1000,
-        currency: "INR",
-        status: "open",
-        location: "Zoom",
-        skills_required: ["Docker", "Teaching", "DevOps"],
-        created_at: new Date(Date.now() - 777600000).toISOString(),
-        profiles: {
-            full_name: "Siddharth J",
-            avatar_url: "https://api.dicebear.com/7.x/avataaars/svg?seed=Siddharth",
-            username: "sid_student"
-        }
-    }
-];
+// Mock data deleted - now using real database listings
 
 const GigMarketplace = () => {
     const [gigs, setGigs] = useState<GigListing[]>([]);
@@ -204,7 +33,7 @@ const GigMarketplace = () => {
             if (gigsError) throw gigsError;
 
             if (!gigsData || gigsData.length === 0) {
-                setGigs(MOCK_GIG_LISTINGS);
+                setGigs([]);
                 return;
             }
 
@@ -238,11 +67,10 @@ const GigMarketplace = () => {
 
         } catch (error: any) {
             console.error("Error fetching gigs:", error);
-            // Fallback to mock data on error but show toast
-            setGigs(MOCK_GIG_LISTINGS);
+            setGigs([]);
             toast({
-                title: "Notice",
-                description: "Loaded demo gigs. " + (error.message || ""),
+                title: "Error",
+                description: "Failed to load gigs. " + (error.message || ""),
                 variant: "destructive"
             });
         } finally {

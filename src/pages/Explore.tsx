@@ -1,87 +1,18 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Search, TrendingUp, Code, Brain, Shield, Cloud, Cpu, Blocks, Users, Smartphone, Database, Rocket, ExternalLink, Zap, Heart, Gamepad2 } from "lucide-react";
-import { motion } from "framer-motion";
 import { BottomNav } from "@/components/BottomNav";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { FollowButton } from "@/components/FollowButton";
-import { StartChatButton } from "@/components/StartChatButton";
-import { OnlineIndicator } from "@/components/OnlineIndicator";
-import { Button } from "@/components/ui/button";
 import { SEO } from "@/components/SEO";
-
-import { VerifiedBadge } from "@/components/VerifiedBadge";
+import {
+  ExploreHeader,
+  OpportunitySection,
+  UserGrid,
+  CategoryGrid,
+  TrendingSection,
+  UserProfile
+} from "@/components/explore/ExploreComponents";
 import type { User } from "@supabase/supabase-js";
-
-interface UserProfile {
-  id: string;
-  username: string;
-  full_name: string;
-  avatar_url: string | null;
-  is_verified?: boolean | null;
-  follower_count?: number;
-}
-
-// Static data moved outside component to prevent recreation on every render
-const CATEGORIES = [
-  { name: "AI & ML", icon: Brain, color: "bg-blue-500" },
-  { name: "Web Dev", icon: Code, color: "bg-green-500" },
-  { name: "Cybersecurity", icon: Shield, color: "bg-red-500" },
-  { name: "Cloud", icon: Cloud, color: "bg-purple-500" },
-  { name: "Robotics", icon: Cpu, color: "bg-yellow-500" },
-  { name: "Blockchain", icon: Blocks, color: "bg-orange-500" },
-  { name: "Mobile Dev", icon: Smartphone, color: "bg-pink-500" },
-  { name: "Data Science", icon: Database, color: "bg-teal-500" },
-];
-
-const TRENDING_TOPICS = [
-  { tag: "ChatGPT-5", posts: "2.4K" },
-  { tag: "ReactJS", posts: "1.8K" },
-  { tag: "Python", posts: "3.2K" },
-  { tag: "DevOps", posts: "1.5K" },
-  { tag: "MachineLearning", posts: "2.9K" },
-  { tag: "Rust", posts: "1.2K" },
-  { tag: "Web3", posts: "2.1K" },
-  { tag: "DataScience", posts: "1.9K" },
-];
-
-const TRENDING_PROJECTS = [
-  {
-    title: "AI Image Generator",
-    author: "Saanvi Iyer",
-    likes: 342,
-    tech: ["Python", "TensorFlow", "React"],
-  },
-  {
-    title: "Blockchain Voting System",
-    author: "Arjun Kapoor",
-    likes: 289,
-    tech: ["Solidity", "Web3", "Node.js"],
-  },
-  {
-    title: "Real-time Chat App",
-    author: "Diya Malhotra",
-    likes: 456,
-    tech: ["WebSocket", "React", "Express"],
-  },
-  {
-    title: "Smart Home Dashboard",
-    author: "Vihaan Nair",
-    likes: 234,
-    tech: ["IoT", "Vue.js", "MQTT"],
-  },
-  {
-    title: "DeFi Exchange",
-    author: "Ishaan Gupta",
-    likes: 567,
-    tech: ["Solidity", "React", "Ethers.js"],
-  },
-];
 
 const Explore = () => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -97,6 +28,65 @@ const Explore = () => {
   useEffect(() => {
     fetchCurrentUser();
     fetchPeople();
+
+    console.log("Setting up real-time profile sync for Explore...");
+    const channel = supabase
+      .channel('explore-profile-sync')
+      .on(
+        'postgres_changes',
+        {
+          event: '*', // Listen to all profile changes
+          schema: 'public',
+          table: 'profiles'
+        },
+        (payload) => {
+          console.log("Real-time profile update received in Explore:", payload);
+          const updatedProfile = payload.new as any;
+
+          if (!updatedProfile || !updatedProfile.id) return;
+
+          // Update people grid
+          setPeople(currentPeople => {
+            const index = currentPeople.findIndex(p => p.id === updatedProfile.id);
+            if (index === -1) return currentPeople;
+
+            console.log(`Updating person ${updatedProfile.username} in grid. is_verified: ${updatedProfile.is_verified}`);
+            const newPeople = [...currentPeople];
+            newPeople[index] = {
+              ...newPeople[index],
+              username: updatedProfile.username || newPeople[index].username,
+              full_name: updatedProfile.full_name || newPeople[index].full_name,
+              avatar_url: updatedProfile.avatar_url || newPeople[index].avatar_url,
+              is_verified: updatedProfile.is_verified !== undefined ? updatedProfile.is_verified : newPeople[index].is_verified
+            };
+            return newPeople;
+          });
+
+          // Update search results
+          setSearchResults(currentResults => {
+            const index = currentResults.findIndex(p => p.id === updatedProfile.id);
+            if (index === -1) return currentResults;
+
+            const newResults = [...currentResults];
+            newResults[index] = {
+              ...newResults[index],
+              username: updatedProfile.username || newResults[index].username,
+              full_name: updatedProfile.full_name || newResults[index].full_name,
+              avatar_url: updatedProfile.avatar_url || newResults[index].avatar_url,
+              is_verified: updatedProfile.is_verified !== undefined ? updatedProfile.is_verified : newResults[index].is_verified
+            };
+            return newResults;
+          });
+        }
+      )
+      .subscribe((status) => {
+        console.log(`Explore real-time subscription status: ${status}`);
+      });
+
+    return () => {
+      console.log("Cleaning up Explore real-time profile sync...");
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   // Debounced search effect
@@ -152,6 +142,7 @@ const Explore = () => {
 
       if (error) throw error;
 
+      // Optimize: Use a single query for counts if possible, or keep as is if volume is low.
       const usersWithCounts = await Promise.all(
         (data || []).map(async (profile) => {
           const { count } = await supabase
@@ -176,7 +167,6 @@ const Explore = () => {
   };
 
   const handleCategoryClick = useCallback((categoryName: string) => {
-
     toast({
       title: `Exploring ${categoryName}`,
       description: `Showing posts and projects related to ${categoryName}`,
@@ -185,7 +175,6 @@ const Explore = () => {
   }, [navigate, toast]);
 
   const handleTopicClick = useCallback((tag: string) => {
-
     toast({
       title: `#${tag}`,
       description: `Viewing all posts with #${tag}`,
@@ -194,7 +183,6 @@ const Explore = () => {
   }, [navigate, toast]);
 
   const handleProjectClick = useCallback((projectTitle: string) => {
-
     toast({
       title: projectTitle,
       description: "Opening project details...",
@@ -203,7 +191,6 @@ const Explore = () => {
   }, [navigate, toast]);
 
   const handleSearch = useCallback((e: React.FormEvent) => {
-
     e.preventDefault();
     if (searchQuery.trim()) {
       setShowResults(false);
@@ -227,429 +214,42 @@ const Explore = () => {
         title="Explore"
         description="Discover top developers, trending projects, and exciting opportunities on Futora."
       />
-      {/* Header */}
-      <motion.div
-        className="sticky top-0 z-50 bg-card/95 backdrop-blur-lg border-b border-border p-4 shadow-sm"
-        initial={{ y: -20, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-      >
-        <div className="max-w-2xl mx-auto">
-          <div className="flex items-center justify-between mb-4">
-            <h1 className="text-2xl font-bold gradient-text">Explore</h1>
-          </div>
-          <form onSubmit={handleSearch} className="relative">
-            <div className="relative group">
-              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors z-10" size={20} />
-              <Input
-                type="text"
-                placeholder="Search projects, topics, people..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onFocus={() => searchQuery && setShowResults(true)}
-                className="pl-12 pr-4 h-12 bg-background/50 border-2 border-border focus:border-primary transition-all rounded-2xl shadow-sm"
-              />
-              {searchLoading && (
-                <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
-                  <motion.div
-                    className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full"
-                    animate={{ rotate: 360 }}
-                    transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                  />
-                </div>
-              )}
-            </div>
 
-            {/* Search Results Dropdown */}
-            {showResults && searchResults.length > 0 && (
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="absolute top-full mt-2 w-full bg-card/95 backdrop-blur-lg border border-border rounded-2xl shadow-2xl overflow-hidden z-50"
-              >
-                <div className="p-2 space-y-1">
-                  {searchResults.map((user, index) => (
-                    <motion.div
-                      key={user.id}
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: index * 0.05 }}
-                      onClick={() => handleUserClick(user.id)}
-                      className="p-3 hover:bg-primary/10 rounded-xl cursor-pointer transition-all flex items-center gap-3 group"
-                    >
-                      <Avatar className="h-10 w-10 ring-2 ring-primary/20 group-hover:ring-primary/40 transition-all">
-                        <AvatarImage src={user.avatar_url || undefined} />
-                        <AvatarFallback className="bg-gradient-to-br from-primary/20 to-secondary/20">
-                          {user.username[0]?.toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-foreground truncate flex items-center gap-1">
-                          {user.full_name}
-                          <VerifiedBadge isVerified={user.is_verified} size={12} />
-                        </p>
-                        <p className="text-sm text-muted-foreground truncate">@{user.username}</p>
-                      </div>
-                      <Search className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </motion.div>
-                  ))}
-                </div>
-                <div className="p-3 border-t border-border bg-muted/30">
-                  <button
-                    type="submit"
-                    className="text-xs text-primary hover:text-primary/80 font-medium"
-                  >
-                    Press Enter to see all results for "{searchQuery}"
-                  </button>
-                </div>
-              </motion.div>
-            )}
-          </form>
-        </div>
-      </motion.div>
+      <ExploreHeader
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        handleSearch={handleSearch}
+        setShowResults={setShowResults}
+        searchLoading={searchLoading}
+        showResults={showResults}
+        searchResults={searchResults}
+        handleUserClick={handleUserClick}
+        onEcosystemClick={() => navigate("/ecosystem")}
+      />
 
       <div className="max-w-2xl mx-auto p-4 space-y-6">
+        <OpportunitySection onNavigate={navigate} />
 
-        {/* Opportunities Hub */}
-        <section>
-          <div className="flex items-center gap-2 mb-4">
-            <h2 className="text-xl font-bold bg-gradient-to-r from-orange-500 to-green-600 bg-clip-text text-transparent">
-              Opportunities Hub
-            </h2>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            {/* Founders Corner Card */}
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-              style={{ willChange: "transform, opacity" }}
-            >
-              <Card
-                className="bg-gradient-to-r from-orange-500 to-pink-600 text-white border-0 cursor-pointer overflow-hidden relative h-full hover:scale-[1.02] transition-transform duration-300"
-                onClick={() => navigate('/founders-corner')}
-              >
-                <div className="absolute top-0 right-0 p-4 opacity-10">
-                  <Rocket size={80} />
-                </div>
-                <CardContent className="p-4 relative z-10 flex flex-col h-full justify-between gap-2">
-                  <div>
-                    <h2 className="text-lg md:text-2xl font-bold mb-1 flex items-center gap-2">
-                      <Rocket className="fill-white w-5 h-5 md:w-6 md:h-6" />
-                      <span className="leading-tight">Founders Corner</span>
-                    </h2>
-                    <p className="text-white/90 text-xs md:text-base line-clamp-3 md:line-clamp-none">
-                      Find your perfect co-founder or join the next unicorn.
-                    </p>
-                  </div>
-                  <Button variant="secondary" size="sm" className="mt-2 w-full md:w-fit font-semibold text-pink-600 hover:text-pink-700 text-xs md:text-sm h-8">
-                    Find Matches
-                  </Button>
-                </CardContent>
-              </Card>
-            </motion.div>
+        <UserGrid
+          loading={loadingPeople}
+          people={people}
+          handleUserClick={handleUserClick}
+          currentUser={currentUser}
+          onSeeAllClick={() => navigate("/people")}
+        />
 
-            {/* Gig Marketplace Card */}
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              style={{ willChange: "transform, opacity" }}
-            >
-              <Card
-                className="bg-gradient-to-r from-yellow-400 to-green-500 text-black border-0 cursor-pointer overflow-hidden relative h-full hover:scale-[1.02] transition-transform duration-300"
-                onClick={() => navigate('/gig-marketplace')}
-              >
-                <div className="absolute top-0 right-0 p-4 opacity-10">
-                  <Zap size={80} />
-                </div>
-                <CardContent className="p-4 relative z-10 flex flex-col h-full justify-between gap-2">
-                  <div>
-                    <h2 className="text-lg md:text-2xl font-bold mb-1 flex items-center gap-2">
-                      <Zap className="fill-black w-5 h-5 md:w-6 md:h-6" />
-                      <span className="leading-tight">Gig Market</span>
-                    </h2>
-                    <p className="text-black/80 font-medium text-xs md:text-base line-clamp-3 md:line-clamp-none">
-                      Find micro-gigs, freelance tasks, and earn while you learn.
-                    </p>
-                  </div>
-                  <Button size="sm" className="mt-2 w-full md:w-fit font-bold bg-white text-green-700 hover:bg-white/90 border-0 text-xs md:text-sm h-8">
-                    Find Gigs
-                  </Button>
-                </CardContent>
-              </Card>
-            </motion.div>
+        <CategoryGrid onCategoryClick={handleCategoryClick} />
 
-            {/* Tech Match / Dating Card */}
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-              style={{ willChange: "transform, opacity" }}
-            >
-              <Card
-                className="bg-gradient-to-r from-pink-500 to-rose-500 text-white border-0 cursor-pointer overflow-hidden relative h-full hover:scale-[1.02] transition-transform duration-300"
-                onClick={() => navigate('/tech-match')}
-              >
-                <div className="absolute top-0 right-0 p-4 opacity-10">
-                  <Heart size={80} />
-                </div>
-                <CardContent className="p-4 relative z-10 flex flex-col h-full justify-between gap-2">
-                  <div>
-                    <h2 className="text-lg md:text-2xl font-bold mb-1 flex items-center gap-2">
-                      <Heart className="fill-white w-5 h-5 md:w-6 md:h-6" />
-                      <span className="leading-tight">Tech Match</span>
-                    </h2>
-                    <p className="text-white/90 text-xs md:text-base line-clamp-3 md:line-clamp-none">
-                      Find your player 2. Date other devs.
-                    </p>
-                  </div>
-                  <Button size="sm" variant="secondary" className="mt-2 w-full md:w-fit font-bold text-rose-600 hover:text-rose-700 h-8 text-xs md:text-sm">
-                    Connect
-                  </Button>
-                </CardContent>
-              </Card>
-            </motion.div>
+        <TrendingSection
+          onTopicClick={handleTopicClick}
+          onProjectClick={handleProjectClick}
+        />
+      </div>
 
-            {/* Game Zone Card */}
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4 }}
-              style={{ willChange: "transform, opacity" }}
-            >
-              <Card
-                className="bg-gradient-to-r from-violet-600 to-indigo-600 text-white border-0 cursor-pointer overflow-hidden relative h-full hover:scale-[1.02] transition-transform duration-300"
-                onClick={() => navigate('/games')}
-              >
-                <div className="absolute top-0 right-0 p-4 opacity-10">
-                  <Gamepad2 size={80} />
-                </div>
-                <CardContent className="p-4 relative z-10 flex flex-col h-full justify-between gap-2">
-                  <div>
-                    <h2 className="text-lg md:text-2xl font-bold mb-1 flex items-center gap-2">
-                      <Gamepad2 className="fill-white w-5 h-5 md:w-6 md:h-6" />
-                      <span className="leading-tight">Game Zone</span>
-                    </h2>
-                    <p className="text-white/90 text-xs md:text-base line-clamp-3 md:line-clamp-none">
-                      Play multiplayer games with friends.
-                    </p>
-                  </div>
-                  <Button size="sm" variant="secondary" className="mt-2 w-full md:w-fit font-bold text-indigo-600 hover:text-indigo-700 h-8 text-xs md:text-sm">
-                    Play Now
-                  </Button>
-                </CardContent>
-              </Card>
-            </motion.div>
-
-
-          </div>
-        </section>
-
-        {/* People to Follow */}
-        <section>
-          <div className="flex items-center gap-2 mb-4">
-            <Users className="text-primary" size={24} />
-            <h2 className="text-xl font-bold text-foreground">People to Follow</h2>
-          </div>
-
-          {loadingPeople ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {[1, 2, 3, 4].map((i) => (
-                <Card key={i} className="bg-card border-border animate-pulse">
-                  <CardContent className="p-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-full bg-muted shrink-0" />
-                      <div className="flex-1 space-y-2 min-w-0">
-                        <div className="h-4 bg-muted rounded w-2/3" />
-                        <div className="h-3 bg-muted rounded w-1/2" />
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          ) : people.length === 0 ? (
-            <Card className="bg-card border-border">
-              <CardContent className="p-8 text-center">
-                <Users className="w-12 h-12 mx-auto mb-2 text-muted-foreground" />
-                <p className="text-muted-foreground">No users found</p>
-              </CardContent>
-            </Card>
-          ) : (
-            <>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-                {people.map((user, index) => (
-                  <motion.div
-                    key={user.id}
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ delay: index * 0.1 }}
-                    style={{ willChange: "transform, opacity" }}
-                  >
-                    <Card className="bg-card border-2 border-black/30 dark:border-border hover:border-primary transition-all hover:shadow-lg">
-                      <CardContent className="p-3 sm:p-4">
-                        <div className="flex items-start gap-3 mb-3">
-                          <div
-                            className="relative cursor-pointer shrink-0"
-                            onClick={() => handleUserClick(user.id)}
-                          >
-                            <Avatar className="h-12 w-12">
-                              <AvatarImage src={user.avatar_url || undefined} />
-                              <AvatarFallback className="bg-primary text-primary-foreground">
-                                {user.username[0]?.toUpperCase()}
-                              </AvatarFallback>
-                            </Avatar>
-                            <OnlineIndicator userId={user.id} />
-                          </div>
-                          <div
-                            className="flex-1 min-w-0 cursor-pointer"
-                            onClick={() => handleUserClick(user.id)}
-                          >
-                            <p className="font-semibold text-foreground truncate flex items-center gap-1">
-                              {user.full_name}
-                              <VerifiedBadge isVerified={user.is_verified} size={14} />
-                            </p>
-                            <p className="text-sm text-muted-foreground truncate">
-                              @{user.username}
-                            </p>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              <span className="font-semibold text-foreground">
-                                {user.follower_count}
-                              </span>{" "}
-                              followers
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex gap-2">
-                          <FollowButton
-                            userId={user.id}
-                            currentUserId={currentUser?.id}
-                          />
-                          <StartChatButton
-                            userId={user.id}
-                            currentUserId={currentUser?.id}
-                          />
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </motion.div>
-                ))}
-              </div>
-
-              <div className="flex justify-center">
-                <Button
-                  variant="outline"
-                  onClick={() => navigate("/people")}
-                  className="w-full sm:w-auto border-primary text-primary hover:bg-primary hover:text-primary-foreground animate-blink-glow"
-                >
-                  See All People
-                </Button>
-              </div>
-            </>
-          )}
-        </section>
-
-        {/* Categories */}
-        <section>
-          <h2 className="text-xl font-bold text-foreground mb-4">Tech Categories</h2>
-          <div className="grid grid-cols-2 gap-3">
-            {CATEGORIES.map((category, index) => (
-
-              <motion.div
-                key={category.name}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.1 }}
-              >
-                <Card
-                  className="cursor-pointer border-2 border-black/30 dark:border-border hover:border-primary transition-all bg-card hover:shadow-lg"
-                  onClick={() => handleCategoryClick(category.name)}
-                >
-                  <CardContent className="p-3 flex items-center gap-2">
-                    <div className={`${category.color} p-2.5 rounded-lg shrink-0`}>
-                      <category.icon className="text-white" size={20} />
-                    </div>
-                    <span className="font-semibold text-foreground text-sm sm:text-base truncate min-w-0 flex-1" title={category.name}>
-                      {category.name}
-                    </span>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            ))}
-          </div>
-        </section>
-
-        {/* Trending Topics */}
-        <section>
-          <div className="flex items-center gap-2 mb-4">
-            <TrendingUp className="text-primary" size={24} />
-            <h2 className="text-xl font-bold text-foreground">Trending Topics</h2>
-          </div>
-          <div className="space-y-3">
-            {TRENDING_TOPICS.map((topic, index) => (
-              <motion.div
-                key={topic.tag}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: index * 0.1 }}
-              >
-                <Card
-                  className="cursor-pointer border-2 border-black/30 dark:border-border hover:border-primary transition-all bg-card hover:shadow-lg"
-                  onClick={() => handleTopicClick(topic.tag)}
-                >
-                  <CardContent className="p-4 flex items-center justify-between">
-                    <div>
-                      <p className="font-semibold text-foreground">#{topic.tag}</p>
-                      <p className="text-sm text-muted-foreground">{topic.posts} posts</p>
-                    </div>
-                    <Badge variant="secondary" className="bg-primary text-primary-foreground">
-                      Trending
-                    </Badge>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            ))}
-          </div>
-        </section>
-
-        {/* Trending Projects */}
-        <section>
-          <h2 className="text-xl font-bold text-foreground mb-4">Top Projects</h2>
-          <div className="space-y-3">
-            {TRENDING_PROJECTS.map((project, index) => (
-              <motion.div
-                key={project.title}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.1 }}
-              >
-                <Card
-                  className="cursor-pointer border-2 border-black/30 dark:border-border hover:border-primary transition-all bg-card hover:shadow-lg"
-                  onClick={() => handleProjectClick(project.title)}
-                >
-                  <CardContent className="p-4">
-                    <h3 className="font-bold text-foreground mb-1">{project.title}</h3>
-                    <p className="text-sm text-muted-foreground mb-3">by {project.author}</p>
-                    <div className="flex items-center justify-between">
-                      <div className="flex gap-2 flex-wrap">
-                        {project.tech.map((tech) => (
-                          <Badge key={tech} variant="outline" className="text-xs border-primary text-primary">
-                            {tech}
-                          </Badge>
-                        ))}
-                      </div>
-                      <span className="text-sm text-muted-foreground">{project.likes} likes</span>
-                    </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            ))}
-          </div>
-        </section>
-      </div >
       <BottomNav />
-    </div >
+    </div>
   );
 };
 
 export default React.memo(Explore);
+

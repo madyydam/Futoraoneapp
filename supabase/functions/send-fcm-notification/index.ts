@@ -1,153 +1,148 @@
 /**
  * Supabase Edge Function to send FCM notifications
- * This keeps Firebase server key secure on the backend
+ * This keeps Firebase service account secure on the backend
  */
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-
-const FIREBASE_SERVER_KEY = Deno.env.get('FIREBASE_SERVER_KEY');
-const FCM_ENDPOINT = 'https://fcm.googleapis.com/fcm/send';
+import { create, getNumericDate } from 'https://deno.land/x/djwt@v2.8/mod.ts';
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
 interface NotificationRequest {
-    tokens: string[];
+    userIds?: string[]; // For bulk
+    tokens?: string[]; // For specific tokens
     title: string;
     body: string;
     data?: Record<string, unknown>;
 }
 
-interface FCMResponse {
-    success: number;
-    failure: number;
-    results: { error?: string }[];
+interface ServiceAccount {
+    project_id: string;
+    client_email: string;
+    private_key: string;
+}
+
+// Helper to get FCM Access Token using Service Account
+async function getAccessToken(serviceAccount: ServiceAccount) {
+    const header = { alg: "RS256", typ: "JWT" };
+    const now = Math.floor(Date.now() / 1000);
+    const payload = {
+        iss: serviceAccount.client_email,
+        sub: serviceAccount.client_email,
+        aud: "https://oauth2.googleapis.com/token",
+        iat: now,
+        exp: now + 3600,
+        scope: "https://www.googleapis.com/auth/cloud-platform"
+    };
+
+    // Construct private key correctly
+    const pem = serviceAccount.private_key.replace(/\\n/g, '\n');
+
+    // Import the key
+    const binaryKey = str2ab(pem.replace(/-----BEGIN PRIVATE KEY-----|-----END PRIVATE KEY-----|\n/g, ""));
+    const key = await crypto.subtle.importKey(
+        "pkcs8",
+        binaryKey,
+        { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+        false,
+        ["sign"]
+    );
+
+    const jwt = await create(header, payload, key);
+
+    const response = await fetch("https://oauth2.googleapis.com/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+            grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+            assertion: jwt
+        })
+    });
+
+    const data = await response.json();
+    return data.access_token;
+}
+
+// Convert string to ArrayBuffer for key import
+function str2ab(str: string) {
+    const binaryString = atob(str);
+    const len = binaryString.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+    }
+    return bytes.buffer;
 }
 
 serve(async (req) => {
-    // Handle CORS preflight
     if (req.method === 'OPTIONS') {
         return new Response(null, { headers: corsHeaders });
     }
 
     try {
-        // Only allow POST requests
-        if (req.method !== 'POST') {
-            return new Response(
-                JSON.stringify({ error: 'Method not allowed' }),
-                { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-            );
+        const FCM_SERVICE_ACCOUNT_JSON = Deno.env.get('FCM_SERVICE_ACCOUNT_JSON');
+        if (!FCM_SERVICE_ACCOUNT_JSON) {
+            throw new Error('FCM_SERVICE_ACCOUNT_JSON is not set');
         }
 
-        // Check authentication
-        const authHeader = req.headers.get('Authorization');
-        if (!authHeader) {
-            return new Response(
-                JSON.stringify({ error: 'Missing authorization header' }),
-                { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-            );
-        }
-
-        // Parse request body
+        const serviceAccount = JSON.parse(FCM_SERVICE_ACCOUNT_JSON);
         const { tokens, title, body, data = {} }: NotificationRequest = await req.json();
 
-        // Validate input
         if (!tokens || !Array.isArray(tokens) || tokens.length === 0) {
-            return new Response(
-                JSON.stringify({ error: 'Invalid tokens array' }),
-                { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-            );
+            return new Response(JSON.stringify({ error: 'Tokens are required' }), { status: 400, headers: corsHeaders });
         }
 
-        if (!title || !body) {
-            return new Response(
-                JSON.stringify({ error: 'Title and body are required' }),
-                { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-            );
-        }
+        console.log(`FCM: Fetching access token for project ${serviceAccount.project_id}...`);
+        const accessToken = await getAccessToken(serviceAccount);
+        const endpoint = `https://fcm.googleapis.com/v1/projects/${serviceAccount.project_id}/messages:send`;
 
-        // Check if Firebase server key is configured
-        if (!FIREBASE_SERVER_KEY) {
-            console.error('FIREBASE_SERVER_KEY not configured');
-            return new Response(
-                JSON.stringify({ error: 'Server configuration error' }),
-                { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-            );
-        }
-
-        // Send notifications to all tokens
-        const results: FCMResponse[] = [];
-
+        const results = [];
         for (const token of tokens) {
             try {
-                const fcmPayload = {
-                    to: token,
-                    notification: {
-                        title,
-                        body,
-                        sound: 'default',
-                        badge: 1,
-                    },
-                    data: {
-                        ...data,
-                        click_action: 'FLUTTER_NOTIFICATION_CLICK',
-                    },
-                    priority: 'high',
+                const message = {
+                    message: {
+                        token: token,
+                        notification: { title, body },
+                        data: data as Record<string, string>,
+                        webpush: {
+                            notification: {
+                                icon: '/app-icon.png',
+                                badge: '/favicon.png',
+                                click_action: '/'
+                            }
+                        }
+                    }
                 };
 
-                const response = await fetch(FCM_ENDPOINT, {
+                const response = await fetch(endpoint, {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `key=${FIREBASE_SERVER_KEY}`,
+                        'Authorization': `Bearer ${accessToken}`,
+                        'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify(fcmPayload),
+                    body: JSON.stringify(message)
                 });
 
-                const result = await response.json();
-                results.push(result);
-
-                console.log(`Notification sent to token: ${token.substring(0, 20)}...`, result);
-            } catch (error: unknown) {
-                const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-                console.error(`Error sending to token ${token.substring(0, 20)}...`, error);
-                results.push({
-                    success: 0,
-                    failure: 1,
-                    results: [{ error: errorMessage }],
-                });
+                const resData = await response.json();
+                results.push({ token: token.substring(0, 10), status: response.status, data: resData });
+            } catch (err) {
+                results.push({ token: token.substring(0, 10), error: (err as Error).message });
             }
         }
 
-        // Calculate totals
-        const totalSuccess = results.reduce((sum, r) => sum + (r.success || 0), 0);
-        const totalFailure = results.reduce((sum, r) => sum + (r.failure || 0), 0);
+        return new Response(JSON.stringify({ results }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 200
+        });
 
-        return new Response(
-            JSON.stringify({
-                message: 'Notifications processed',
-                total: tokens.length,
-                success: totalSuccess,
-                failure: totalFailure,
-                results,
-            }),
-            {
-                status: 200,
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-            }
-        );
-
-    } catch (error: unknown) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        console.error('Error in send-fcm-notification:', error);
-        return new Response(
-            JSON.stringify({
-                error: 'Internal server error',
-                details: errorMessage
-            }),
-            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+    } catch (error) {
+        console.error('FCM Error:', error);
+        return new Response(JSON.stringify({ error: (error as Error).message }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 500
+        });
     }
 });

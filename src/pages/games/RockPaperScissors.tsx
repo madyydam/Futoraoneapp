@@ -4,6 +4,7 @@ import { ArrowLeft, RotateCcw, Hand, Scissors, Scroll, Zap, Cpu, Users, Globe, C
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import confetti from "canvas-confetti";
+import { useGameReward } from "@/hooks/useGameReward";
 import { motion, AnimatePresence } from "framer-motion";
 import { useGameSounds } from "@/hooks/useGameSounds";
 import { HowToPlay } from "@/components/games/HowToPlay";
@@ -41,6 +42,7 @@ ChoiceButton.displayName = "ChoiceButton";
 const RockPaperScissors = () => {
     const navigate = useNavigate();
     const playSound = useGameSounds();
+    const { triggerWinReward } = useGameReward();
     const [p1Choice, setP1Choice] = useState<Choice>(null);
     const [p2Choice, setP2Choice] = useState<Choice>(null);
     const [turn, setTurn] = useState<1 | 2>(1); // For Stats/Turn display
@@ -84,7 +86,15 @@ const RockPaperScissors = () => {
                     newScores = { ...newScores, 1: newScores[1] + 1 };
 
                     playSound('win');
-                    if (gameMode === 'AI' || isHost || gameMode === 'LOCAL') triggerWin(); // P1 Win
+                    if (gameMode === 'AI' || (gameMode === 'ONLINE' && isHost) || gameMode === 'LOCAL') {
+                        triggerWin(); // Confetti
+                        // Reward only if playing AI or if I am the Host winning online (simple assumption for now)
+                        // Actually, for Local PVP, we shouldn't probably reward coins to avoid farming? 
+                        // Let's restrict rewards to AI or Online Wins for authenticated user.
+                        if (gameMode === 'AI' || (gameMode === 'ONLINE' && isHost)) {
+                            triggerWinReward();
+                        }
+                    }
 
 
                 } else {

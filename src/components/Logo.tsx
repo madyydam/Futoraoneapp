@@ -1,13 +1,12 @@
-import logo from "@/assets/futora-logo-v2.png";
+import logo from "@/assets/logo.png";
+import { cn } from "@/lib/utils";
 
 export const Logo = ({ className = "" }: { className?: string }) => {
   return (
     <img
       src={logo}
       alt="FutoraOne Logo"
-      className={className}
-      width="150"
-      height="40"
+      className={cn("object-contain mix-blend-screen contrast-125", className)}
       decoding="async"
     />
   );

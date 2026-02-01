@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
-import { ArrowLeft, User, Lock, Bell, ChevronRight } from "lucide-react";
+import { ArrowLeft, User, Lock, Bell, ChevronRight, RefreshCw, Download } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { BottomNav } from "@/components/BottomNav";
 import { CartoonLoader } from "@/components/CartoonLoader";
@@ -32,6 +32,11 @@ const Settings = () => {
         notifications: { push: true, email: true },
         theme: { accent_color: "default" }
     });
+    const [isStandalone, setIsStandalone] = useState(false);
+
+    useEffect(() => {
+        setIsStandalone(window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone);
+    }, []);
 
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
@@ -73,7 +78,7 @@ const Settings = () => {
 
         setSettings(newSettings);
         localStorage.setItem('futora_settings', JSON.stringify(newSettings));
-        
+
         toast({ title: "Settings updated", description: "Your preferences have been saved." });
     };
 
@@ -160,6 +165,30 @@ const Settings = () => {
                                 </CardContent>
                             </Card>
 
+                            {!isStandalone && (
+                                <Card className="border-primary/20 bg-primary/5">
+                                    <CardHeader>
+                                        <CardTitle className="flex items-center gap-2">
+                                            <Download className="w-5 h-5 text-primary" />
+                                            Install FutoraOne
+                                        </CardTitle>
+                                        <CardDescription>
+                                            Get the premium experience with our Laptop & Mobile App.
+                                        </CardDescription>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <Button
+                                            className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground font-bold"
+                                            onClick={() => {
+                                                window.dispatchEvent(new CustomEvent('show-pwa-install'));
+                                            }}
+                                        >
+                                            Install App Now
+                                        </Button>
+                                    </CardContent>
+                                </Card>
+                            )}
+
                             <Card>
                                 <CardHeader>
                                     <CardTitle>Change Password</CardTitle>
@@ -186,6 +215,37 @@ const Settings = () => {
                                 <CardFooter>
                                     <Button onClick={handlePasswordUpdate} disabled={!password}>Update Password</Button>
                                 </CardFooter>
+                            </Card>
+
+                            <Card className="border-primary/20">
+                                <CardHeader>
+                                    <CardTitle className="text-primary">Troubleshooting</CardTitle>
+                                    <CardDescription>If the app feels slow or doesn't show latest updates.</CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                    <Button
+                                        variant="outline"
+                                        className="w-full sm:w-auto gap-2"
+                                        onClick={async () => {
+                                            if ('serviceWorker' in navigator) {
+                                                const registrations = await navigator.serviceWorker.getRegistrations();
+                                                for (const registration of registrations) {
+                                                    await registration.unregister();
+                                                }
+                                            }
+                                            if ('caches' in window) {
+                                                const keys = await caches.keys();
+                                                for (const key of keys) {
+                                                    await caches.delete(key);
+                                                }
+                                            }
+                                            window.location.reload();
+                                        }}
+                                    >
+                                        <RefreshCw className="w-4 h-4" />
+                                        Force Refresh & Update
+                                    </Button>
+                                </CardContent>
                             </Card>
 
                             <Card className="border-destructive/20">

@@ -1,7 +1,8 @@
 import { memo } from "react";
 import { Button } from "@/components/ui/button";
-import { Zap, Film, Bell, Rocket } from "lucide-react";
+import { Zap, Film, Bell, Rocket, Download } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
 
 interface FeedHeaderProps {
     unreadCount?: number;
@@ -9,6 +10,12 @@ interface FeedHeaderProps {
 
 export const FeedHeader = memo(({ unreadCount = 0 }: FeedHeaderProps) => {
     const navigate = useNavigate();
+    const [isStandalone, setIsStandalone] = useState(true);
+
+    useEffect(() => {
+        const checkStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
+        setIsStandalone(!!checkStandalone);
+    }, []);
 
     return (
         <header className="sticky top-0 z-50 bg-card border-b border-black/20 dark:border-border shadow-sm">

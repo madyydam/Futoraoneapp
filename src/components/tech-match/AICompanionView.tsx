@@ -5,6 +5,7 @@ import AIChat from "@/components/AIChat";
 import VideoBackground from "@/components/VideoBackground";
 import { useToast } from "@/hooks/use-toast";
 import { useAIMentor } from "@/hooks/useAIMentor";
+import { Sparkles } from "lucide-react";
 
 interface Message {
     id: string;
@@ -155,17 +156,19 @@ export const AICompanionView = () => {
                     </div>
                 </div>
 
-                {/* Chat Area - Extracted for Performance */}
-                <AIChat
-                    messages={messages}
-                    onSendMessage={handleSendMessage}
-                    aiName={aiName}
-                    themeColor={themeColor}
-                    gradientFrom={gradientFrom}
-                    gradientTo={gradientTo}
-                    aiGender={aiGender}
-                    isTyping={isTyping}
-                />
+                {/* Chat Area - Live & Operational */}
+                <div className="relative flex-1 overflow-hidden">
+                    <AIChat
+                        messages={messages}
+                        onSendMessage={handleSendMessage}
+                        aiName={aiName}
+                        themeColor={themeColor}
+                        gradientFrom={gradientFrom}
+                        gradientTo={gradientTo}
+                        aiGender={aiGender}
+                        isTyping={isTyping || isAiLoading}
+                    />
+                </div>
             </div>
         </div>
     );

@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ArrowLeft, RotateCcw, Trophy, Circle, X, Cpu, Users, Globe, Copy } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { useGameReward } from "@/hooks/useGameReward";
 import { toast } from "sonner";
 import confetti from "canvas-confetti";
 import { motion, AnimatePresence } from "framer-motion";

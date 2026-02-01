@@ -10,19 +10,19 @@ import {
     CartesianGrid,
     Tooltip,
     ResponsiveContainer,
-    BarChart,
-    Bar,
-    Legend
+    AreaChart,
+    Area
 } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
+import { ArrowUpRight, MessageCircle, Heart, Users } from "lucide-react";
 
 const AnalyticsPage = () => {
     const [engagementData, setEngagementData] = useState<any[]>([]);
     const [stats, setStats] = useState({
         totalLikes: 0,
         totalComments: 0,
-        totalRevenue: 0,
-        activeUsers: 0
+        activeUsers: 0,
+        growthRate: 0
     });
 
     useEffect(() => {
@@ -64,7 +64,7 @@ const AnalyticsPage = () => {
                 engagementMap.get(dateKey).comments++;
             });
 
-            const engagementChart = Array.from(engagementMap.values()).slice(-7);
+            const engagementChart = Array.from(engagementMap.values()).slice(-14); // Last 14 days
             setEngagementData(engagementChart);
             setStats(prev => ({
                 ...prev,
@@ -79,89 +79,125 @@ const AnalyticsPage = () => {
 
     return (
         <AdminLayout>
-            <div className="space-y-6">
-                <div>
-                    <h2 className="text-3xl font-bold tracking-tight">Analytics Reports</h2>
-                    <p className="text-muted-foreground mt-1">Detailed performance metrics and trends (Real Data).</p>
+            <div className="space-y-10 pb-20">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <div>
+                        <h2 className="text-4xl font-black tracking-tight text-slate-900 mb-2">Analytics</h2>
+                        <p className="text-slate-500 font-medium italic">Performance metrics and growth trends.</p>
+                    </div>
                 </div>
 
-                <Tabs defaultValue="engagement" className="space-y-4">
-                    <TabsList>
-                        <TabsTrigger value="engagement">Engagement</TabsTrigger>
-                        <TabsTrigger value="revenue">Revenue</TabsTrigger>
-                    </TabsList>
+                <div className="grid gap-6 md:grid-cols-3">
+                    <Card className="shadow-lg shadow-slate-200/50 border-slate-200 rounded-3xl overflow-hidden bg-white group hover:shadow-xl transition-all">
+                        <CardHeader className="flex flex-row items-center justify-between pb-2 bg-slate-50/50">
+                            <CardTitle className="text-sm font-black text-slate-500 uppercase tracking-wider">Total Likes</CardTitle>
+                            <Heart className="h-4 w-4 text-rose-500" />
+                        </CardHeader>
+                        <CardContent className="pt-6">
+                            <div className="text-4xl font-black text-slate-900 mb-1">{stats.totalLikes.toLocaleString()}</div>
+                            <div className="flex items-center text-xs font-bold text-emerald-600 bg-emerald-50 w-fit px-2 py-1 rounded-lg">
+                                <ArrowUpRight className="h-3 w-3 mr-1" />
+                                +12% this week
+                            </div>
+                        </CardContent>
+                    </Card>
 
-                    <TabsContent value="engagement" className="space-y-4">
-                        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle className="text-sm font-medium">Total Likes</CardTitle>
-                                </CardHeader>
-                                <CardContent>
-                                    <div className="text-2xl font-bold">{stats.totalLikes}</div>
-                                    <p className="text-xs text-muted-foreground">Lifetime</p>
-                                </CardContent>
-                            </Card>
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle className="text-sm font-medium">Total Comments</CardTitle>
-                                </CardHeader>
-                                <CardContent>
-                                    <div className="text-2xl font-bold">{stats.totalComments}</div>
-                                    <p className="text-xs text-muted-foreground">Lifetime</p>
-                                </CardContent>
-                            </Card>
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle className="text-sm font-medium">Est. Daily Activity</CardTitle>
-                                </CardHeader>
-                                <CardContent>
-                                    <div className="text-2xl font-bold">~{Math.floor((stats.totalLikes + stats.totalComments) / 30)}</div>
-                                    <p className="text-xs text-muted-foreground">Actions / day (approx)</p>
-                                </CardContent>
-                            </Card>
-                        </div>
+                    <Card className="shadow-lg shadow-slate-200/50 border-slate-200 rounded-3xl overflow-hidden bg-white group hover:shadow-xl transition-all">
+                        <CardHeader className="flex flex-row items-center justify-between pb-2 bg-slate-50/50">
+                            <CardTitle className="text-sm font-black text-slate-500 uppercase tracking-wider">Total Comments</CardTitle>
+                            <MessageCircle className="h-4 w-4 text-blue-500" />
+                        </CardHeader>
+                        <CardContent className="pt-6">
+                            <div className="text-4xl font-black text-slate-900 mb-1">{stats.totalComments.toLocaleString()}</div>
+                            <div className="flex items-center text-xs font-bold text-emerald-600 bg-emerald-50 w-fit px-2 py-1 rounded-lg">
+                                <ArrowUpRight className="h-3 w-3 mr-1" />
+                                +5% this week
+                            </div>
+                        </CardContent>
+                    </Card>
 
-                        <Card className="col-span-4">
-                            <CardHeader>
-                                <CardTitle>User Engagement Trends</CardTitle>
-                                <CardDescription>Likes and Comments over time (Real Data)</CardDescription>
-                            </CardHeader>
-                            <CardContent className="pl-2">
-                                <div className="h-[400px]">
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <LineChart data={engagementData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                                            <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-muted" />
-                                            <XAxis dataKey="name" tickLine={false} axisLine={false} />
-                                            <YAxis tickLine={false} axisLine={false} />
-                                            <Tooltip contentStyle={{ backgroundColor: 'var(--background)', borderRadius: '8px', border: '1px solid var(--border)' }} />
-                                            <Legend />
-                                            <Line type="monotone" dataKey="likes" stroke="#8884d8" strokeWidth={2} activeDot={{ r: 8 }} />
-                                            <Line type="monotone" dataKey="comments" stroke="#82ca9d" strokeWidth={2} />
-                                        </LineChart>
-                                    </ResponsiveContainer>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    </TabsContent>
+                    <Card className="shadow-lg shadow-slate-200/50 border-slate-200 rounded-3xl overflow-hidden bg-white group hover:shadow-xl transition-all">
+                        <CardHeader className="flex flex-row items-center justify-between pb-2 bg-slate-50/50">
+                            <CardTitle className="text-sm font-black text-slate-500 uppercase tracking-wider">Daily Activity</CardTitle>
+                            <Users className="h-4 w-4 text-purple-500" />
+                        </CardHeader>
+                        <CardContent className="pt-6">
+                            <div className="text-4xl font-black text-slate-900 mb-1">
+                                {Math.round((stats.totalLikes + stats.totalComments) / 30).toLocaleString()}
+                            </div>
+                            <p className="text-xs font-bold text-slate-400 mt-1">
+                                Avg. interactions per day
+                            </p>
+                        </CardContent>
+                    </Card>
+                </div>
 
-                    <TabsContent value="revenue">
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Revenue Overview</CardTitle>
-                                <CardDescription>Revenue tracking coming soon</CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="h-[350px] flex items-center justify-center">
-                                    <div className="text-center text-muted-foreground">
-                                        <p className="text-lg font-medium">Revenue Analytics</p>
-                                        <p className="text-sm">Transaction tracking will be available soon</p>
-                                    </div>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    </TabsContent>
-                </Tabs>
+                <div className="grid gap-6 md:grid-cols-1">
+                    <Card className="col-span-1 shadow-xl shadow-slate-200/40 border-slate-200 rounded-3xl overflow-hidden bg-white">
+                        <CardHeader className="bg-slate-50/50 border-b border-slate-100 pb-4">
+                            <CardTitle className="text-lg font-black text-slate-900">Engagement Trends</CardTitle>
+                            <CardDescription className="text-slate-500 font-medium">Daily social interactions over the last 2 weeks.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="p-6">
+                            <div className="h-[400px] w-full">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <AreaChart data={engagementData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                                        <defs>
+                                            <linearGradient id="colorLikes" x1="0" y1="0" x2="0" y2="1">
+                                                <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.2} />
+                                                <stop offset="95%" stopColor="#f43f5e" stopOpacity={0} />
+                                            </linearGradient>
+                                            <linearGradient id="colorComments" x1="0" y1="0" x2="0" y2="1">
+                                                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2} />
+                                                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                                            </linearGradient>
+                                        </defs>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                                        <XAxis
+                                            dataKey="name"
+                                            tickLine={false}
+                                            axisLine={false}
+                                            tick={{ fontSize: 12, fill: '#64748b', fontWeight: 600 }}
+                                            dy={10}
+                                        />
+                                        <YAxis
+                                            tickLine={false}
+                                            axisLine={false}
+                                            tick={{ fontSize: 12, fill: '#64748b', fontWeight: 600 }}
+                                        />
+                                        <Tooltip
+                                            contentStyle={{
+                                                backgroundColor: '#fff',
+                                                borderRadius: '16px',
+                                                border: '1px solid #e2e8f0',
+                                                boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)'
+                                            }}
+                                            itemStyle={{ fontWeight: 'bold' }}
+                                        />
+                                        <Area
+                                            type="monotone"
+                                            dataKey="likes"
+                                            stroke="#f43f5e"
+                                            strokeWidth={3}
+                                            fillOpacity={1}
+                                            fill="url(#colorLikes)"
+                                            name="Likes"
+                                        />
+                                        <Area
+                                            type="monotone"
+                                            dataKey="comments"
+                                            stroke="#3b82f6"
+                                            strokeWidth={3}
+                                            fillOpacity={1}
+                                            fill="url(#colorComments)"
+                                            name="Comments"
+                                        />
+                                    </AreaChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
             </div>
         </AdminLayout>
     );

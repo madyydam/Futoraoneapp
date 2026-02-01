@@ -7,12 +7,12 @@ importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-comp
 // Initialize the Firebase app in the service worker by passing in
 // your app's Firebase config object.
 firebase.initializeApp({
-    apiKey: "AIzaSyCDGA-g9BnIPE4BdmS9X5PjzqRsWD11afE",
-    authDomain: "futoraone-92489.firebaseapp.com",
-    projectId: "futoraone-92489",
-    storageBucket: "futoraone-92489.firebasestorage.app",
-    messagingSenderId: "670532875984",
-    appId: "1:670532875984:web:1843189ff642c51fbd50d5"
+    apiKey: "AIzaSyArb_qskaLUDV-0MgINWcCREYwob85sed4",
+    authDomain: "futoraone-push.firebaseapp.com",
+    projectId: "futoraone-push",
+    storageBucket: "futoraone-push.firebasestorage.app",
+    messagingSenderId: "980983525298",
+    appId: "1:980983525298:web:f91cc1678082e61feefeab"
 });
 
 // Retrieve an instance of Firebase Messaging so that it can handle background messages.
@@ -25,8 +25,8 @@ messaging.onBackgroundMessage((payload) => {
     const notificationTitle = payload.notification.title || 'FutoraOne';
     const notificationOptions = {
         body: payload.notification.body,
-        icon: '/icon-192.png',
-        badge: '/icon-192.png',
+        icon: '/app-icon.png',
+        badge: '/favicon.png',
         data: payload.data,
     };
 

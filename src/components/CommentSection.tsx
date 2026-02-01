@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Trash2, Send } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 import { CommentSkeleton } from "@/components/CommentSkeleton";
+import { sendPushNotification } from "@/utils/notifications";
 
 interface Comment {
     id: string;
@@ -168,6 +169,13 @@ export const CommentSection = ({ postId, postAuthorId, currentUser }: CommentSec
 
             // Refresh comments from server to get real IDs and timestamps
             await fetchComments();
+
+            // Send push notification to post author
+            if (postAuthorId !== currentUser.id) {
+                const actorName = currentUser.user_metadata?.full_name || currentUser.user_metadata?.username || "Someone";
+                sendPushNotification(postAuthorId, `${actorName} commented on your post: ${tempComment.content.substring(0, 30)}${tempComment.content.length > 30 ? '...' : ''}`).catch(console.error);
+            }
+
             toast({
                 title: "Comment posted",
                 description: "Your comment has been added",

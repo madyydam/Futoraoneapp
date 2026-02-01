@@ -83,7 +83,6 @@ const EditProfileDialogComponent = ({ open, onOpenChange, profile, userId, onUpd
         // Standardized path: bucket/[userId]/[filename]
         const fileName = `${user.id}/avatar_${Date.now()}.${fileExt}`;
 
-        console.log('Uploading avatar for user:', user.id, 'to bucket: post_images');
         const { error: uploadError } = await supabase.storage
           .from('post_images')
           .upload(fileName, compressedFile, {
@@ -123,7 +122,6 @@ const EditProfileDialogComponent = ({ open, onOpenChange, profile, userId, onUpd
         const fileExt = compressedFile.name.split('.').pop();
         const fileName = `${user.id}/banner_${Date.now()}.${fileExt}`;
 
-        console.log('Uploading banner for user:', user.id, 'to bucket: post_images');
         const { error: uploadError } = await supabase.storage
           .from('post_images')
           .upload(fileName, compressedFile, {
@@ -143,7 +141,6 @@ const EditProfileDialogComponent = ({ open, onOpenChange, profile, userId, onUpd
         bannerUrl = publicUrl;
       }
 
-      console.log('Updating profile with data:', { avatarUrl, bannerUrl });
       const { error } = await supabase
         .from('profiles')
         .upsert({

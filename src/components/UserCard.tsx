@@ -112,6 +112,7 @@ export const UserCard = memo(({ user, currentUser, index }: UserCardProps) => {
         prevProps.user.id === nextProps.user.id &&
         prevProps.user.follower_count === nextProps.user.follower_count &&
         prevProps.user.following_count === nextProps.user.following_count &&
+        prevProps.user.is_verified === nextProps.user.is_verified &&
         prevProps.currentUser?.id === nextProps.currentUser?.id
     );
 });

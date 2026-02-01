@@ -58,7 +58,6 @@ export const requestNotificationPermission = async (): Promise<string | null> =>
         const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY;
         const token = await getToken(messaging, { vapidKey });
 
-        console.log('FCM Token obtained:', token);
         return token;
 
     } catch (error) {
@@ -84,7 +83,6 @@ export const saveFCMToken = async (userId: string, fcmToken: string): Promise<vo
             throw error;
         }
 
-        console.log('FCM token saved successfully');
     } catch (error) {
         console.error('Error in saveFCMToken:', error);
         throw error;
@@ -97,30 +95,39 @@ export const saveFCMToken = async (userId: string, fcmToken: string): Promise<vo
  */
 export const initializeFCM = async (userId: string): Promise<void> => {
     try {
+        console.log('FCM: Initializing for user:', userId);
+
         // Request permission and get token
         const token = await requestNotificationPermission();
 
         if (token) {
+            console.log('FCM: Token generated successfully:', token.substring(0, 10) + '...');
+
             // Save token to database
             await saveFCMToken(userId, token);
+            console.log('FCM: Token saved to Supabase profile.');
 
             // Listen for foreground messages
             if (messaging) {
                 onMessage(messaging, (payload) => {
-                    console.log('Foreground message received:', payload);
+                    console.log('FCM: Foreground message received:', payload);
 
                     // Show notification
                     if (payload.notification) {
                         new Notification(payload.notification.title || 'FutoraOne', {
                             body: payload.notification.body,
-                            icon: '/icon-192.png',
+                            icon: '/app-icon.png',
+                            badge: '/favicon.png',
                         });
                     }
                 });
+                console.log('FCM: Foreground listener active.');
             }
+        } else {
+            console.warn('FCM: No token generated. Check console for errors or permission status.');
         }
     } catch (error) {
-        console.error('Error initializing FCM:', error);
+        console.error('FCM: Initialization failed:', error);
     }
 };
 
@@ -150,7 +157,6 @@ export const removeFCMToken = async (userId: string): Promise<void> => {
             throw error;
         }
 
-        console.log('FCM token removed successfully');
     } catch (error) {
         console.error('Error in removeFCMToken:', error);
         throw error;

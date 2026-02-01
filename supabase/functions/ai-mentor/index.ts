@@ -11,122 +11,73 @@ serve(async (req) => {
   }
 
   try {
-    const { messages, mode } = await req.json();
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    const { messages, mode = 'mentor' } = await req.json();
+    const apiKey = Deno.env.get('GEMINI_API_KEY');
 
-    if (!LOVABLE_API_KEY) {
-      console.error("LOVABLE_API_KEY is missing");
-      return new Response(JSON.stringify({ error: "Server configuration error: LOVABLE_API_KEY is missing." }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const systemPrompts: Record<string, string> = {
-      mentor: `You are an expert tech mentor on FutoraOne - a social platform for tech enthusiasts. Help users with debugging, learning, project ideas, and career advice. Be concise, friendly, and encouraging. Use emojis sparingly to add personality.`,
-      enhance: `You are an AI content enhancer for a tech social platform. Improve post descriptions to be more engaging and professional while keeping the tech focus. Also suggest relevant hashtags. Return JSON: { "enhanced_content": "...", "hashtags": [...] }`,
-      ideas: `You are a creative project idea generator for developers. Generate unique, practical project ideas based on user interests. Return JSON: { "title": "...", "description": "...", "tech_stack": [...], "difficulty": "beginner|intermediate|advanced", "features": [...] }`,
-      video_gen: `You are an AI video script generator for tech content. Create short, engaging scripts for tech reels/shorts. Return JSON: { "script": "...", "scenes": [...], "duration": "30s|60s" }`,
-      female_companion: `You are Riya, a friendly and supportive AI companion on FutoraOne. You're knowledgeable about tech, coding, and startups. Be warm, encouraging, and helpful. Keep responses conversational and engaging. Use occasional emojis. Never be inappropriate.`,
-      male_companion: `You are Arjun, a cool and motivating AI companion on FutoraOne. You're passionate about building tech products and helping developers grow. Be encouraging, give practical advice, and maintain a friendly tone. Use occasional emojis. Never be inappropriate.`,
-      cofounder: `You are Arya, an AI co-founder advisor on FutoraOne. Help users validate startup ideas, suggest equity splits, find co-founders, and provide business advice. Be professional but friendly. Focus on actionable insights.`,
-      roadmap: `You are an expert technical career coach. Create a detailed, step-by-step learning roadmap for the requested topic.
-IMPORTANT: Return the response in strict Markdown format exactly like this:
-
-# 🚀 [Topic] Roadmap
-
-## Phase 1: [Phase Name] ([Duration])
-✅ [Task 1]
-✅ [Task 2]
-...
-
-## Phase 2: [Phase Name] ([Duration])
-✅ [Task 1]
-...
-
-## Resources:
-📚 [Resource 1 with link if available]
-📚 [Resource 2]
-...
-
-Keep it practical, actionable, and structured. Do not add conversational filler before or after the markdown.`
-    };
-
-    const systemPrompt = systemPrompts[mode] || systemPrompts.mentor;
-
-    // Format messages for the API
-    const formattedMessages = messages
-      .filter((m: { content: string }) => m.content && m.content.trim() !== '')
-      .map((m: { role: string; content: string }) => ({
-        role: m.role === 'assistant' || m.role === 'ai' ? 'assistant' : 'user',
-        content: m.content
-      }));
-
-    // Call Lovable AI Gateway
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: [
-          { role: "system", content: systemPrompt },
-          ...formattedMessages,
-        ],
-        stream: false,
-        max_tokens: 2000,
-        temperature: 0.7,
-      }),
-    });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error("Lovable AI Error:", response.status, errText);
-      
-      if (response.status === 429) {
-        return new Response(JSON.stringify({ 
-          error: "AI is experiencing high demand. Please wait a moment and try again.",
-          generatedText: "🔄 AI is currently busy. Please try again in a few seconds." 
-        }), {
-          status: 200, // Return 200 so frontend can handle gracefully
-          headers: { ...corsHeaders, "Content-Type": "application/json" }
-        });
-      }
-      
-      if (response.status === 402) {
-        return new Response(JSON.stringify({ 
-          error: "AI usage limit reached. Please try again later.",
-          generatedText: "⏳ AI usage limit reached. Please try again later." 
-        }), {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" }
-        });
-      }
-
-      return new Response(JSON.stringify({ 
-        error: "AI service temporarily unavailable. Please try again.",
-        generatedText: "⚠️ AI service is temporarily unavailable. Please try again shortly." 
-      }), {
-        status: 200,
+    if (!apiKey) {
+      return new Response(JSON.stringify({ generatedText: "Error: GEMINI_API_KEY missing in Supabase Secrets." }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
 
-    const data = await response.json();
-    const generatedText = data.choices?.[0]?.message?.content || "I couldn't generate a response. Please try again.";
+    // Define system instructions based on mode
+    const systemInstructions: Record<string, string> = {
+      mentor: "You are an expert Tech Mentor at FutoraOne. Your goal is to help users with code, technical architecture, and career advice in tech. Be professional, encouraging, and highly technical.",
+      enhance: "You are a code optimization expert. Analyze the provided code and suggest improvements for performance, readability, and security. Provide clear explanations for your changes.",
+      ideas: "You are a creative technical brainstormer. Help users find unique and impactful project ideas based on their skill levels and interests.",
+      female_companion: "You are a friendly, caring, and supportive female AI companion. Engage in warm, friendly conversation, show interest in the user's day, and offer emotional support if needed.",
+      male_companion: "You are a friendly, supportive, and grounded male AI companion. Engage in good conversation, show interest in the user's life, and offer steady support and encouragement.",
+      roadmap: "You are a learning path specialist. Create structured, step-by-step learning roadmaps for various tech stacks and skills, recommending resources and projects for each stage."
+    };
 
-    return new Response(JSON.stringify({ generatedText }), {
+    const instruction = systemInstructions[mode] || systemInstructions.mentor;
+
+    // Format history for Gemini API
+    const contents = messages.map((m: any) => ({
+      role: m.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: m.content }]
+    }));
+
+    // Add system instruction as the first turn or as a model parameter if using system_instruction (v1beta)
+    const body = {
+      system_instruction: {
+        parts: [{ text: instruction }]
+      },
+      contents: contents,
+      generationConfig: {
+        temperature: 0.7,
+        topP: 0.95,
+        maxOutputTokens: 1024,
+      }
+    };
+
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return new Response(JSON.stringify({
+        generatedText: `API Error (${response.status}): ${data.error?.message || "Unknown API failure"}`
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "Model returned empty response. Structure: " + JSON.stringify(data).substring(0, 100);
+
+    return new Response(JSON.stringify({ generatedText: text }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" }
     });
 
-  } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    console.error("AI Mentor Error:", errorMessage);
-    return new Response(JSON.stringify({ error: "An error occurred. Please try again." }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+  } catch (error: any) {
+    return new Response(JSON.stringify({
+      generatedText: `Edge Function Crash: ${error.message}`
+    }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
     });
   }
 });

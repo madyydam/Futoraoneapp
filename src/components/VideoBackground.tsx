@@ -37,7 +37,7 @@ const VideoBackground = memo(({ videoSrc, aiGender }: VideoBackgroundProps) => {
                         playsInline
                         className="h-full w-full object-cover"
                         style={{ willChange: "opacity" }}
-                        poster={aiGender === "female" ? "/ai-3d-model.png" : "/arjun-avatar.png"}
+                        poster={aiGender === "female" ? "/ai-avatar.png" : "/arjun-avatar.png"}
                     >
                         <source src={videoSrc} type="video/mp4" />
                         Your browser does not support the video tag.

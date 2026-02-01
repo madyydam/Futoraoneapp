@@ -60,6 +60,8 @@ export const useAIMentor = () => {
 
       if (data.generatedText) {
         updateAssistant(data.generatedText);
+      } else if (data.error) {
+        throw new Error(`${data.error}: ${data.details || 'Unknown error'}`);
       } else if (data.choices?.[0]?.message?.content) {
         // Fallback if we accidentally used OpenAI wrapper format
         updateAssistant(data.choices[0].message.content);

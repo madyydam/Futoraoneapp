@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, memo, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence, Variants } from "framer-motion";
 import {
     Trophy,
@@ -14,13 +15,15 @@ import {
     Heart,
     Code,
     Bug,
-    Flame
+    Flame,
+    ArrowRight
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { Badge } from "@/components/ui/badge";
 
 interface Achievement {
     id: string;
@@ -64,6 +67,7 @@ const IconMap: { [key: string]: React.ElementType } = {
 };
 
 export const AchievementShowcase = memo(({ userId }: { userId?: string }) => {
+    const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState<'badges' | 'leaderboard'>('badges');
     const [achievements, setAchievements] = useState<Achievement[]>(DEFAULT_ACHIEVEMENTS);
     const [leaderboard, setLeaderboard] = useState<LeaderboardUser[]>([]);
@@ -115,35 +119,29 @@ export const AchievementShowcase = memo(({ userId }: { userId?: string }) => {
 
             setAchievements(mergedAchievements);
 
-            // Fetch leaderboard from profiles (using follower count as XP proxy)
+            // Fetch leaderboard from profiles (using real XP data)
             const { data: profiles } = await supabase
                 .from('profiles')
-                .select('id, username, avatar_url')
-                .limit(100);
+                .select('*')
+                .limit(100)
+                .order('xp', { ascending: false });
 
             if (profiles) {
-                // Get follower counts for each profile
-                const usersWithStats = await Promise.all(
-                    profiles.slice(0, 10).map(async (profile) => {
-                        const { count } = await supabase
-                            .from('follows')
-                            .select('*', { count: 'exact', head: true })
-                            .eq('following_id', profile.id);
-                        
-                        return {
-                            ...profile,
-                            xp: (count || 0) * 10,
-                            level: Math.floor((count || 0) / 5) + 1
-                        };
-                    })
-                );
+                // Map to our LeaderboardUser interface, handling missing columns
+                const sortedUsers = (profiles as any[]).map(p => ({
+                    id: p.id,
+                    username: p.username,
+                    avatar_url: p.avatar_url,
+                    xp: p.xp || 0,
+                    level: p.level || 1
+                }));
 
-                const sortedUsers = usersWithStats.sort((a, b) => b.xp - a.xp);
                 const userIndex = sortedUsers.findIndex(u => u.id === targetId);
-                
-                setLeaderboard(sortedUsers.slice(0, 3));
 
-                if (userIndex > 2) {
+                // Show top 10 for better experience
+                setLeaderboard(sortedUsers.slice(0, 10));
+
+                if (userIndex >= 10) {
                     setCurrentUserRank({
                         rank: userIndex + 1,
                         user: sortedUsers[userIndex]
@@ -433,63 +431,95 @@ export const AchievementShowcase = memo(({ userId }: { userId?: string }) => {
                                 ))
                             ) : (
                                 <>
-                                    {leaderboard.map((user, index) => (
+                                    {leaderboard.slice(0, 3).map((user, index) => (
                                         <motion.div
                                             key={user.id}
                                             variants={itemVariants}
-                                            className={`flex items-center gap-4 p-4 rounded-xl border ${index === 0 ? 'bg-gradient-to-r from-yellow-500/10 to-orange-500/10 border-yellow-500/30' :
-                                                index === 1 ? 'bg-gradient-to-r from-gray-300/10 to-gray-400/10 border-gray-400/30' :
+                                            className={`flex items-center gap-4 p-4 rounded-xl border ${index === 0 ? 'bg-gradient-to-r from-yellow-500/10 to-orange-500/10 border-yellow-500/30 shadow-lg shadow-yellow-500/5' :
+                                                index === 1 ? 'bg-gradient-to-r from-gray-300/10 to-gray-400/10 border-gray-400/30 shadow-lg shadow-gray-400/5' :
                                                     'bg-gradient-to-r from-amber-600/10 to-orange-700/10 border-amber-600/30'
                                                 }`}
                                         >
-                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${index === 0 ? 'bg-yellow-500 text-black' :
+                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold relative ${index === 0 ? 'bg-yellow-500 text-black' :
                                                 index === 1 ? 'bg-gray-300 text-black' :
                                                     'bg-amber-600 text-white'
                                                 }`}>
-                                                {index === 0 ? <Crown className="w-4 h-4" /> : index + 1}
+                                                {index === 0 ? (
+                                                    <>
+                                                        <Crown className="w-4 h-4" />
+                                                        <motion.div
+                                                            className="absolute -inset-1 rounded-full border border-yellow-500/50"
+                                                            animate={{ scale: [1, 1.2, 1], opacity: [0.5, 0, 0.5] }}
+                                                            transition={{ duration: 2, repeat: Infinity }}
+                                                        />
+                                                    </>
+                                                ) : index + 1}
                                             </div>
                                             <Avatar className="h-10 w-10 border-2 border-background">
                                                 <AvatarImage src={user.avatar_url || ''} />
                                                 <AvatarFallback>{user.username?.[0]?.toUpperCase() || 'U'}</AvatarFallback>
                                             </Avatar>
                                             <div className="flex-1">
-                                                <p className="font-semibold">{user.username}</p>
-                                                <p className="text-xs text-muted-foreground">Level {user.level}</p>
+                                                <div className="flex items-center gap-2">
+                                                    <p className="font-semibold">{user.username}</p>
+                                                    {currentUserRank?.user.id === user.id && (
+                                                        <Badge variant="secondary" className="text-[10px] h-4 px-1 bg-primary/20 text-primary border-0">YOU</Badge>
+                                                    )}
+                                                </div>
+                                                <p className="text-xs text-muted-foreground italic">Level {user.level}</p>
                                             </div>
                                             <div className="text-right">
-                                                <p className="font-bold text-primary">{user.xp} XP</p>
+                                                <p className="font-black text-primary text-lg">{user.xp}</p>
+                                                <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold opacity-50">XP</p>
                                             </div>
                                         </motion.div>
                                     ))}
 
-                                    {currentUserRank && (
+                                    {currentUserRank && currentUserRank.rank > 3 && (
                                         <>
-                                            <div className="flex items-center justify-center gap-1 text-muted-foreground py-2">
-                                                <span className="w-2 h-2 rounded-full bg-muted-foreground" />
-                                                <span className="w-2 h-2 rounded-full bg-muted-foreground" />
-                                                <span className="w-2 h-2 rounded-full bg-muted-foreground" />
+                                            <div className="flex flex-col items-center justify-center gap-1.5 py-3 opacity-40">
+                                                <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50" />
+                                                <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50" />
+                                                <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50" />
                                             </div>
                                             <motion.div
                                                 variants={itemVariants}
-                                                className="flex items-center gap-4 p-4 rounded-xl border bg-primary/5 border-primary/30"
+                                                className="flex items-center gap-4 p-4 rounded-xl border bg-primary/5 border-primary/30 shadow-inner group transition-all hover:bg-primary/10"
                                             >
-                                                <div className="w-8 h-8 rounded-full flex items-center justify-center font-bold bg-primary/20 text-primary">
+                                                <div className="w-8 h-8 rounded-full flex items-center justify-center font-bold bg-primary/20 text-primary border border-primary/20">
                                                     {currentUserRank.rank}
                                                 </div>
-                                                <Avatar className="h-10 w-10 border-2 border-primary">
+                                                <Avatar className="h-10 w-10 border-2 border-primary group-hover:scale-110 transition-transform">
                                                     <AvatarImage src={currentUserRank.user.avatar_url || ''} />
                                                     <AvatarFallback>{currentUserRank.user.username?.[0]?.toUpperCase() || 'U'}</AvatarFallback>
                                                 </Avatar>
                                                 <div className="flex-1">
-                                                    <p className="font-semibold">{currentUserRank.user.username} <span className="text-xs text-muted-foreground">(You)</span></p>
-                                                    <p className="text-xs text-muted-foreground">Level {currentUserRank.user.level}</p>
+                                                    <div className="flex items-center gap-2">
+                                                        <p className="font-bold text-foreground">{currentUserRank.user.username}</p>
+                                                        <Badge variant="secondary" className="text-[10px] h-4 px-1 bg-primary text-primary-foreground border-0">YOU</Badge>
+                                                    </div>
+                                                    <p className="text-xs text-muted-foreground font-medium">Level {currentUserRank.user.level}</p>
                                                 </div>
                                                 <div className="text-right">
-                                                    <p className="font-bold text-primary">{currentUserRank.user.xp} XP</p>
+                                                    <div className="flex items-baseline justify-end gap-1">
+                                                        <p className="font-black text-primary text-lg">{currentUserRank.user.xp}</p>
+                                                        <p className="text-[10px] text-muted-foreground uppercase font-black">XP</p>
+                                                    </div>
                                                 </div>
                                             </motion.div>
                                         </>
                                     )}
+
+                                    <Button
+                                        variant="ghost"
+                                        className="w-full mt-6 py-6 rounded-2xl border border-dashed border-primary/20 bg-primary/5 hover:bg-primary/10 text-primary font-bold group"
+                                        onClick={() => navigate('/hall-of-fame')}
+                                    >
+                                        <span className="flex items-center gap-2">
+                                            See Full Leaderboard
+                                            <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                                        </span>
+                                    </Button>
                                 </>
                             )}
                         </motion.div>

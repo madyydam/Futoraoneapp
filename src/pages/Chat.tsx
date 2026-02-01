@@ -10,6 +10,7 @@ import type { User } from "@supabase/supabase-js";
 import { formatDistanceToNow } from "date-fns";
 import { CartoonLoader } from "@/components/CartoonLoader";
 import { useTypingIndicator } from "@/hooks/useTypingIndicator";
+import { sendMessageNotification } from "@/services/notification.service";
 
 interface Message {
   id: string;
@@ -26,32 +27,32 @@ interface OtherUser {
   avatar_url: string | null;
 }
 
-const MessageBubble = memo(({ message, isOwn, isTechMatch }: { message: Message, isOwn: boolean, isTechMatch: boolean }) => (
-  <div className={`flex ${isOwn ? "justify-end" : "justify-start"}`}>
-    <div
-      className={`max-w-[70%] sm:max-w-[60%] rounded-2xl px-4 py-2 ${isOwn
-        ? "bg-primary text-primary-foreground"
-        : (isTechMatch ? "bg-pink-100 dark:bg-pink-900/30 text-pink-900 dark:text-pink-100" : "bg-muted text-foreground")
-        }`}
-    >
-      <p className="text-sm sm:text-base break-words">{message.content}</p>
-      <div className={`flex items-center justify-end gap-1 mt-1 ${isTechMatch && !isOwn ? "text-pink-700/70 dark:text-pink-300/70" : ""}`}>
-        <p className="text-xs opacity-70">
-          {formatDistanceToNow(new Date(message.created_at), {
-            addSuffix: true
-          })}
-        </p>
-        {isOwn && message.is_read && (
-          <span className="text-xs opacity-70">• Read</span>
-        )}
+const Chat = () => {
+  const MessageBubble = memo(({ message, isOwn, isTechMatch }: { message: Message, isOwn: boolean, isTechMatch: boolean }) => (
+    <div className={`flex ${isOwn ? "justify-end" : "justify-start"}`}>
+      <div
+        className={`max-w-[70%] sm:max-w-[60%] rounded-2xl px-4 py-2 ${isOwn
+          ? "bg-primary text-primary-foreground"
+          : (isTechMatch ? "bg-pink-100 dark:bg-pink-900/30 text-pink-900 dark:text-pink-100" : "bg-muted text-foreground")
+          }`}
+      >
+        <p className="text-sm sm:text-base break-words">{message.content}</p>
+        <div className={`flex items-center justify-end gap-1 mt-1 ${isTechMatch && !isOwn ? "text-pink-700/70 dark:text-pink-300/70" : ""}`}>
+          <p className="text-xs opacity-70">
+            {formatDistanceToNow(new Date(message.created_at), {
+              addSuffix: true
+            })}
+          </p>
+          {isOwn && message.is_read && (
+            <span className="text-xs opacity-70">• Read</span>
+          )}
+        </div>
       </div>
     </div>
-  </div>
-));
+  ));
 
-MessageBubble.displayName = "MessageBubble";
+  MessageBubble.displayName = "MessageBubble";
 
-const Chat = () => {
   const { conversationId } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -105,8 +106,7 @@ const Chat = () => {
       .single();
 
     if (participants?.profiles) {
-      const profile = participants.profiles as any;
-      setOtherUser(profile);
+      setOtherUser(participants.profiles as unknown as OtherUser);
     }
 
     const { data: messagesData } = await supabase
@@ -211,6 +211,15 @@ const Chat = () => {
         .from("conversations")
         .update({ updated_at: new Date().toISOString() })
         .eq("id", conversationId);
+
+      // Trigger push notification
+      if (otherUser && user) {
+        sendMessageNotification(
+          otherUser.id,
+          user.user_metadata?.full_name || user.email || "Someone",
+          messageContent
+        ).catch(err => console.error("Failed to send push:", err));
+      }
     }
 
     setSending(false);

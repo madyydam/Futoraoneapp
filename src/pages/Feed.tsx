@@ -7,6 +7,8 @@ import { useInView } from "react-intersection-observer";
 import AIMentor from "@/components/AIMentor";
 import { FeedHeader } from "@/components/feed/FeedHeader";
 import { FeedSkeleton } from "@/components/feed/FeedSkeleton";
+import { AchievementShowcase } from "@/components/AchievementShowcase";
+import { GamificationBar } from "@/components/GamificationBar";
 import { useFeedLogic } from "@/hooks/useFeedLogic";
 
 // Lazy load Stories component
@@ -53,6 +55,9 @@ const Feed = () => {
             <Stories />
           </Suspense>
         </div>
+
+        {/* Gamification Bar */}
+        <GamificationBar userProfile={userProfile as any} />
 
         {/* Posts */}
         <div className="space-y-6">

@@ -43,51 +43,66 @@ export const PostActions = memo(({
     );
 
     return (
-        <div className="flex items-center justify-between pt-4 border-t border-border/50">
-            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={onLike}
-                    className={likeButtonClass}
-                >
-                    <Heart
-                        className={`w-5 h-5 mr-1.5 ${isLiked ? "fill-red-500" : ""} transition-all`}
-                    />
-                    <span className="font-medium">{likeCount}</span>
-                </Button>
-            </motion.div>
+        <div className="flex items-center justify-between pt-3 border-t border-border/40">
+            <div className="flex items-center gap-1 bg-muted/30 rounded-full px-2 py-1">
+                <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={onLike}
+                        className={`rounded-full w-10 h-10 ${likeButtonClass}`}
+                    >
+                        <Heart
+                            className={`w-6 h-6 ${isLiked ? "fill-red-500" : ""} transition-all duration-300`}
+                        />
+                    </Button>
+                </motion.div>
+                <span className={`text-sm font-bold min-w-[1.5rem] tabular-nums ${isLiked ? "text-red-500" : "text-muted-foreground"}`}>
+                    {likeCount}
+                </span>
+            </div>
 
-            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                <Button
-                    variant="ghost"
-                    size="sm"
-                    className={commentButtonClass}
-                    onClick={onComment}
-                >
-                    <MessageCircle className="w-5 h-5 mr-1.5" />
-                    <span className="font-medium">{commentCount}</span>
-                </Button>
-            </motion.div>
+            <div className="flex items-center gap-1 hover:bg-muted/30 rounded-full px-2 py-1 transition-colors">
+                <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className={`rounded-full w-10 h-10 ${commentButtonClass}`}
+                        onClick={onComment}
+                    >
+                        <MessageCircle className="w-6 h-6" />
+                    </Button>
+                </motion.div>
+                <span className="text-sm font-bold text-muted-foreground min-w-[1.5rem] tabular-nums">
+                    {commentCount}
+                </span>
+            </div>
 
-            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={onSave}
-                    className={saveButtonClass}
-                >
-                    <Bookmark
-                        className={`w-5 h-5 mr-1.5 ${isSaved ? "fill-primary" : ""} transition-all`}
-                    />
-                </Button>
-            </motion.div>
+            <div className="flex items-center gap-2">
+                <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={onSave}
+                        className={`rounded-full w-10 h-10 ${saveButtonClass}`}
+                    >
+                        <Bookmark
+                            className={`w-5 h-5 ${isSaved ? "fill-primary" : ""} transition-all duration-300`}
+                        />
+                    </Button>
+                </motion.div>
 
-            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                <Button variant="ghost" size="sm" onClick={onShare} className="hover:text-green-500 transition-colors">
-                    <Share2 className="w-5 h-5" />
-                </Button>
-            </motion.div>
+                <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={onShare}
+                        className="rounded-full w-10 h-10 hover:bg-green-500/10 hover:text-green-600 transition-colors"
+                    >
+                        <Share2 className="w-5 h-5" />
+                    </Button>
+                </motion.div>
+            </div>
         </div>
     );
 });

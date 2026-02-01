@@ -9,7 +9,7 @@ interface WaitlistTicketProps {
     avatarUrl?: string;
 }
 
-export const WaitlistTicket: React.FC<WaitlistTicketProps> = ({ ticketNumber, username, avatarUrl }) => {
+export const WaitlistTicket: React.FC<WaitlistTicketProps> = React.memo(({ ticketNumber, username, avatarUrl }) => {
     return (
         <motion.div
             initial={{ rotateY: 90, opacity: 0 }}
@@ -28,7 +28,7 @@ export const WaitlistTicket: React.FC<WaitlistTicketProps> = ({ ticketNumber, us
                     {/* Header */}
                     <div className="flex justify-between items-start">
                         <div className="space-y-1">
-                            <h2 className="text-xs font-bold tracking-[0.2em] text-yellow-500 uppercase">Futora One</h2>
+                            <h2 className="text-xs font-bold tracking-[0.2em] text-yellow-500 uppercase">FutoraOne</h2>
                             <h1 className="text-2xl font-black italic bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">GOLDEN TICKET</h1>
                         </div>
                         <Ticket className="w-8 h-8 text-yellow-500" />
@@ -71,4 +71,4 @@ export const WaitlistTicket: React.FC<WaitlistTicketProps> = ({ ticketNumber, us
             </div>
         </motion.div>
     );
-};
+});

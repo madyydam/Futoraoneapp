@@ -3,7 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/Logo";
 import { motion, Variants, Easing } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, Code, Cpu, Globe, Zap } from "lucide-react";
+import { ArrowRight, Code, Cpu, Globe, Zap, Download } from "lucide-react";
+import { useState, useEffect } from "react";
 
 const containerVariants: Variants = {
   hidden: { opacity: 0 },
@@ -22,6 +23,12 @@ const itemVariants: Variants = {
 
 const Welcome = () => {
   const navigate = useNavigate();
+  const [isStandalone, setIsStandalone] = useState(true);
+
+  useEffect(() => {
+    const checkStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
+    setIsStandalone(!!checkStandalone);
+  }, []);
 
   return (
     <div className="dark min-h-screen bg-background text-foreground relative overflow-hidden flex flex-col justify-center">
@@ -67,21 +74,21 @@ const Welcome = () => {
                 Tech Community
               </span>
             </h1>
-            <p className="text-base sm:text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed px-4">
-              Connect with developers, showcase your projects, and level up your skills in an ecosystem designed for innovators.
+            <p className="text-base sm:text-lg md:text-xl text-muted-foreground max-w-lg mx-auto leading-relaxed px-4">
+              Connect, showcase projects, and level up in the ultimate tech ecosystem.
             </p>
           </motion.div>
 
-          {/* Feature Icons */}
-          <motion.div variants={itemVariants} className="flex flex-wrap justify-center gap-3 sm:gap-8 py-4 sm:py-6 text-muted-foreground/80 px-4">
-            <div className="flex items-center gap-2 text-xs sm:text-sm font-medium px-3 py-1.5 sm:px-4 sm:py-2 rounded-full bg-secondary/30 backdrop-blur-sm border border-white/5">
-              <Code className="w-3 h-3 sm:w-4 sm:h-4 text-primary" /> Code Sharing
+          {/* Feature Icons / Key Points */}
+          <motion.div variants={itemVariants} className="flex flex-wrap justify-center gap-3 sm:gap-4 pb-6 text-muted-foreground/80 px-4 max-w-2xl mx-auto">
+            <div className="flex items-center gap-2 text-xs sm:text-sm font-medium px-4 py-2 rounded-full bg-secondary/20 backdrop-blur-md border border-white/5 shadow-sm">
+              <Code className="w-4 h-4 text-primary" /> Code Sharing
             </div>
-            <div className="flex items-center gap-2 text-xs sm:text-sm font-medium px-3 py-1.5 sm:px-4 sm:py-2 rounded-full bg-secondary/30 backdrop-blur-sm border border-white/5">
-              <Zap className="w-3 h-3 sm:w-4 sm:h-4 text-yellow-500" /> Real-time Chat
+            <div className="flex items-center gap-2 text-xs sm:text-sm font-medium px-4 py-2 rounded-full bg-secondary/20 backdrop-blur-md border border-white/5 shadow-sm">
+              <Zap className="w-4 h-4 text-yellow-500" /> Real-time Chat
             </div>
-            <div className="flex items-center gap-2 text-xs sm:text-sm font-medium px-3 py-1.5 sm:px-4 sm:py-2 rounded-full bg-secondary/30 backdrop-blur-sm border border-white/5">
-              <Globe className="w-3 h-3 sm:w-4 sm:h-4 text-blue-500" /> Global Network
+            <div className="flex items-center gap-2 text-xs sm:text-sm font-medium px-4 py-2 rounded-full bg-secondary/20 backdrop-blur-md border border-white/5 shadow-sm">
+              <Globe className="w-4 h-4 text-blue-500" /> Global Network
             </div>
           </motion.div>
 
@@ -94,13 +101,33 @@ const Welcome = () => {
               Get Started Now
               <ArrowRight className="ml-2 w-4 h-4 sm:w-5 sm:h-5 group-hover:translate-x-1 transition-transform" />
             </Button>
-            <Button
-              variant="outline"
+            {!isStandalone ? (
+              <Button
+                variant="outline"
+                onClick={() => window.dispatchEvent(new CustomEvent('show-pwa-install'))}
+                className="h-12 sm:h-14 px-8 text-base sm:text-lg rounded-full border-2 border-primary/20 hover:bg-primary/5 transition-all hover:scale-105 w-full sm:w-auto flex items-center gap-2 group"
+              >
+                <Download className="w-5 h-5 text-primary group-hover:animate-bounce" />
+                Install App
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                onClick={() => navigate("/auth?mode=login")}
+                className="h-12 sm:h-14 px-8 text-base sm:text-lg rounded-full border-2 hover:bg-secondary/50 transition-all hover:scale-105 w-full sm:w-auto"
+              >
+                Sign In
+              </Button>
+            )}
+          </motion.div>
+
+          <motion.div variants={itemVariants} className="pt-2">
+            <button
               onClick={() => navigate("/auth?mode=login")}
-              className="h-12 sm:h-14 px-8 text-base sm:text-lg rounded-full border-2 hover:bg-secondary/50 transition-all hover:scale-105 w-full sm:w-auto"
+              className="text-sm text-muted-foreground hover:text-primary transition-colors flex items-center justify-center gap-1 mx-auto"
             >
-              I have an account
-            </Button>
+              Already have an account? <span className="font-bold underline">Sign In</span>
+            </button>
           </motion.div>
 
           {/* Footer Links */}

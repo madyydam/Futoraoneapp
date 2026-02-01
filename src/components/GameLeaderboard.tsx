@@ -11,23 +11,16 @@ import { subDays, isAfter, parseISO } from "date-fns";
 import { useNavigate } from "react-router-dom";
 
 interface LeaderboardEntry {
-    user_id: string;
-    total_wins: number;
-    total_losses: number;
+    id: string;
+    xp: number;
+    level: number;
     username: string;
     avatar_url: string | null;
     full_name: string;
-    last_active_at?: string;
+    last_activity_date?: string;
 }
 
-// Mock leaderboard data for demo
-const MOCK_LEADERBOARD: LeaderboardEntry[] = [
-    { user_id: "1", username: "tech_wizard", full_name: "Alex Chen", avatar_url: null, total_wins: 45, total_losses: 12, last_active_at: new Date().toISOString() },
-    { user_id: "2", username: "code_ninja", full_name: "Sarah Dev", avatar_url: null, total_wins: 38, total_losses: 15, last_active_at: new Date().toISOString() },
-    { user_id: "3", username: "react_master", full_name: "Mike React", avatar_url: null, total_wins: 32, total_losses: 18, last_active_at: new Date().toISOString() },
-    { user_id: "4", username: "js_hero", full_name: "Emma JS", avatar_url: null, total_wins: 28, total_losses: 20, last_active_at: new Date().toISOString() },
-    { user_id: "5", username: "dev_star", full_name: "John Star", avatar_url: null, total_wins: 25, total_losses: 22, last_active_at: new Date().toISOString() },
-];
+// Mock data deleted - using real database profile stats
 
 interface GameLeaderboardProps {
     currentUserId?: string;
@@ -47,11 +40,20 @@ const GameLeaderboard = ({ currentUserId, isWidget = true }: GameLeaderboardProp
 
     const fetchLeaderboard = async () => {
         if (leaderboard.length === 0) setLoading(true);
+        try {
+            const { data, error } = await supabase
+                .from('profiles')
+                .select('id, username, full_name, avatar_url, xp, level, last_activity_date')
+                .order('xp', { ascending: false })
+                .limit(50);
 
-        // Since user_game_stats table doesn't exist, use mock data
-        // In production, you would create this table and use the RPC
-        setLeaderboard(MOCK_LEADERBOARD);
-        setLoading(false);
+            if (error) throw error;
+            setLeaderboard((data as any) || []);
+        } catch (err) {
+            console.error("Error fetching leaderboard:", err);
+        } finally {
+            setLoading(false);
+        }
     };
 
     const filteredLeaderboard = useMemo(() => {
@@ -61,14 +63,14 @@ const GameLeaderboard = ({ currentUserId, isWidget = true }: GameLeaderboardProp
         const cutoffDate = timeFilter === "week" ? subDays(now, 7) : subDays(now, 30);
 
         return leaderboard.filter(entry => {
-            if (!entry.last_active_at) return false;
-            return isAfter(parseISO(entry.last_active_at), cutoffDate);
+            if (!entry.last_activity_date) return false;
+            return isAfter(parseISO(entry.last_activity_date), cutoffDate);
         });
     }, [leaderboard, timeFilter]);
 
     useEffect(() => {
         if (currentUserId) {
-            const rank = filteredLeaderboard.findIndex(p => p.user_id === currentUserId);
+            const rank = filteredLeaderboard.findIndex(p => p.id === currentUserId);
             setUserRank(rank !== -1 ? rank + 1 : null);
         }
     }, [currentUserId, filteredLeaderboard]);
@@ -96,7 +98,8 @@ const GameLeaderboard = ({ currentUserId, isWidget = true }: GameLeaderboardProp
                 <p className="font-bold text-sm sm:text-base truncate max-w-[100px] sm:max-w-full">
                     {entry.full_name.split(' ')[0]}
                 </p>
-                <p className="text-xs sm:text-sm text-primary font-bold mt-1">{entry.total_wins} Wins</p>
+                <p className="text-xs sm:text-sm text-primary font-bold mt-1">Level {entry.level}</p>
+                <p className="text-[10px] text-muted-foreground">{entry.xp} XP</p>
             </div>
 
             <div className="absolute -bottom-6 flex items-center justify-center w-8 h-8 rounded-full bg-card border border-border font-bold text-sm z-20 shadow-md">
@@ -177,12 +180,12 @@ const GameLeaderboard = ({ currentUserId, isWidget = true }: GameLeaderboardProp
                                 !isWidget && "max-h-[600px] overflow-y-auto"
                             )}>
                                 {listItems.map((entry) => {
-                                    const trueRank = filteredLeaderboard.findIndex(p => p.user_id === entry.user_id) + 1;
-                                    const isCurrentUser = entry.user_id === currentUserId;
+                                    const trueRank = filteredLeaderboard.findIndex(p => p.id === entry.id) + 1;
+                                    const isCurrentUser = entry.id === currentUserId;
 
                                     return (
                                         <div
-                                            key={entry.user_id}
+                                            key={entry.id}
                                             className={cn(
                                                 "flex items-center gap-4 p-3 rounded-xl border transition-colors",
                                                 isCurrentUser ? "bg-primary/10 border-primary/50" : "bg-card border-border/50 hover:bg-muted/50"
@@ -195,7 +198,7 @@ const GameLeaderboard = ({ currentUserId, isWidget = true }: GameLeaderboardProp
 
                                             <Avatar className="h-10 w-10">
                                                 <AvatarImage src={entry.avatar_url || undefined} />
-                                                <AvatarFallback>{entry.username[0]?.toUpperCase()}</AvatarFallback>
+                                                <AvatarFallback>{entry.username?.[0]?.toUpperCase() || '?'}</AvatarFallback>
                                             </Avatar>
                                             <div className="flex-1">
                                                 <p className={cn("font-semibold", isCurrentUser && "text-primary")}>
@@ -204,12 +207,12 @@ const GameLeaderboard = ({ currentUserId, isWidget = true }: GameLeaderboardProp
                                                 <p className="text-xs text-muted-foreground flex items-center gap-2">
                                                     @{entry.username}
                                                     <span className="w-1 h-1 bg-muted-foreground rounded-full" />
-                                                    {((entry.total_wins / ((entry.total_wins + entry.total_losses) || 1)) * 100).toFixed(0)}% Win Rate
+                                                    Level {entry.level}
                                                 </p>
                                             </div>
                                             <div className="text-right">
-                                                <span className="block font-bold text-foreground">{entry.total_wins}</span>
-                                                <span className="text-[10px] text-muted-foreground uppercase">Wins</span>
+                                                <span className="block font-bold text-foreground">{entry.xp}</span>
+                                                <span className="text-[10px] text-muted-foreground uppercase">XP</span>
                                             </div>
                                         </div>
                                     )

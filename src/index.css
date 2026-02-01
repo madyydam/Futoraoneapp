@@ -115,13 +115,20 @@
     -moz-osx-font-smoothing: grayscale;
     overflow-x: hidden;
   }
-  
-  h1, h2, h3, h4, h5, h6 {
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
     @apply font-heading;
   }
 
   /* GPU Acceleration hints for common interactive elements */
-  button, a, .motion-safe {
+  button,
+  a,
+  .motion-safe {
     backface-visibility: hidden;
     perspective: 1000px;
     transform: translateZ(0);
@@ -163,7 +170,7 @@
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
-  
+
   .hide-scrollbar::-webkit-scrollbar {
     display: none;
   }

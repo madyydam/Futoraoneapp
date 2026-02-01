@@ -1,7 +1,8 @@
 import React, { Component, ErrorInfo, ReactNode } from "react";
 import * as Sentry from "@sentry/react";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, RefreshCcw } from "lucide-react";
+import { AlertTriangle, RefreshCcw, Sparkles } from "lucide-react";
+import { getRandomJoke } from "@/utils/jokes";
 
 interface Props {
     children: ReactNode;
@@ -17,6 +18,7 @@ interface State {
         description: string;
         subtitle: string;
     };
+    joke: string;
 }
 
 export class GlobalErrorBoundary extends Component<Props, State> {
@@ -28,6 +30,7 @@ export class GlobalErrorBoundary extends Component<Props, State> {
         errorType: 'unknown',
         retryCount: 0,
         cachedMessage: undefined,
+        joke: "",
     };
 
     public static getDerivedStateFromError(error: Error): Partial<State> {
@@ -42,7 +45,7 @@ export class GlobalErrorBoundary extends Component<Props, State> {
             errorType = 'render';
         }
 
-        return { hasError: true, error, errorType };
+        return { hasError: true, error, errorType, joke: getRandomJoke() };
     }
 
     public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
@@ -75,35 +78,20 @@ export class GlobalErrorBoundary extends Component<Props, State> {
     }
 
     private handleReset = () => {
-        // Clear potentially corrupted state/cache
+        // Safe recovery: Reload without stripping auth
         try {
-            // Clear localStorage except auth-related items
-            const keysToPreserve = ['supabase.auth.token', 'vite-ui-theme'];
-            const storage: { [key: string]: string } = {};
-
-            keysToPreserve.forEach(key => {
-                const value = localStorage.getItem(key);
-                if (value) storage[key] = value;
-            });
-
-            localStorage.clear();
-
-            Object.entries(storage).forEach(([key, value]) => {
-                localStorage.setItem(key, value);
-            });
-
-            // Clear session storage
+            // Clear session storage which is ephemeral anyway
             sessionStorage.clear();
 
-            // Clear service worker caches if available
+            // Clear service worker caches if available to fix corrupted assets
             if ('caches' in window) {
                 caches.keys().then(names => {
                     names.forEach(name => caches.delete(name));
                 });
             }
 
-            // Redirect to home
-            window.location.assign("/feed");
+            // Just reload the page or go to landing to reset the app state
+            window.location.reload();
         } catch (e) {
             console.error("Error during reset:", e);
             window.location.reload();
@@ -180,6 +168,12 @@ export class GlobalErrorBoundary extends Component<Props, State> {
                             <h1 className="text-2xl font-bold tracking-tight text-foreground">
                                 {message.title}
                             </h1>
+                            <div className="p-6 bg-primary/5 rounded-3xl border border-primary/20 relative group my-4">
+                                <Sparkles className="w-5 h-5 text-primary absolute -top-2 -right-1 animate-bounce" />
+                                <p className="text-primary text-lg font-semibold italic">
+                                    "{this.state.joke}"
+                                </p>
+                            </div>
                             <div className="space-y-2">
                                 <p className="text-muted-foreground leading-relaxed text-lg">
                                     {message.description}

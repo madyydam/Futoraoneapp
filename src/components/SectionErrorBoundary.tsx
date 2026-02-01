@@ -1,7 +1,8 @@
 import React, { Component, ErrorInfo, ReactNode } from "react";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, Home, RefreshCcw } from "lucide-react";
+import { AlertTriangle, Home, RefreshCcw, Sparkles } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { getRandomJoke } from "@/utils/jokes";
 
 interface Props {
     children: ReactNode;
@@ -12,16 +13,18 @@ interface Props {
 interface State {
     hasError: boolean;
     error: Error | null;
+    joke: string;
 }
 
 class SectionErrorBoundaryClass extends Component<Props & { navigate: (path: string) => void }, State> {
     public state: State = {
         hasError: false,
         error: null,
+        joke: "",
     };
 
-    public static getDerivedStateFromError(error: Error): State {
-        return { hasError: true, error };
+    public static getDerivedStateFromError(error: Error): Partial<State> {
+        return { hasError: true, error, joke: getRandomJoke() };
     }
 
     public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
@@ -67,11 +70,14 @@ class SectionErrorBoundaryClass extends Component<Props & { navigate: (path: str
                             <h2 className="text-xl font-bold tracking-tight text-foreground">
                                 {this.props.sectionName} mein dikkat!
                             </h2>
+                            <div className="p-4 bg-primary/5 rounded-2xl border border-primary/10 relative group">
+                                <Sparkles className="w-4 h-4 text-primary absolute -top-2 -right-1 animate-pulse" />
+                                <p className="text-primary font-medium italic">
+                                    "{this.state.joke}"
+                                </p>
+                            </div>
                             <p className="text-muted-foreground leading-relaxed">
                                 Kuch gadbad ho gayi, par tension nahi! 😊
-                            </p>
-                            <p className="text-sm text-muted-foreground font-medium">
-                                Refresh karo ya Home wapas jao
                             </p>
                         </div>
 

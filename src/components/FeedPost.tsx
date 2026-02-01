@@ -97,54 +97,62 @@ export const FeedPost = memo(({ post, currentUser, onLike, onSave, onShare, onDe
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 30, scale: 0.95 }}
+      initial={{ opacity: 0, y: 20, scale: 0.98 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={{ delay: Math.min(index * 0.05, 0.3), type: "spring", stiffness: 80, damping: 15 }}
-      whileHover={{ y: -2, scale: 1.005 }}
-      className="group"
+      transition={{ delay: Math.min(index * 0.05, 0.3), type: "spring", stiffness: 80, damping: 20 }}
+      className="group mb-6"
       style={{ willChange: "transform, opacity", contentVisibility: "auto" }}
       layout="position"
     >
       <Card
-        className="overflow-hidden shadow-md hover:shadow-2xl border border-border/50 hover:border-primary/20 transition-all duration-300 bg-card/60 backdrop-blur-sm"
+        className="overflow-hidden border border-border shadow-sm hover:shadow-lg transition-all duration-300 bg-card rounded-[1.25rem] ring-1 ring-black/5 dark:ring-white/5"
         style={{ contentVisibility: index > 5 ? 'auto' : 'visible', containIntrinsicSize: '0 500px' }}
       >
-        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 bg-gradient-to-br from-primary/5 via-transparent to-secondary/5 pointer-events-none" />
+        {/* Subtle Gradient Glow on Hover */}
+        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-700 bg-gradient-to-br from-indigo-500/5 via-transparent to-purple-500/5 pointer-events-none" />
 
-        <div className="p-6 relative z-10">
-          <PostHeader
-            profile={post.profiles}
-            createdAt={post.created_at}
-            content={post.content}
-            isOwner={isOwner}
-            index={index}
-            onProfileClick={handleProfileClick}
-            onEdit={handleEdit}
-            onDelete={handleDelete}
-          />
+        <div className="p-0 relative z-10">
+          <div className="px-6 pt-6">
+            <PostHeader
+              profile={post.profiles}
+              createdAt={post.created_at}
+              content={post.content}
+              isOwner={isOwner}
+              index={index}
+              onProfileClick={handleProfileClick}
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+            />
+          </div>
 
-          <PostContent
-            content={post.content}
-            onClick={handlePostClick}
-          />
+          <div className="px-6 py-2">
+            <PostContent
+              content={post.content}
+              onClick={handlePostClick}
+            />
+          </div>
 
-          <PostMedia
-            imageUrl={post.image_url}
-            videoUrl={post.video_url}
-            index={index}
-          />
+          <div className={post.image_url || post.video_url ? "mt-3" : ""}>
+            <PostMedia
+              imageUrl={post.image_url}
+              videoUrl={post.video_url}
+              index={index}
+            />
+          </div>
 
-          <PostActions
-            likeCount={post.likes.length}
-            commentCount={post.comments.length}
-            isLiked={isLiked}
-            isSaved={!!isSaved}
-            showComments={showComments}
-            onLike={handleLikeClick}
-            onComment={() => setShowComments(!showComments)}
-            onSave={handleSaveClick}
-            onShare={handleShareClick}
-          />
+          <div className="px-6 pb-4 pt-2">
+            <PostActions
+              likeCount={post.likes.length}
+              commentCount={post.comments.length}
+              isLiked={isLiked}
+              isSaved={!!isSaved}
+              showComments={showComments}
+              onLike={handleLikeClick}
+              onComment={() => setShowComments(!showComments)}
+              onSave={handleSaveClick}
+              onShare={handleShareClick}
+            />
+          </div>
 
           {/* Comments Section (Heavy, load only when needed) */}
           <AnimatePresence>
@@ -153,10 +161,10 @@ export const FeedPost = memo(({ post, currentUser, onLike, onSave, onShare, onDe
                 initial={{ height: 0, opacity: 0 }}
                 animate={{ height: "auto", opacity: 1 }}
                 exit={{ height: 0, opacity: 0 }}
-                className="overflow-hidden"
+                className="overflow-hidden bg-muted/30"
               >
-                <div className="mt-4 pt-4 border-t border-border/50">
-                  <Suspense fallback={<div className="h-20 flex items-center justify-center text-muted-foreground">Loading comments...</div>}>
+                <div className="px-6 py-6 border-t border-border/50">
+                  <Suspense fallback={<div className="h-20 flex items-center justify-center text-muted-foreground text-sm">Loading comments...</div>}>
                     <CommentSection
                       postId={post.id}
                       postAuthorId={post.user_id}

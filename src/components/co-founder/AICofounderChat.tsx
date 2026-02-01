@@ -86,7 +86,7 @@ export const AICofounderChat = ({ onApplyFilter }: AICofounderChatProps) => {
 
     return (
         <Card className="h-[500px] flex flex-col border-none shadow-none bg-transparent">
-            <CardContent className="flex-1 p-4 flex flex-col h-full">
+            <CardContent className="flex-1 p-4 flex flex-col h-full relative overflow-hidden">
                 <ScrollArea className="flex-1 pr-4" ref={scrollRef}>
                     <div className="space-y-4">
                         {messages.map((msg) => (
@@ -98,7 +98,7 @@ export const AICofounderChat = ({ onApplyFilter }: AICofounderChatProps) => {
                             >
                                 <Avatar className={`w-8 h-8 ${msg.sender === 'ai' ? 'border-pink-500/50' : 'border-blue-500/50'} border-2`}>
                                     {msg.sender === 'ai' ? (
-                                        <AvatarImage src="/lovable-uploads/ai-avatar.png" />
+                                        <AvatarImage src="/ai-avatar.png" />
                                     ) : null}
                                     <AvatarFallback className={msg.sender === 'ai' ? 'bg-pink-100 text-pink-700' : 'bg-blue-100 text-blue-700'}>
                                         {msg.sender === 'ai' ? <Bot size={16} /> : <User size={16} />}
@@ -165,6 +165,19 @@ export const AICofounderChat = ({ onApplyFilter }: AICofounderChatProps) => {
                     >
                         <Send className="w-4 h-4" />
                     </Button>
+                </div>
+
+                {/* Coming Soon Overlay */}
+                <div className="absolute inset-0 z-50 bg-background/40 backdrop-blur-[1px] flex items-center justify-center p-6 text-center">
+                    <div className="bg-white/90 dark:bg-black/90 border border-border p-6 rounded-2xl shadow-xl max-w-[280px] animate-in fade-in zoom-in duration-300">
+                        <div className="w-12 h-12 bg-pink-100 dark:bg-pink-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <Sparkles className="w-6 h-6 text-pink-600" />
+                        </div>
+                        <h4 className="font-bold text-lg mb-1">Coming Soon</h4>
+                        <p className="text-sm text-muted-foreground leading-tight">
+                            Arya is currently training to be the world's best co-founder. Check back in a few days!
+                        </p>
+                    </div>
                 </div>
             </CardContent>
         </Card>

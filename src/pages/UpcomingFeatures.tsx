@@ -16,7 +16,8 @@ import {
     Trophy,
     Swords,
     Award,
-    PenTool
+    PenTool,
+    Heart
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { BottomNav } from "@/components/BottomNav";
@@ -25,18 +26,18 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { WaitlistTicket } from "@/components/WaitlistTicket";
 import { supabase } from "@/integrations/supabase/client";
 
-const FeatureCard = memo(({ icon: Icon, title, description, badge }: { icon: any, title: string, description: string, badge?: string }) => (
-    <div className="relative group p-6 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all duration-300 backdrop-blur-sm">
+const FeatureCard = memo(({ icon: Icon, title, description, badge, isSquare }: { icon: any, title: string, description: string, badge?: string, isSquare?: boolean }) => (
+    <div className={`relative group p-4 sm:p-6 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all duration-300 backdrop-blur-sm flex flex-col ${isSquare ? 'aspect-square justify-center text-center items-center' : ''}`}>
         {badge && (
             <div className="absolute -top-3 -right-2 px-3 py-1 bg-primary text-primary-foreground text-xs font-bold rounded-full shadow-lg animate-pulse">
                 {badge}
             </div>
         )}
-        <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
-            <Icon className="w-6 h-6 text-primary" />
+        <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-primary/20 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300`}>
+            <Icon className="w-5 h-5 sm:w-6 sm:h-6 text-primary" />
         </div>
-        <h3 className="text-lg font-bold text-white mb-2">{title}</h3>
-        <p className="text-sm text-gray-400 leading-relaxed">{description}</p>
+        <h3 className={`font-bold text-white mb-2 ${isSquare ? 'text-sm sm:text-base' : 'text-lg'}`}>{title}</h3>
+        <p className={`text-xs text-gray-400 leading-relaxed ${isSquare ? 'line-clamp-2' : ''}`}>{description}</p>
     </div>
 ));
 
@@ -47,6 +48,33 @@ const UpcomingFeatures = memo(() => {
     const [isLoading, setIsLoading] = useState(false);
     const [ticketData, setTicketData] = useState<{ number: number; username: string; avatarUrl?: string } | null>(null);
     const [showTicket, setShowTicket] = useState(false);
+
+    const aiFeatures = [
+        {
+            icon: Sparkles,
+            title: "AI Mentor",
+            description: "Expert tech guidance and code review 24/7.",
+            badge: "BETA"
+        },
+        {
+            icon: Rocket,
+            title: "AI Co-founder",
+            description: "Strategic planning and business logic support.",
+            badge: "VIP"
+        },
+        {
+            icon: Heart,
+            title: "AI GF",
+            description: "Personal conversation and emotional support.",
+            badge: "NEW"
+        },
+        {
+            icon: Shield,
+            title: "AI BF",
+            description: "Supportive dialogue and personal interaction.",
+            badge: "NEW"
+        }
+    ];
 
     const features = [
         {
@@ -84,12 +112,6 @@ const UpcomingFeatures = memo(() => {
             title: "Futora Pro",
             description: "Exclusive access to premium gigs, advanced search filters, and profile boosts.",
             badge: "Q1 2024"
-        },
-        {
-            icon: Code2,
-            title: "AI Code Companion",
-            description: "Your personal AI pair programmer available 24/7 for debugging and optimization.",
-            badge: "Beta"
         },
         {
             icon: Trophy,
@@ -206,11 +228,31 @@ const UpcomingFeatures = memo(() => {
                     </p>
                 </div>
 
-                {/* Features Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {features.map((feature, index) => (
-                        <FeatureCard key={index} {...feature} />
-                    ))}
+                {/* AI Features Highlight - 2x2 Grid */}
+                <div className="mb-12">
+                    <div className="flex items-center gap-2 mb-6 ml-1">
+                        <div className="h-px flex-1 bg-gradient-to-r from-primary/50 to-transparent" />
+                        <span className="text-xs font-black tracking-[0.3em] text-primary uppercase">AI Innovations</span>
+                        <div className="h-px flex-1 bg-gradient-to-l from-primary/50 to-transparent" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        {aiFeatures.map((feature, index) => (
+                            <FeatureCard key={`ai-${index}`} {...feature} isSquare={true} />
+                        ))}
+                    </div>
+                </div>
+
+                {/* Other Features Grid */}
+                <div className="space-y-6">
+                    <div className="flex items-center gap-2 mb-2 ml-1">
+                        <span className="text-xs font-black tracking-[0.3em] text-gray-500 uppercase">Roadmap Explorer</span>
+                        <div className="h-px flex-1 bg-white/10" />
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {features.map((feature, index) => (
+                            <FeatureCard key={index} {...feature} />
+                        ))}
+                    </div>
                 </div>
 
                 {/* Community Section */}

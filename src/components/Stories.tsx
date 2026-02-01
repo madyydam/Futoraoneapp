@@ -1,94 +1,39 @@
 import { useState, useEffect, useMemo, useCallback, memo } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Plus } from "lucide-react";
+import { Plus, Share2 } from "lucide-react";
 import { StoryViewer, Story } from "./StoryViewer";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import imageCompression from 'browser-image-compression';
 
 // Demo stories for when there are no real users
-const DEMO_STORIES = [
-    {
-        id: 'demo-1',
-        user_id: 'test-user-1',
-        username: 'Testing 1',
-        avatar_url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Testing1',
-        media_url: 'https://images.unsplash.com/photo-1518770660439-4636190af475?w=400&h=600&fit=crop', // Tech/coding
-        media_type: 'image'
-    },
-    {
-        id: 'demo-2',
-        user_id: 'test-user-2',
-        username: 'Testing 2',
-        avatar_url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Testing2',
-        media_url: 'https://images.unsplash.com/photo-1488590528505-98d2b5aba04b?w=400&h=600&fit=crop', // Laptop/tech
-        media_type: 'image'
-    },
-    {
-        id: 'demo-3',
-        user_id: 'test-user-3',
-        username: 'Testing 3',
-        avatar_url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Testing3',
-        media_url: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=400&h=600&fit=crop', // Code on screen
-        media_type: 'image'
-    },
-    {
-        id: 'demo-4',
-        user_id: 'test-user-4',
-        username: 'Testing 4',
-        avatar_url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Testing4',
-        media_url: 'https://images.unsplash.com/photo-1461749280684-dccba630e2f6?w=400&h=600&fit=crop', // Programming
-        media_type: 'image'
-    },
-    {
-        id: 'demo-5',
-        user_id: 'test-user-5',
-        username: 'Testing 5',
-        avatar_url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Testing5',
-        media_url: 'https://images.unsplash.com/photo-1504384308090-c894fdcc538d?w=400&h=600&fit=crop', // Developer workspace
-        media_type: 'image'
-    },
-    {
-        id: 'demo-6',
-        user_id: 'test-user-6',
-        username: 'Testing 6',
-        avatar_url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Testing6',
-        media_url: 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=400&h=600&fit=crop', // Laptop code
-        media_type: 'image'
-    },
-    {
-        id: 'demo-7',
-        user_id: 'test-user-7',
-        username: 'Testing 7',
-        avatar_url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Testing7',
-        media_url: 'https://images.unsplash.com/photo-1484417894907-623942c8ee29?w=400&h=600&fit=crop', // MacBook code
-        media_type: 'image'
-    },
-    {
-        id: 'demo-8',
-        user_id: 'test-user-8',
-        username: 'Testing 8',
-        avatar_url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Testing8',
-        media_url: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=400&h=600&fit=crop', // Tech abstract
-        media_type: 'image'
-    },
-    {
-        id: 'demo-9',
-        user_id: 'test-user-9',
-        username: 'Testing 9',
-        avatar_url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Testing9',
-        media_url: 'https://images.unsplash.com/photo-1515879218367-8466d910aaa4?w=400&h=600&fit=crop', // Coding setup
-        media_type: 'image'
-    },
-    {
-        id: 'demo-10',
-        user_id: 'test-user-10',
-        username: 'Testing 10',
-        avatar_url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Testing10',
-        media_url: 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=400&h=600&fit=crop', // Code closeup
-        media_type: 'image'
-    }
-];
+// Demo stories deleted - using real database stories
+
+const StoryItem = memo(({ user, onClick, isLive }: { user: any, onClick: (id: string) => void, isLive?: boolean }) => (
+    <div
+        className="flex flex-col items-center gap-1 min-w-[72px] cursor-pointer group"
+        onClick={() => onClick(user.id)}
+    >
+        <div className="relative p-[3px] rounded-full bg-gradient-to-tr from-[#f09433] via-[#e6683c] to-[#bc1888] shadow-lg group-hover:scale-110 transition-transform duration-300">
+            <div className="rounded-full p-0.5 bg-background">
+                <Avatar className="w-16 h-16 border-2 border-background">
+                    <AvatarImage src={user.avatar_url} />
+                    <AvatarFallback>{user.username?.[0]}</AvatarFallback>
+                </Avatar>
+            </div>
+            {isLive && (
+                <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 bg-[#ff0050] text-white text-[10px] font-black px-1.5 py-0.5 rounded-sm border border-background animate-pulse">
+                    LIVE
+                </div>
+            )}
+        </div>
+        <span className="text-xs font-medium text-muted-foreground truncate w-full text-center group-hover:text-foreground transition-colors mt-1">
+            {user.username}
+        </span>
+    </div>
+));
+
+StoryItem.displayName = "StoryItem";
 
 export const Stories = memo(() => {
     const [selectedUser, setSelectedUser] = useState<string | null>(null);
@@ -174,40 +119,9 @@ export const Stories = memo(() => {
         }
     };
 
-    // Get demo stories formatted as Story objects
-    const { demoStoriesGrouped, demoUsers } = useMemo(() => {
-        const demoStoriesGrouped: Record<string, Story[]> = {};
-        const demoUsers: any[] = [];
-
-        DEMO_STORIES.forEach(story => {
-            if (!demoStoriesGrouped[story.user_id]) {
-                demoStoriesGrouped[story.user_id] = [];
-                demoUsers.push({
-                    id: story.user_id,
-                    username: story.username,
-                    avatar_url: story.avatar_url
-                });
-            }
-
-            demoStoriesGrouped[story.user_id].push({
-                id: story.id,
-                url: story.media_url,
-                type: story.media_type as 'image' | 'video',
-                createdAt: new Date().toISOString(),
-                user: {
-                    id: story.user_id,
-                    username: story.username,
-                    avatar_url: story.avatar_url
-                }
-            });
-        });
-
-        return { demoStoriesGrouped, demoUsers };
-    }, []);
-
-    // Merge real and demo stories
-    const allStories = useMemo(() => ({ ...demoStoriesGrouped, ...storiesByUser }), [demoStoriesGrouped, storiesByUser]);
-    const allUsers = useMemo(() => [...demoUsers, ...usersWithStories], [demoUsers, usersWithStories]);
+    // Use only real stories
+    const allStories = storiesByUser;
+    const allUsers = usersWithStories;
 
     const handleUserClick = useCallback((userId: string) => {
         if (allStories[userId]) {
@@ -271,10 +185,14 @@ export const Stories = memo(() => {
                 .from('stories')
                 .getPublicUrl(filePath);
 
+            const expiresAt = new Date();
+            expiresAt.setHours(expiresAt.getHours() + 24);
+
             const { error: dbError } = await supabase.from('stories').insert({
                 user_id: currentUser.id,
                 media_url: publicUrl,
-                media_type: file.type.startsWith('video') ? 'video' : 'image'
+                media_type: file.type.startsWith('video') ? 'video' : 'image',
+                expires_at: expiresAt.toISOString()
             });
 
             if (dbError) throw dbError;
@@ -331,24 +249,39 @@ export const Stories = memo(() => {
                     </span>
                 </div>
 
+                {/* Invite Placeholder */}
+                <div className="flex flex-col items-center gap-1 min-w-[72px] cursor-pointer group">
+                    <div className="relative p-[3px] rounded-full border-2 border-dashed border-primary/30 group-hover:border-primary/60 transition-colors">
+                        <div className="w-16 h-16 rounded-full bg-primary/5 flex items-center justify-center">
+                            <Share2 className="w-6 h-6 text-primary/60 group-hover:text-primary transition-colors" />
+                        </div>
+                    </div>
+                    <span className="text-xs font-medium text-muted-foreground group-hover:text-primary transition-colors mt-1">Invite</span>
+                </div>
+
                 {/* Other Users (excluding current user) */}
                 {allUsers.filter(user => user.id !== currentUser?.id).map((user) => (
-                    <div
+                    <StoryItem
                         key={user.id}
-                        className="flex flex-col items-center gap-1 min-w-[72px] cursor-pointer group"
-                        onClick={() => handleUserClick(user.id)}
-                    >
-                        <div className={`relative p-[2px] rounded-full bg-gradient-to-tr from-yellow-400 via-red-500 to-purple-500 ring-2 ring-black/30 dark:ring-transparent`}>
-                            <Avatar className="w-16 h-16 border-2 border-background">
-                                <AvatarImage src={user.avatar_url} />
-                                <AvatarFallback>{user.username?.[0]}</AvatarFallback>
-                            </Avatar>
-                        </div>
-                        <span className="text-xs text-muted-foreground truncate w-full text-center group-hover:text-foreground transition-colors">
-                            {user.username}
-                        </span>
-                    </div>
+                        user={user}
+                        onClick={handleUserClick}
+                        isLive={false} // Transitioned from demo live status
+                    />
                 ))}
+
+                {/* Empty State Fillers (if few stories) */}
+                {allUsers.length < 3 && (
+                    <>
+                        <div className="flex flex-col items-center gap-1 min-w-[72px] opacity-50 grayscale pointer-events-none">
+                            <div className="relative p-[3px] rounded-full border-2 border-dotted border-muted">
+                                <div className="w-16 h-16 rounded-full bg-muted/20 flex items-center justify-center">
+                                    <span className="text-lg font-bold text-muted-foreground/50">?</span>
+                                </div>
+                            </div>
+                            <span className="text-xs font-medium text-muted-foreground mt-1">Soon</span>
+                        </div>
+                    </>
+                )}
             </div>
 
             {selectedUser && allStories[selectedUser] && (

@@ -65,14 +65,17 @@ const CreateStory = () => {
       const fileName = `${user.id}/${Date.now()}.${fileExt}`;
 
       const { error: uploadError, data: uploadData } = await supabase.storage
-        .from("post-images")
+        .from("stories")
         .upload(fileName, mediaFile);
 
       if (uploadError) throw uploadError;
 
       const { data: { publicUrl } } = supabase.storage
-        .from("post-images")
+        .from("stories")
         .getPublicUrl(fileName);
+
+      const expiresAt = new Date();
+      expiresAt.setHours(expiresAt.getHours() + 24);
 
       // Create story
       const { error: storyError } = await supabase.from("stories").insert({
@@ -80,6 +83,7 @@ const CreateStory = () => {
         media_url: publicUrl,
         media_type: mediaFile.type.startsWith("image/") ? "image" : "video",
         caption: caption || null,
+        expires_at: expiresAt.toISOString(),
       });
 
       if (storyError) throw storyError;

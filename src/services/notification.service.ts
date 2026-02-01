@@ -9,14 +9,14 @@ interface SendNotificationParams {
     userId: string;
     title: string;
     body: string;
-    data?: Record<string, any>;
+    data?: Record<string, string>;
 }
 
 interface BulkNotificationParams {
     userIds: string[];
     title: string;
     body: string;
-    data?: Record<string, any>;
+    data?: Record<string, string>;
 }
 
 /**
@@ -38,13 +38,11 @@ export const sendPushNotification = async ({
             .single();
 
         if (profileError || !profile?.fcm_token) {
-            console.log('User does not have FCM token or profile not found');
             return;
         }
 
         // Skip if user has digest mode enabled
         if (profile.digest_mode) {
-            console.log('User has digest mode enabled. Skipping immediate notification.');
             return;
         }
 
@@ -63,7 +61,6 @@ export const sendPushNotification = async ({
             throw error;
         }
 
-        console.log('Notification sent successfully:', result);
     } catch (error) {
         console.error('Error in sendPushNotification:', error);
         throw error;
@@ -88,7 +85,6 @@ export const sendBulkNotifications = async ({
             .in('id', userIds);
 
         if (profileError || !profiles || profiles.length === 0) {
-            console.log('No users found with FCM tokens');
             return;
         }
 
@@ -98,7 +94,6 @@ export const sendBulkNotifications = async ({
             .map(p => p.fcm_token);
 
         if (tokens.length === 0) {
-            console.log('No valid tokens found for bulk notification');
             return;
         }
 
@@ -117,7 +112,6 @@ export const sendBulkNotifications = async ({
             throw error;
         }
 
-        console.log(`Bulk notification sent to ${tokens.length} users:`, result);
     } catch (error) {
         console.error('Error in sendBulkNotifications:', error);
         throw error;

@@ -51,15 +51,29 @@ export const useFeedLogic = () => {
             return;
         }
 
+        // Select specific columns to be safe, but handle missing columns gracefully
         const { data, error } = await supabase
             .from('profiles')
-            .select('xp, level, current_streak')
+            .select('*')
             .eq('id', userId)
             .maybeSingle();
 
-        if (!error && data) {
-            profileCache.set(userId, data);
-            setUserProfile(data as any);
+        if (error) {
+            console.warn("Error fetching user profile stats (expected if columns missing):", error.message);
+            return;
+        }
+
+        if (data) {
+            // Handle potentially missing columns from older schemas
+            const formattedProfile = {
+                xp: (data as any).xp || 0,
+                level: (data as any).level || 1,
+                current_streak: (data as any).current_streak || 0,
+                longest_streak: (data as any).longest_streak || 0,
+                daily_challenges: (data as any).daily_challenges || null
+            };
+            profileCache.set(userId, formattedProfile);
+            setUserProfile(formattedProfile as any);
         }
     }, []);
 
@@ -80,16 +94,11 @@ export const useFeedLogic = () => {
                 saves: post.saves || []
             }));
 
-            let allPosts = formattedPosts;
-            if (pageRef.current === 0 && formattedPosts.length < 5) {
-                allPosts = [...formattedPosts, ...DEMO_POSTS];
-            }
-
             if (pageRef.current === 0) {
-                setPosts(allPosts);
-                savePostsToCache(allPosts.slice(0, 20));
+                setPosts(formattedPosts);
+                savePostsToCache(formattedPosts.slice(0, 20));
             } else {
-                setPosts(prev => [...prev, ...allPosts]);
+                setPosts(prev => [...prev, ...formattedPosts]);
             }
 
             if (formattedPosts.length < POSTS_PER_PAGE) {
@@ -99,7 +108,7 @@ export const useFeedLogic = () => {
             console.error('Error fetching posts:', error);
             toast({
                 title: "Error loading posts",
-                description: error.message,
+                description: "Could not connect to database. Showing cached posts.",
                 variant: "destructive",
             });
             if (pageRef.current === 0) {
@@ -131,11 +140,6 @@ export const useFeedLogic = () => {
             if (mounted && loading) {
                 console.warn("Feed loading timed out, forcing UI unlock");
                 setLoading(false);
-                toast({
-                    title: "Network Delay",
-                    description: "Loading took longer than expected. Showing cached content.",
-                    variant: "destructive"
-                });
             }
         }, 8000); // 8 seconds timeout
 
@@ -266,10 +270,79 @@ export const useFeedLogic = () => {
                 )
                 .subscribe();
 
+            const profileChannel = supabase
+                .channel('profile-sync')
+                .on(
+                    'postgres_changes',
+                    {
+                        event: '*',
+                        schema: 'public',
+                        table: 'profiles'
+                    },
+                    (payload) => {
+                        console.log('Real-time profile update in Feed:', payload);
+                        const updatedProfile = (payload.new || payload.old) as any;
+                        if (!updatedProfile || !updatedProfile.id) return;
+
+                        if (mounted) {
+                            // Update cache
+                            if (profileCache.has(updatedProfile.id)) {
+                                console.log(`Updating profile cache for ${updatedProfile.id}`);
+                                profileCache.set(updatedProfile.id, {
+                                    xp: updatedProfile.xp || 0,
+                                    level: updatedProfile.level || 1,
+                                    current_streak: updatedProfile.current_streak || 0,
+                                    longest_streak: updatedProfile.longest_streak || 0,
+                                    daily_challenges: updatedProfile.daily_challenges || null
+                                });
+                            }
+
+                            // Update posts that belong to this profile
+                            setPosts(currentPosts => {
+                                const needsUpdate = currentPosts.some(p => p.user_id === updatedProfile.id);
+                                if (!needsUpdate) return currentPosts;
+
+                                console.log(`Updating ${currentPosts.filter(p => p.user_id === updatedProfile.id).length} posts for user ${updatedProfile.id}. is_verified: ${updatedProfile.is_verified}`);
+                                return currentPosts.map(post => {
+                                    if (post.user_id === updatedProfile.id) {
+                                        return {
+                                            ...post,
+                                            profiles: {
+                                                ...post.profiles,
+                                                username: updatedProfile.username || post.profiles?.username,
+                                                full_name: updatedProfile.full_name || post.profiles?.full_name,
+                                                avatar_url: updatedProfile.avatar_url || post.profiles?.avatar_url,
+                                                is_verified: updatedProfile.is_verified !== undefined ? updatedProfile.is_verified : post.profiles?.is_verified
+                                            }
+                                        };
+                                    }
+                                    return post;
+                                });
+                            });
+
+                            // If it's the current user, update userProfile state
+                            if (user && updatedProfile.id === user.id) {
+                                console.log('Updating current user profile stats in feed state');
+                                setUserProfile({
+                                    xp: updatedProfile.xp || 0,
+                                    level: updatedProfile.level || 1,
+                                    current_streak: updatedProfile.current_streak || 0,
+                                    longest_streak: updatedProfile.longest_streak || 0,
+                                    daily_challenges: updatedProfile.daily_challenges || null
+                                } as any);
+                            }
+                        }
+                    }
+                )
+                .subscribe((status) => {
+                    console.log(`Feed profiles subscription status: ${status}`);
+                });
+
             return () => {
                 mounted = false;
                 supabase.removeChannel(channel);
                 supabase.removeChannel(notificationChannel);
+                supabase.removeChannel(profileChannel);
             };
         }
     }, [user, fetchPosts, fetchUnreadCount]);

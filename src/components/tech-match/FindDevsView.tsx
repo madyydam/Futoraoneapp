@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { SwipeCard, Profile as SwipeProfile } from "@/components/tech-match/SwipeCard";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { triggerConfetti } from "@/utils/confetti";
 
 // Mock Profiles for improved UX
 const MOCK_PROFILES: SwipeProfile[] = [
@@ -134,9 +135,6 @@ export const FindDevsView = () => {
         fetchProfiles();
     }, [selectedSkills]);
 
-    const triggerConfetti = useCallback(() => {
-        console.log("Confetti boom! 🎉");
-    }, []);
 
     const handleSwipe = useCallback(async (direction: "left" | "right", profileId: string) => {
         setExitDirection(direction);

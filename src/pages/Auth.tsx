@@ -189,108 +189,85 @@ const Auth = () => {
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.5, type: "spring", bounce: 0.3 }}
-        className="w-full max-w-lg relative z-10"
+        className="w-full max-w-xl relative z-10"
       >
-        <div className="absolute -top-12 left-0">
-          <Button
-            variant="ghost"
-            onClick={() => navigate("/")}
-            className="text-muted-foreground hover:text-foreground hover:bg-white/5"
-          >
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Home
-          </Button>
-        </div>
+        <div className="bg-card/40 backdrop-blur-xl border border-white/10 rounded-[2.5rem] shadow-2xl overflow-hidden">
+          {/* Header - Transparent & Integrated Toggle */}
+          <div className="px-8 py-4 flex items-center justify-between border-b border-white/5 bg-white/5">
+            <div className="flex items-center gap-2">
+              <Logo className="w-7 h-7" />
+              <span className="text-[10px] font-black tracking-[0.2em] text-white/40 uppercase">FutoraOne</span>
+            </div>
 
-        <div className="bg-card/40 backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl overflow-hidden">
-          {/* Header */}
-          <div className="p-8 pb-6 text-center border-b border-white/5 bg-white/5">
-            <motion.div
-              initial={{ scale: 0.8 }}
-              animate={{ scale: 1 }}
-              className="inline-flex items-center justify-center p-3 bg-primary/10 rounded-2xl mb-4"
-            >
-              <Logo className="w-12 h-12" />
-            </motion.div>
-            <h2 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-white/70">
-              {isLogin ? "Welcome Back" : "Join the Community"}
-            </h2>
-            <p className="text-muted-foreground mt-2">
-              {isLogin ? "Enter your credentials to access your account" : "Start your journey with FutoraOne today"}
-            </p>
-          </div>
-
-          <div className="p-8 pt-6">
-            {/* Toggle Switch */}
-            <div className="grid grid-cols-2 gap-1 p-1 bg-secondary/50 rounded-xl mb-8 relative">
-              <motion.div
-                layoutId="active-tab"
-                className={cn("absolute inset-1 w-[calc(50%-4px)] bg-background rounded-lg shadow-sm")}
-                style={{ left: !isLogin ? '4px' : 'calc(50%)' }}
-                transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-              />
+            <div className="flex bg-black/40 p-1 rounded-full border border-white/10">
               <button
                 onClick={() => { setIsLogin(false); navigate("?mode=signup", { replace: true }); }}
-                className={cn("relative z-10 py-2.5 text-sm font-semibold transition-colors rounded-lg", !isLogin ? "text-foreground" : "text-muted-foreground hover:text-foreground/80")}
+                className={cn("px-4 py-1.5 text-[10px] font-black rounded-full transition-all", !isLogin ? "bg-primary text-white shadow-lg shadow-primary/20 scale-105" : "text-muted-foreground hover:text-white")}
               >
-                Create Account
+                SIGNUP
               </button>
               <button
                 onClick={() => { setIsLogin(true); navigate("?mode=login", { replace: true }); }}
-                className={cn("relative z-10 py-2.5 text-sm font-semibold transition-colors rounded-lg", isLogin ? "text-foreground" : "text-muted-foreground hover:text-foreground/80")}
+                className={cn("px-4 py-1.5 text-[10px] font-black rounded-full transition-all", isLogin ? "bg-primary text-white shadow-lg shadow-primary/20 scale-105" : "text-muted-foreground hover:text-white")}
               >
-                Sign In
+                LOGIN
               </button>
             </div>
+          </div>
 
-            <form onSubmit={handleSubmit} className="space-y-5">
+          <div className="p-8 pt-6">
+            <div className="text-center mb-6">
+              <h2 className="text-2xl font-black tracking-tight text-white mb-1">
+                {isLogin ? "Welcome Back!" : "New Account"}
+              </h2>
+              <p className="text-[11px] text-muted-foreground font-bold uppercase tracking-wider">
+                {isLogin ? "Sign in to your tech portal" : "Join the future of networking"}
+              </p>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-4">
               <AnimatePresence mode="wait">
                 {!isLogin && (
                   <motion.div
                     key="signup-fields"
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: "auto" }}
-                    exit={{ opacity: 0, height: 0 }}
-                    className="space-y-5 overflow-hidden"
+                    initial={{ opacity: 0, scale: 0.98 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.98 }}
+                    className="space-y-4"
                   >
-                    {/* Photo Upload */}
-                    <div className="flex justify-center mb-6">
-                      <div className="relative">
-                        <label htmlFor="photo-upload" className="cursor-pointer group">
-                          <div className="w-24 h-24 rounded-full border-4 border-background shadow-xl overflow-hidden bg-secondary flex items-center justify-center">
+                    {/* Compact Photo Upload & Profile Info Grid */}
+                    <div className="grid grid-cols-[100px_1fr] gap-6 items-center bg-white/5 p-4 rounded-2xl border border-white/5">
+                      <div className="flex flex-col items-center gap-2">
+                        <label htmlFor="photo-upload" className="cursor-pointer group block">
+                          <div className="w-20 h-20 rounded-2xl border-2 border-primary/20 shadow-xl overflow-hidden bg-secondary/50 flex items-center justify-center relative">
                             {photoPreview ? (
                               <img src={photoPreview} alt="Preview" className="w-full h-full object-cover" />
                             ) : (
-                              <User className="w-10 h-10 text-muted-foreground" />
+                              <User className="w-8 h-8 text-muted-foreground" />
                             )}
-                          </div>
-                          <div className="absolute inset-0 flex items-center justify-center bg-black/40 text-white opacity-0 group-hover:opacity-100 transition-opacity rounded-full">
-                            <Camera className="w-8 h-8" />
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/40 text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                              <Camera className="w-5 h-5" />
+                            </div>
                           </div>
                         </label>
-                        <input
-                          id="photo-upload"
-                          type="file"
-                          accept="image/*"
-                          onChange={handlePhotoChange}
-                          className="hidden"
-                        />
+                        <span className="text-[10px] font-bold text-primary/60 uppercase tracking-wider">Add Photo</span>
+                        <input id="photo-upload" type="file" accept="image/*" onChange={handlePhotoChange} className="hidden" />
                       </div>
-                    </div>
 
-                    <div className="grid grid-cols-1 gap-5">
-                      <div className="space-y-2">
-                        <Label htmlFor="fullName" className="text-white">Full Name</Label>
-                        <div className="relative">
-                          <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                          <Input id="fullName" placeholder="Name" value={fullName} onChange={(e) => setFullName(e.target.value)} className="pl-10 h-11 bg-secondary/30 border-white/10 focus:border-primary/50 text-white placeholder:text-muted-foreground" required />
+                      <div className="space-y-3">
+                        <div className="space-y-1.5">
+                          <Label htmlFor="fullName" className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">Full Name</Label>
+                          <div className="relative">
+                            <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                            <Input id="fullName" placeholder="Full Name" value={fullName} onChange={(e) => setFullName(e.target.value)} className="pl-9 h-10 bg-black/20 border-white/5 focus:border-primary/50 text-white text-sm" required />
+                          </div>
                         </div>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="username" className="text-white">Username</Label>
-                        <div className="relative">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-mono">@</span>
-                          <Input id="username" placeholder="Username" value={username} onChange={(e) => setUsername(e.target.value)} className="pl-8 h-11 bg-secondary/30 border-white/10 focus:border-primary/50 text-white placeholder:text-muted-foreground" required />
+                        <div className="space-y-1.5">
+                          <Label htmlFor="username" className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">Username</Label>
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-xs font-mono">@</span>
+                            <Input id="username" placeholder="username" value={username} onChange={(e) => setUsername(e.target.value)} className="pl-8 h-10 bg-black/20 border-white/5 focus:border-primary/50 text-white text-sm" required />
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -298,36 +275,36 @@ const Auth = () => {
                 )}
               </AnimatePresence>
 
-              <div className="space-y-2">
-                <Label htmlFor="email" className="text-white">Email Address</Label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input id="email" type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} className="pl-10 h-11 bg-secondary/30 border-white/10 focus:border-primary/50 text-white placeholder:text-muted-foreground" required />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="email" className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">Email Address</Label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input id="email" type="email" placeholder="name@domain.com" value={email} onChange={(e) => setEmail(e.target.value)} className="pl-9 h-10 bg-black/20 border-white/5 focus:border-primary/50 text-white text-sm" required />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="password" className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">Password</Label>
+                    {isLogin && <a href="#" className="text-[10px] text-primary hover:underline font-bold">Forgot?</a>}
+                  </div>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input id="password" type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} className="pl-9 h-10 bg-black/20 border-white/5 focus:border-primary/50 text-white text-sm" required minLength={6} />
+                  </div>
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="password" className="text-white">Password</Label>
-                  {isLogin && (
-                    <a href="#" className="text-xs text-primary hover:underline">Forgot password?</a>
-                  )}
-                </div>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input id="password" type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} className="pl-10 h-11 bg-secondary/30 border-white/10 focus:border-primary/50 text-white placeholder:text-muted-foreground" required minLength={6} />
-                </div>
-              </div>
-
-              {/* CAPTCHA Widget */}
+              {/* CAPTCHA Widget - Compact */}
               {import.meta.env.VITE_CAPTCHA_SITE_KEY && (
-                <div className="flex justify-center py-2">
+                <div className="flex justify-center scale-90 origin-center py-1">
                   <Turnstile
                     siteKey={import.meta.env.VITE_CAPTCHA_SITE_KEY}
                     onSuccess={(token) => setCaptchaToken(token)}
                     onError={() => setCaptchaToken(null)}
                     onExpire={() => setCaptchaToken(null)}
-                    options={{ theme: 'dark' }}
+                    options={{ theme: 'dark', size: 'flexible' }}
                   />
                 </div>
               )}
@@ -335,17 +312,16 @@ const Auth = () => {
               <Button
                 type="submit"
                 disabled={loading}
-                className="w-full h-12 rounded-xl text-md font-bold bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-600/90 shadow-lg shadow-primary/20 transition-all hover:scale-[1.02] mt-4"
+                className="w-full h-12 rounded-2xl text-xs font-black tracking-widest bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-600/90 shadow-xl shadow-primary/20 transition-all hover:scale-[1.01] active:scale-95 mt-2 uppercase"
               >
-                {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : isLogin ? "Sign In" : "Create Account"}
+                {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : isLogin ? "Sign In to Feed" : "Create My Account"}
               </Button>
             </form>
           </div>
 
-          {/* Footer of Card */}
-          <div className="p-6 bg-white/5 border-t border-white/5 text-center">
-            <p className="text-sm text-muted-foreground">
-              By continuing, you agree to our <span className="text-primary cursor-pointer hover:underline">Terms</span> and <span className="text-primary cursor-pointer hover:underline">Privacy Policy</span>.
+          <div className="px-8 py-4 bg-white/5 border-t border-white/5 transition-all">
+            <p className="text-[10px] text-muted-foreground text-center leading-normal">
+              By joining FutoraOne, you agree to our <span className="text-primary font-bold cursor-pointer hover:underline">Terms of Service</span> and <span className="text-primary font-bold cursor-pointer hover:underline">Privacy Policy</span>.
             </p>
           </div>
         </div>

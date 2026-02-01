@@ -110,6 +110,40 @@ const AllPeople = () => {
         }
     };
 
+    useEffect(() => {
+        const channel = supabase
+            .channel('all-people-sync')
+            .on(
+                'postgres_changes',
+                {
+                    event: 'UPDATE',
+                    schema: 'public',
+                    table: 'profiles'
+                },
+                (payload) => {
+                    const updatedProfile = payload.new as any;
+                    setUsers(currentUsers => currentUsers.map(user => {
+                        if (user.id === updatedProfile.id) {
+                            return {
+                                ...user,
+                                username: updatedProfile.username,
+                                full_name: updatedProfile.full_name,
+                                avatar_url: updatedProfile.avatar_url,
+                                is_verified: updatedProfile.is_verified,
+                                bio: updatedProfile.bio
+                            };
+                        }
+                        return user;
+                    }));
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, []);
+
     const loadMore = () => {
         const nextPage = page + 1;
         setPage(nextPage);
