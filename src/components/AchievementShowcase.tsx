@@ -94,30 +94,32 @@ export const AchievementShowcase = memo(({ userId }: { userId?: string }) => {
 
             setCurrentViewerId(targetId);
 
-            // Fetch user stats to simulate unlocked achievements
-            const [postsRes, likesRes, followersRes] = await Promise.all([
-                supabase.from('posts').select('id', { count: 'exact' }).eq('user_id', targetId),
-                supabase.from('likes').select('id', { count: 'exact' }).eq('user_id', targetId),
-                supabase.from('follows').select('id', { count: 'exact' }).eq('following_id', targetId),
-            ]);
+            // Fetch developer-defined achievements (Master list)
+            const { data: masterData } = await supabase
+                .from('master_achievements')
+                .select('*')
+                .order('xp_reward', { ascending: true });
 
-            const postCount = postsRes.count || 0;
-            const likeCount = likesRes.count || 0;
-            const followerCount = followersRes.count || 0;
+            // Fetch user-unlocked achievements
+            const { data: userData } = await supabase
+                .from('user_achievements')
+                .select('achievement_id, unlocked_at')
+                .eq('user_id', targetId);
 
-            // Simulate unlocked achievements based on activity
-            const unlockedIds: string[] = [];
-            if (postCount >= 1) unlockedIds.push('first_post');
-            if (likeCount >= 1) unlockedIds.push('first_like');
-            if (followerCount >= 1) unlockedIds.push('rising_star');
-            if (postCount >= 10) unlockedIds.push('code_master');
-
-            const mergedAchievements = DEFAULT_ACHIEVEMENTS.map(ach => ({
-                ...ach,
-                unlocked_at: unlockedIds.includes(ach.id) ? new Date().toISOString() : undefined
-            }));
-
-            setAchievements(mergedAchievements);
+            if (masterData) {
+                const mergedAchievements = masterData.map((master: any) => {
+                    const userUnlock = userData?.find(u => u.achievement_id === master.id);
+                    return {
+                        id: master.id,
+                        title: master.title,
+                        description: master.description,
+                        icon_name: master.icon_name,
+                        xp_reward: master.xp_reward,
+                        unlocked_at: userUnlock?.unlocked_at
+                    };
+                });
+                setAchievements(mergedAchievements);
+            }
 
             // Fetch leaderboard from profiles (using real XP data)
             const { data: profiles } = await supabase
@@ -513,7 +515,7 @@ export const AchievementShowcase = memo(({ userId }: { userId?: string }) => {
                                     <Button
                                         variant="ghost"
                                         className="w-full mt-6 py-6 rounded-2xl border border-dashed border-primary/20 bg-primary/5 hover:bg-primary/10 text-primary font-bold group"
-                                        onClick={() => navigate('/hall-of-fame')}
+                                        onClick={() => navigate('/leaderboard')}
                                     >
                                         <span className="flex items-center gap-2">
                                             See Full Leaderboard

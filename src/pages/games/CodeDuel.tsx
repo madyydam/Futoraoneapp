@@ -7,11 +7,20 @@ import { Slider } from "@/components/ui/slider";
 import { ArrowLeft, Timer, Keyboard, Trophy, RotateCcw, Zap, Code2, Layers } from 'lucide-react';
 import { toast } from "sonner";
 import { CODE_DUEL_SNIPPETS, Language } from "@/data/codeDuelSnippets";
+import { useGameReward } from "@/hooks/useGameReward";
+import { WinCelebration } from "@/components/games/WinCelebration";
 
 const LANGUAGES: Language[] = ['HTML', 'CSS', 'JavaScript', 'Python', 'C', 'C++'];
 
 export default function CodeDuel() {
     const navigate = useNavigate();
+    const {
+        triggerWinReward,
+        showRewardModal,
+        setShowRewardModal,
+        COIN_REWARD,
+        XP_REWARD
+    } = useGameReward();
     const [gameState, setGameState] = useState<'start' | 'playing' | 'finished'>('start');
 
     // Game Config
@@ -103,6 +112,7 @@ export default function CodeDuel() {
             toast.success("Perfect Run! 🏆", {
                 description: `You completed Level ${selectedDifficulty} ${selectedLanguage} with ${wpm} WPM!`
             });
+            triggerWinReward();
         }
     };
 
@@ -179,8 +189,8 @@ export default function CodeDuel() {
                                             key={lang}
                                             onClick={() => setSelectedLanguage(lang)}
                                             className={`px-3 py-2 rounded-lg text-sm font-bold transition-all border ${selectedLanguage === lang
-                                                    ? 'bg-yellow-500 text-black border-yellow-500 shadow-[0_0_15px_rgba(234,179,8,0.4)]'
-                                                    : 'bg-white/5 text-gray-400 border-white/10 hover:bg-white/10 hover:text-white'
+                                                ? 'bg-yellow-500 text-black border-yellow-500 shadow-[0_0_15px_rgba(234,179,8,0.4)]'
+                                                : 'bg-white/5 text-gray-400 border-white/10 hover:bg-white/10 hover:text-white'
                                                 }`}
                                         >
                                             {lang}
@@ -308,6 +318,13 @@ export default function CodeDuel() {
                 )}
             </main>
 
+            {/* Win Celebration Modal */}
+            <WinCelebration
+                isOpen={showRewardModal}
+                onClose={() => setShowRewardModal(false)}
+                coins={COIN_REWARD}
+                xp={XP_REWARD}
+            />
             <BottomNav />
         </div>
     );

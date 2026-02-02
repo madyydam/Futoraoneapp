@@ -4,33 +4,59 @@ import { supabase } from "@/integrations/supabase/client";
 import { FounderListing, FounderListingCard } from "@/components/co-founder/FounderListingCard";
 import { CreateListingDialog } from "@/components/co-founder/CreateListingDialog";
 import { AICofounderChat } from "@/components/co-founder/AICofounderChat";
+import { MarketplaceFilterDrawer } from "@/components/marketplace/MarketplaceFilterDrawer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ArrowLeft, Search, Filter, Sparkles, Users, Bot } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { BottomNav } from "@/components/BottomNav";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { motion, AnimatePresence } from "framer-motion";
+import { useDebounce } from "../hooks/use-debounce";
 
 const FoundersCorner = () => {
+    const [searchParams, setSearchParams] = useSearchParams();
     const [listings, setListings] = useState<FounderListing[]>([]);
     const [loading, setLoading] = useState(true);
-    const [searchTerm, setSearchTerm] = useState("");
-    const [activeFilter, setActiveFilter] = useState("All");
+    const [searchTerm, setSearchTerm] = useState(searchParams.get("search") || "");
+    const debouncedSearch = useDebounce(searchTerm, 500);
+
+    const [filters, setFilters] = useState({
+        industry: searchParams.getAll("industry"),
+        stage: searchParams.getAll("stage"),
+        equity: searchParams.getAll("equity")
+    });
+
     const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-    const [activeTab, setActiveTab] = useState("listings");
+    const [activeTab, setActiveTab] = useState(searchParams.get("tab") || "listings");
     const navigate = useNavigate();
     const { toast } = useToast();
 
     const fetchListings = async () => {
         setLoading(true);
         try {
-            // 1. Fetch listings
-            const { data: listingsData, error: listingsError } = await supabase
+            let query = supabase
                 .from('founder_listings' as any)
-                .select('*')
-                .order('created_at', { ascending: false });
+                .select('*');
+
+            // Apply filters at query level
+            if (filters.industry.length > 0) {
+                query = query.in('industry', filters.industry);
+            }
+            if (filters.stage.length > 0) {
+                query = query.in('stage', filters.stage);
+            }
+            if (filters.equity.length > 0) {
+                query = query.in('equity_range', filters.equity);
+            }
+
+            // Search (case-insensitive)
+            if (debouncedSearch) {
+                query = query.or(`role_needed.ilike.%${debouncedSearch}%,idea_description.ilike.%${debouncedSearch}%,industry.ilike.%${debouncedSearch}%`);
+            }
+
+            const { data: listingsData, error: listingsError } = await query.order('created_at', { ascending: false });
 
             if (listingsError) throw listingsError;
 
@@ -39,7 +65,7 @@ const FoundersCorner = () => {
                 return;
             }
 
-            // 2. Fetch profiles for these listings
+            // 2. Fetch profiles for these listings manually to avoid join issues
             const userIds = [...new Set((listingsData as any[]).map(l => l.user_id))];
             const { data: profilesData, error: profilesError } = await supabase
                 .from('profiles')
@@ -80,32 +106,66 @@ const FoundersCorner = () => {
         }
     };
 
+    // Update URL when filters/search/tab change
+    useEffect(() => {
+        const params = new URLSearchParams();
+        if (debouncedSearch) params.set("search", debouncedSearch);
+        if (activeTab !== "listings") params.set("tab", activeTab);
+
+        filters.industry.forEach(v => params.append("industry", v));
+        filters.stage.forEach(v => params.append("stage", v));
+        filters.equity.forEach(v => params.append("equity", v));
+
+        setSearchParams(params, { replace: true });
+        fetchListings();
+
+        // Subscribe to real-time updates
+        const channel = supabase
+            .channel('founder-listings-all')
+            .on('postgres_changes' as any, { event: '*', table: 'founder_listings' }, () => {
+                fetchListings();
+            })
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [debouncedSearch, filters, activeTab]);
+
     useEffect(() => {
         const fetchUser = async () => {
             const { data: { user } } = await supabase.auth.getUser();
             setCurrentUserId(user?.id || null);
         };
         fetchUser();
-        fetchListings();
     }, []);
 
+    const handleFilterChange = (key: string, value: string) => {
+        setFilters(prev => {
+            const current = (prev as any)[key] || [];
+            const updated = current.includes(value)
+                ? current.filter((v: string) => v !== value)
+                : [...current, value];
+            return { ...prev, [key]: updated };
+        });
+    };
+
+    const handleResetFilters = () => {
+        setFilters({
+            industry: [],
+            stage: [],
+            equity: []
+        });
+        setSearchTerm("");
+    };
+
     const handleAiFilter = (filter: string) => {
-        setActiveFilter(filter);
+        setFilters(prev => ({ ...prev, industry: [filter] }));
         setActiveTab("listings");
     };
 
-    // Mock data deleted - now using real database listings
-
-    const filteredListings = listings.filter(listing => {
-        const matchesSearch =
-            listing.role_needed.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            listing.idea_description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            listing.industry.toLowerCase().includes(searchTerm.toLowerCase());
-
-        const matchesFilter = activeFilter === "All" || listing.industry === activeFilter;
-
-        return matchesSearch && matchesFilter;
-    });
+    // No client-side filtering needed anymore as it's done in fetchListings
+    const filteredListings = listings;
 
     return (
         <div className="min-h-screen bg-background pb-20">
@@ -154,20 +214,24 @@ const FoundersCorner = () => {
                             </div>
 
                             {/* Filters */}
-                            <div className="flex gap-2 mt-4 overflow-x-auto pb-2 scrollbar-hide">
-                                {["All", "Fintech", "Edtech", "AI/ML", "SaaS", "HealthTech", "Gaming"].map((filter) => (
-                                    <Badge
-                                        key={filter}
-                                        variant={activeFilter === filter ? "default" : "outline"}
-                                        className={`cursor-pointer whitespace-nowrap px-4 py-1.5 transition-all ${activeFilter === filter
-                                            ? "bg-foreground text-background scale-105"
-                                            : "hover:bg-secondary hover:scale-105"
-                                            }`}
-                                        onClick={() => setActiveFilter(filter)}
-                                    >
-                                        {filter}
-                                    </Badge>
-                                ))}
+                            <div className="flex items-center justify-between mt-4">
+                                <div className="flex gap-2 items-center overflow-x-auto pb-2 scrollbar-hide flex-1">
+                                    <MarketplaceFilterDrawer
+                                        type="founder"
+                                        filters={filters}
+                                        onFilterChange={handleFilterChange}
+                                        onReset={handleResetFilters}
+                                    />
+                                    {(filters.industry.length > 0 || filters.stage.length > 0 || filters.equity.length > 0) && (
+                                        <div className="flex gap-1">
+                                            {[...filters.industry, ...filters.stage, ...filters.equity].map(f => (
+                                                <Badge key={f} variant="secondary" className="px-2 py-0.5 text-[10px]">
+                                                    {f}
+                                                </Badge>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
                             </div>
 
                             {/* Content */}
@@ -199,6 +263,8 @@ const FoundersCorner = () => {
                                                 <FounderListingCard
                                                     listing={listing}
                                                     currentUserId={currentUserId}
+                                                    onDelete={(id) => setListings(prev => prev.filter(l => l.id !== id))}
+                                                    onUpdate={fetchListings}
                                                 />
                                             </motion.div>
                                         ))}

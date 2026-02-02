@@ -11,6 +11,8 @@ import { HowToPlay } from "@/components/games/HowToPlay";
 import { useMultiplayerGame } from "@/hooks/useMultiplayerGame";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useGameReward } from "@/hooks/useGameReward";
+import { WinCelebration } from "@/components/games/WinCelebration";
 
 const GRID_SIZE = 4; // 4x4 dots = 3x3 boxes
 
@@ -26,6 +28,13 @@ const DotsAndBoxes = () => {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const playSound = useGameSounds();
+    const {
+        triggerWinReward,
+        showRewardModal,
+        setShowRewardModal,
+        COIN_REWARD,
+        XP_REWARD
+    } = useGameReward();
     const [hLines, setHLines] = useState<number[][]>(
         Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE - 1).fill(0))
     );
@@ -332,9 +341,16 @@ const DotsAndBoxes = () => {
                         colors: winner === 1 ? ['#3b82f6', '#1d4ed8'] : ['#ec4899', '#be185d']
                     });
                 }
+
+                // Reward logic: AI mode (P1 win) or Online mode (My turn win)
+                if (gameMode === 'AI' && winner === 1) {
+                    triggerWinReward();
+                } else if (gameMode === 'ONLINE' && winner === myPlayerNum) {
+                    triggerWinReward();
+                }
             }
         }
-    }, [winner, gameMode, playSound]);
+    }, [winner, gameMode, playSound, triggerWinReward, myPlayerNum]);
 
     const toggleGameMode = () => {
         playSound('click');
@@ -579,6 +595,13 @@ const DotsAndBoxes = () => {
                     </div>
                 </DialogContent>
             </Dialog>
+            {/* Win Celebration Modal */}
+            <WinCelebration
+                isOpen={showRewardModal}
+                onClose={() => setShowRewardModal(false)}
+                coins={COIN_REWARD}
+                xp={XP_REWARD}
+            />
         </div>
     );
 };

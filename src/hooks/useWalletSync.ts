@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { supabase } from "@/integrations/supabase/client";
-import { walletSupabase } from "@/integrations/supabase/walletClient";
+
 import { toast } from "sonner";
 
 export const useWalletSync = () => {
@@ -11,30 +11,44 @@ export const useWalletSync = () => {
                 if (!user || !user.email) return;
 
                 // 1. Check if wallet exists
-                const { data: existingWallet } = await (walletSupabase as any)
-                    .from("wallets")
+                // @ts-ignore
+                const { data: existingWallet } = await supabase
+                    .from("native_wallets")
                     .select("id")
-                    .eq("email", user.email)
+                    .eq("user_id", user.id)
                     .maybeSingle();
 
                 if (!existingWallet) {
-                    console.log("Wallet Sync: Creating new wallet for", user.email);
+                    console.log("Wallet Sync: Creating new native wallet for", user.email);
 
-                    // 2. Create Wallet with Signup Bonus (1000 Coins = 100000 Paise)
-                    const { error } = await (walletSupabase as any)
-                        .from("wallets")
+                    // 2. Create Wallet with Signup Bonus (1000.00 Coins)
+                    // @ts-ignore
+                    const { data: newWallet, error } = await supabase
+                        .from("native_wallets")
                         .insert([
                             {
-                                email: user.email,
-                                balance_paise: 100000, // 1000.00 Coins
-                                name: user.user_metadata?.full_name || user.email.split('@')[0],
-                                currency: 'INR' // Default or whatever the platform uses
+                                user_id: user.id,
+                                balance: 1000.00, // 1000.00 Coins
                             }
-                        ]);
+                        ])
+                        .select()
+                        .single();
 
                     if (error) {
                         console.error("Wallet Sync: Creation Failed", error);
                     } else {
+                        // Log bonus transaction
+                        if (newWallet) {
+                            // @ts-ignore
+                            await supabase.from('native_transactions').insert({
+                                wallet_id: newWallet.id,
+                                type: 'cashback',
+                                amount: 1000.00,
+                                description: 'Welcome Bonus 🎁',
+                                status: 'completed'
+                            });
+                        }
+
                         toast.success("Welcome! 🎁 1,000 Coins added to your Futora Wallet!");
                     }
                 }

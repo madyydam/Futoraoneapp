@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
+import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,16 +24,44 @@ export const CreateGigDialog = ({ onGigCreated }: { onGigCreated: () => void }) 
     const { register, handleSubmit, reset } = useForm<CreateGigForm>();
 
     const onSubmit = async (data: CreateGigForm) => {
-        setIsLoading(true);
+        setIsLoading(false); // set to true after session check
         try {
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            toast({ title: "Gig Posted! ⚡", description: "Your task is live. Full feature coming soon!" });
+            const { data: { user } } = await supabase.auth.getUser();
+
+            if (!user) {
+                toast({
+                    title: "Authentication Required",
+                    description: "Please sign in to post a gig.",
+                    variant: "destructive"
+                });
+                return;
+            }
+
+            setIsLoading(true);
+
+            const { error } = await supabase.from('gig_listings' as any).insert({
+                user_id: user.id,
+                title: data.title,
+                description: data.description,
+                price: Number(data.price),
+                currency: 'INR',
+                location: data.location || 'Remote',
+                skills_required: data.skills_input.split(',').map(s => s.trim()).filter(s => s !== "")
+            });
+
+            if (error) throw error;
+
+            toast({ title: "Gig Posted! ⚡", description: "Your task is now live in the marketplace." });
             reset();
             setOpen(false);
             onGigCreated();
-        } catch (error: unknown) {
-            const msg = error instanceof Error ? error.message : "Something went wrong";
-            toast({ title: "Error", description: msg, variant: "destructive" });
+        } catch (error: any) {
+            console.error("Error posting gig:", error);
+            toast({
+                title: "Failed to post gig",
+                description: error.message || "Something went wrong",
+                variant: "destructive"
+            });
         } finally {
             setIsLoading(false);
         }
@@ -59,6 +88,10 @@ export const CreateGigDialog = ({ onGigCreated }: { onGigCreated: () => void }) 
                     <div className="space-y-2">
                         <Label htmlFor="price" className="flex items-center gap-2"><Banknote className="w-4 h-4 text-green-600" />Budget (INR)</Label>
                         <Input id="price" type="number" placeholder="e.g. 500" {...register("price", { required: true, min: 1 })} />
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="location">Location</Label>
+                        <Input id="location" placeholder="e.g. Remote, Mumbai" {...register("location", { required: true })} />
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="skills">Required Skills</Label>

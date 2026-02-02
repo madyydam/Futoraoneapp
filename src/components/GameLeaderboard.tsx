@@ -2,32 +2,34 @@ import { useEffect, useState, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent } from "@/components/ui/card";
-import { Trophy, Crown, TrendingUp, ChevronRight, ExternalLink } from "lucide-react";
+import { Trophy, Crown, TrendingUp, ChevronRight, ExternalLink, Gamepad2, Stars } from "lucide-react";
 import { CartoonLoader } from "@/components/CartoonLoader";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
-import { subDays, isAfter, parseISO } from "date-fns";
+import { subDays } from "date-fns";
 import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
+import { motion, AnimatePresence } from "framer-motion";
 
 interface LeaderboardEntry {
     id: string;
     xp: number;
     level: number;
+    total_wins?: number;
     username: string;
     avatar_url: string | null;
     full_name: string;
     last_activity_date?: string;
 }
 
-// Mock data deleted - using real database profile stats
-
 interface GameLeaderboardProps {
     currentUserId?: string;
     isWidget?: boolean;
+    variant?: "global" | "gamer";
 }
 
-const GameLeaderboard = ({ currentUserId, isWidget = true }: GameLeaderboardProps) => {
+const GameLeaderboard = ({ currentUserId, isWidget = true, variant = "global" }: GameLeaderboardProps) => {
     const navigate = useNavigate();
     const [loading, setLoading] = useState(true);
     const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
@@ -36,216 +38,277 @@ const GameLeaderboard = ({ currentUserId, isWidget = true }: GameLeaderboardProp
 
     useEffect(() => {
         fetchLeaderboard();
-    }, []);
+        const handleUpdate = () => fetchLeaderboard();
+        window.addEventListener('leaderboard-update', handleUpdate);
+        return () => window.removeEventListener('leaderboard-update', handleUpdate);
+    }, [variant, timeFilter]);
 
     const fetchLeaderboard = async () => {
-        if (leaderboard.length === 0) setLoading(true);
+        setLoading(true);
         try {
-            const { data, error } = await supabase
+            let query = supabase
                 .from('profiles')
-                .select('id, username, full_name, avatar_url, xp, level, last_activity_date')
-                .order('xp', { ascending: false })
-                .limit(50);
+                .select(`id, username, full_name, avatar_url, xp, level, total_wins, last_activity_date`);
 
+            const now = new Date();
+            if (timeFilter === "week") {
+                const lastWeek = subDays(now, 7).toISOString();
+                query = query.gte('last_activity_date', lastWeek);
+            } else if (timeFilter === "month") {
+                const lastMonth = subDays(now, 30).toISOString();
+                query = query.gte('last_activity_date', lastMonth);
+            }
+
+            if (variant === "gamer") {
+                query = query.order('total_wins', { ascending: false });
+            } else {
+                query = query.order('xp', { ascending: false });
+            }
+
+            const { data, error } = await query.limit(50);
             if (error) throw error;
-            setLeaderboard((data as any) || []);
+
+            if (data) {
+                const mappedData = (data as any[]).map(item => ({
+                    ...item,
+                    total_wins: item.total_wins || 0
+                }));
+
+                const hasWinners = mappedData.some(p => p.total_wins > 0);
+                setLeaderboard(hasWinners && variant === 'gamer'
+                    ? mappedData.filter(p => (p.total_wins || 0) > 0)
+                    : mappedData
+                );
+            }
         } catch (err) {
             console.error("Error fetching leaderboard:", err);
+            toast.error("Failed to load rankings");
         } finally {
             setLoading(false);
         }
     };
 
-    const filteredLeaderboard = useMemo(() => {
-        if (timeFilter === "all") return leaderboard;
-
-        const now = new Date();
-        const cutoffDate = timeFilter === "week" ? subDays(now, 7) : subDays(now, 30);
-
-        return leaderboard.filter(entry => {
-            if (!entry.last_activity_date) return false;
-            return isAfter(parseISO(entry.last_activity_date), cutoffDate);
-        });
-    }, [leaderboard, timeFilter]);
-
     useEffect(() => {
         if (currentUserId) {
-            const rank = filteredLeaderboard.findIndex(p => p.id === currentUserId);
+            const rank = leaderboard.findIndex(p => p.id === currentUserId);
             setUserRank(rank !== -1 ? rank + 1 : null);
         }
-    }, [currentUserId, filteredLeaderboard]);
-
+    }, [currentUserId, leaderboard]);
 
     const Podium = ({ entry, rank }: { entry: LeaderboardEntry; rank: number }) => (
-        <div className={cn(
-            "flex flex-col items-center justify-end p-4 rounded-t-2xl bg-gradient-to-b border-t border-x border-white/10 relative",
-            rank === 1 ? "h-64 sm:h-80 w-1/3 z-10 from-yellow-500/10 to-transparent" :
-                rank === 2 ? "h-48 sm:h-64 w-1/3 -mr-2 from-slate-400/10 to-transparent" :
-                    "h-40 sm:h-52 w-1/3 -ml-2 from-amber-700/10 to-transparent"
-        )}>
-            {rank === 1 && <Crown className="w-8 h-8 text-yellow-500 mb-2 animate-bounce-slow" />}
-            <Avatar className={cn(
-                "border-4 mb-3",
-                rank === 1 ? "w-20 h-20 sm:w-24 sm:h-24 border-yellow-500" :
-                    rank === 2 ? "w-16 h-16 sm:w-20 sm:h-20 border-slate-400" :
-                        "w-16 h-16 sm:w-20 sm:h-20 border-amber-700"
-            )}>
-                <AvatarImage src={entry.avatar_url || undefined} />
-                <AvatarFallback>{entry.username[0]?.toUpperCase()}</AvatarFallback>
-            </Avatar>
+        <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: rank * 0.1 }}
+            className={cn(
+                "flex flex-col items-center justify-end p-4 rounded-t-[3rem] bg-gradient-to-b border-t border-x border-border/10 relative group transition-all duration-500",
+                isWidget ? (
+                    rank === 1 ? "h-[220px] sm:h-[260px] w-1/3 z-20 from-yellow-500/15 to-transparent scale-105 shadow-xl shadow-yellow-500/5" :
+                        rank === 2 ? "h-[180px] sm:h-[220px] w-1/3 from-slate-400/10 to-transparent" :
+                            "h-[160px] sm:h-[200px] w-1/3 from-orange-800/10 to-transparent"
+                ) : (
+                    rank === 1 ? "h-[320px] sm:h-[360px] w-1/3 z-20 from-yellow-500/15 to-transparent shadow-2xl shadow-yellow-500/5 scale-105" :
+                        rank === 2 ? "h-[260px] sm:h-[300px] w-1/3 from-slate-400/10 to-transparent" :
+                            "h-[220px] sm:h-[260px] w-1/3 from-orange-800/10 to-transparent"
+                )
+            )}
+        >
+            {rank === 1 && <Crown className={cn("text-yellow-500 drop-shadow-lg animate-pulse", isWidget ? "w-8 h-8 mb-2" : "w-10 h-10 mb-6")} />}
+            <div className={cn("relative", isWidget ? "mb-2" : "mb-6")}>
+                <Avatar className={cn(
+                    "ring-offset-2 ring-offset-background transition-transform group-hover:scale-110 duration-500 shadow-xl",
+                    rank === 1 ? (isWidget ? "w-16 h-16 sm:w-20 sm:h-20" : "w-20 h-20 sm:w-28 sm:h-28") + " ring-4 ring-yellow-500" :
+                        rank === 2 ? (isWidget ? "w-12 h-12 sm:w-16 sm:h-16" : "w-16 h-16 sm:w-24 sm:h-24") + " ring-4 ring-slate-400" :
+                            (isWidget ? "w-10 h-10 sm:w-14 sm:h-14" : "w-14 h-14 sm:w-20 sm:h-20") + " ring-4 ring-orange-800"
+                )}>
+                    <AvatarImage src={entry.avatar_url || undefined} className="object-cover" />
+                    <AvatarFallback className={cn("font-bold", isWidget ? "text-sm" : "text-xl")}>{entry.username?.[0]?.toUpperCase()}</AvatarFallback>
+                </Avatar>
+                <div className={cn(
+                    "absolute -bottom-2 left-1/2 -translate-x-1/2 rounded-full flex items-center justify-center font-black shadow-xl border-2 border-background",
+                    isWidget ? "w-6 h-6 text-[10px]" : "w-8 h-8 text-xs",
+                    rank === 1 ? "bg-yellow-500 text-black" :
+                        rank === 2 ? "bg-slate-400 text-black" :
+                            "bg-orange-800 text-white"
+                )}>
+                    {rank}
+                </div>
+            </div>
 
-            <div className="text-center">
-                <p className="font-bold text-sm sm:text-base truncate max-w-[100px] sm:max-w-full">
+            <div className={cn("text-center w-full px-2 space-y-0.5", isWidget ? "mb-2" : "mb-6")}>
+                <p className={cn("font-black truncate drop-shadow-sm leading-tight", isWidget ? "text-[10px] sm:text-xs" : "text-xs sm:text-lg")}>
                     {entry.full_name.split(' ')[0]}
                 </p>
-                <p className="text-xs sm:text-sm text-primary font-bold mt-1">Level {entry.level}</p>
-                <p className="text-[10px] text-muted-foreground">{entry.xp} XP</p>
+                <div className={cn("flex flex-col items-center", isWidget ? "gap-0" : "gap-0.5")}>
+                    <span className={cn("font-bold text-primary uppercase tracking-tighter", isWidget ? "text-[8px]" : "text-[10px] sm:text-xs")}>Level {entry.level}</span>
+                    <span className={cn("font-black tracking-tight text-foreground", isWidget ? "text-[12px] sm:text-[14px]" : "text-[14px] sm:text-[18px]")}>
+                        {variant === 'gamer' ? (entry.total_wins || 0) : entry.xp}
+                        <span className={cn("ml-1 font-bold text-muted-foreground uppercase", isWidget ? "text-[7px]" : "text-[10px]")}>{variant === 'gamer' ? 'Wins' : 'XP'}</span>
+                    </span>
+                </div>
             </div>
-
-            <div className="absolute -bottom-6 flex items-center justify-center w-8 h-8 rounded-full bg-card border border-border font-bold text-sm z-20 shadow-md">
-                {rank}
-            </div>
-        </div>
+        </motion.div>
     );
 
     const listItems = useMemo(() => {
-        const fullList = filteredLeaderboard.slice(3);
-
+        const fullList = leaderboard.slice(3);
         if (!isWidget) return fullList;
-
-        if (!currentUserId || !userRank) {
-            return fullList.slice(0, 3);
-        }
-
-        if (userRank <= 3) {
-            return fullList.slice(0, 3);
-        }
-
-        return fullList.filter((_, idx) => {
-            const actualRank = idx + 4;
-            return Math.abs(actualRank - userRank) <= 1;
-        });
-
-    }, [filteredLeaderboard, isWidget, currentUserId, userRank]);
-
+        if (!currentUserId || !userRank || userRank <= 3) return fullList.slice(0, 3);
+        return fullList.filter((_, idx) => Math.abs((idx + 4) - userRank) <= 1);
+    }, [leaderboard, isWidget, currentUserId, userRank]);
 
     return (
-        <div className="space-y-6">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="space-y-1">
-                    <h2 className="text-2xl font-bold flex items-center gap-2">
-                        <Trophy className="text-primary fill-current" />
-                        {isWidget ? "Global Leaderboard" : "Global Leaderboard Rankings"}
-                    </h2>
-                    <p className="text-muted-foreground text-sm">Top performers across the community</p>
+        <div className={cn("animate-in fade-in duration-700", isWidget ? "space-y-4" : "space-y-8")}>
+            {/* Contextual Header - Hidden in widget mode to avoid redundancy */}
+            {!isWidget && (
+                <div className={cn("flex flex-col items-center justify-center text-center px-2", isWidget ? "gap-2" : "gap-6")}>
+                    <div className="space-y-1">
+                        <h2 className={cn("font-black tracking-tighter uppercase leading-none", isWidget ? "text-xl sm:text-2xl" : "text-4xl")}>
+                            {variant === 'gamer' ? "Gamer Zone" : "Hall of Stars"}
+                        </h2>
+                        <p className={cn("font-bold text-muted-foreground uppercase", isWidget ? "text-[8px] tracking-[0.2em]" : "text-[10px] tracking-[0.3em]")}>
+                            {variant === 'gamer' ? "Rankings by Total Wins" : "Rankings by Experience Points"}
+                        </p>
+                    </div>
+
+                    <div className="flex items-center justify-center gap-3 transition-all">
+                        <Tabs value={timeFilter} onValueChange={(v: any) => setTimeFilter(v)} className="w-auto">
+                            <TabsList className={cn("bg-muted/30 p-1 rounded-full backdrop-blur-sm", isWidget ? "h-9" : "h-11")}>
+                                <TabsTrigger value="week" className={cn("rounded-full font-black uppercase tracking-tight", isWidget ? "px-3 text-[8px]" : "px-5 text-[10px]")}>Week</TabsTrigger>
+                                <TabsTrigger value="month" className={cn("rounded-full font-black uppercase tracking-tight", isWidget ? "px-3 text-[8px]" : "px-5 text-[10px]")}>Month</TabsTrigger>
+                                <TabsTrigger value="all" className={cn("rounded-full font-black uppercase tracking-tight", isWidget ? "px-3 text-[8px]" : "px-5 text-[10px]")}>All Time</TabsTrigger>
+                            </TabsList>
+                        </Tabs>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={fetchLeaderboard}
+                            className={cn("rounded-full bg-muted/30 hover:bg-muted/50 transition-all shadow-sm", isWidget ? "h-9 w-9" : "h-11 w-11", loading && "animate-pulse")}
+                        >
+                            <TrendingUp className={cn(loading && "animate-spin", isWidget ? "w-4 h-4" : "w-5 h-5")} />
+                        </Button>
+                    </div>
                 </div>
+            )}
 
-                <Tabs defaultValue="all" value={timeFilter} onValueChange={(v: any) => setTimeFilter(v)} className="w-full md:w-auto">
-                    <TabsList className="grid w-full grid-cols-3">
-                        <TabsTrigger value="week">This Week</TabsTrigger>
-                        <TabsTrigger value="month">Month</TabsTrigger>
-                        <TabsTrigger value="all">All Time</TabsTrigger>
-                    </TabsList>
-                </Tabs>
-            </div>
-
-            <Card className="w-full bg-card/60 backdrop-blur-xl border-border overflow-hidden">
-                <CardContent className="p-0">
-                    {loading ? (
-                        <div className="h-64 flex items-center justify-center">
-                            <CartoonLoader />
+            <div className={cn(
+                "w-full overflow-hidden transition-all duration-1000",
+                isWidget ? "rounded-[2rem]" : "rounded-[3.5rem]",
+                !isWidget ? "bg-transparent" : "bg-card/40 backdrop-blur-xl border border-border/50 shadow-2xl"
+            )}>
+                {loading ? (
+                    <div className="h-[500px] flex flex-col items-center justify-center gap-4 bg-muted/5">
+                        <CartoonLoader />
+                        <p className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground animate-pulse">Syncing Rankings...</p>
+                    </div>
+                ) : leaderboard.length === 0 ? (
+                    <div className="text-center py-24 px-4 bg-muted/5">
+                        <Trophy className="w-20 h-20 text-muted-foreground/10 mx-auto mb-6" />
+                        <h3 className="text-2xl font-black uppercase tracking-tighter">No Champions Yet</h3>
+                        <p className="text-muted-foreground text-sm font-medium mt-2 max-w-xs mx-auto">
+                            The arena is waiting for its first hero. Step up and claim your glory!
+                        </p>
+                    </div>
+                ) : (
+                    <div className="flex flex-col">
+                        {/* THE PODIUM */}
+                        <div className="flex items-end justify-center px-4 pt-10 pb-6 bg-gradient-to-b from-primary/5 to-transparent border-b border-border/20 overflow-hidden">
+                            <AnimatePresence mode="popLayout">
+                                {leaderboard[1] && <Podium entry={leaderboard[1]} rank={2} key={`p2-${variant}`} />}
+                                {leaderboard[0] && <Podium entry={leaderboard[0]} rank={1} key={`p1-${variant}`} />}
+                                {leaderboard[2] && <Podium entry={leaderboard[2]} rank={3} key={`p3-${variant}`} />}
+                            </AnimatePresence>
                         </div>
-                    ) : filteredLeaderboard.length === 0 ? (
-                        <div className="text-center py-16 px-4">
-                            <Trophy className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
-                            <h3 className="text-lg font-semibold">No Active Champions</h3>
-                            <p className="text-muted-foreground text-sm max-w-xs mx-auto mt-2">
-                                {timeFilter === 'all'
-                                    ? "Be the first to claim victory!"
-                                    : "No players active in this period. Play now to reach the top!"}
-                            </p>
-                        </div>
-                    ) : (
-                        <>
-                            {filteredLeaderboard.length >= 3 && (
-                                <div className="flex items-end justify-center px-4 pt-8 pb-12 bg-gradient-to-b from-primary/5 to-transparent">
-                                    {filteredLeaderboard[1] && <Podium entry={filteredLeaderboard[1]} rank={2} />}
-                                    {filteredLeaderboard[0] && <Podium entry={filteredLeaderboard[0]} rank={1} />}
-                                    {filteredLeaderboard[2] && <Podium entry={filteredLeaderboard[2]} rank={3} />}
-                                </div>
-                            )}
 
-                            <div className={cn(
-                                "px-4 pb-4 space-y-2 mt-4",
-                                !isWidget && "max-h-[600px] overflow-y-auto"
-                            )}>
-                                {listItems.map((entry) => {
-                                    const trueRank = filteredLeaderboard.findIndex(p => p.id === entry.id) + 1;
-                                    const isCurrentUser = entry.id === currentUserId;
+                        {/* THE LIST */}
+                        <div className={cn(
+                            "px-4 py-6 space-y-3",
+                            !isWidget ? "max-h-none" : "max-h-[400px] overflow-y-auto"
+                        )}>
+                            {listItems.map((entry, index) => {
+                                const trueRank = leaderboard.findIndex(p => p.id === entry.id) + 1;
+                                const isCurrentUser = entry.id === currentUserId;
 
-                                    return (
-                                        <div
-                                            key={entry.id}
-                                            className={cn(
-                                                "flex items-center gap-4 p-3 rounded-xl border transition-colors",
-                                                isCurrentUser ? "bg-primary/10 border-primary/50" : "bg-card border-border/50 hover:bg-muted/50"
-                                            )}
-                                        >
-                                            <span className={cn(
-                                                "w-8 text-center font-bold",
-                                                isCurrentUser ? "text-primary" : "text-muted-foreground"
-                                            )}>{trueRank}</span>
+                                return (
+                                    <motion.div
+                                        key={entry.id}
+                                        initial={{ opacity: 0, x: -20 }}
+                                        animate={{ opacity: 1, x: 0 }}
+                                        transition={{ delay: (index * 0.05) }}
+                                        className={cn(
+                                            "flex items-center gap-4 p-4 rounded-[1.5rem] border transition-all group",
+                                            isCurrentUser ? "bg-primary/20 border-primary/40 shadow-lg shadow-primary/5 scale-[1.02]" : "bg-muted/10 border-border/40 hover:bg-muted/20 hover:border-border/60"
+                                        )}
+                                    >
+                                        <div className={cn(
+                                            "w-10 h-10 rounded-full flex items-center justify-center font-black text-sm shadow-inner",
+                                            isCurrentUser ? "bg-primary text-primary-foreground" : "bg-muted/50 text-muted-foreground"
+                                        )}>
+                                            {trueRank}
+                                        </div>
 
-                                            <Avatar className="h-10 w-10">
-                                                <AvatarImage src={entry.avatar_url || undefined} />
-                                                <AvatarFallback>{entry.username?.[0]?.toUpperCase() || '?'}</AvatarFallback>
-                                            </Avatar>
-                                            <div className="flex-1">
-                                                <p className={cn("font-semibold", isCurrentUser && "text-primary")}>
-                                                    {entry.full_name} {isCurrentUser && "(You)"}
-                                                </p>
-                                                <p className="text-xs text-muted-foreground flex items-center gap-2">
-                                                    @{entry.username}
-                                                    <span className="w-1 h-1 bg-muted-foreground rounded-full" />
-                                                    Level {entry.level}
-                                                </p>
-                                            </div>
-                                            <div className="text-right">
-                                                <span className="block font-bold text-foreground">{entry.xp}</span>
-                                                <span className="text-[10px] text-muted-foreground uppercase">XP</span>
+                                        <Avatar className="h-12 w-12 border-2 border-background shadow-md">
+                                            <AvatarImage src={entry.avatar_url || undefined} className="object-cover" />
+                                            <AvatarFallback className="font-bold">{entry.username?.[0]?.toUpperCase() || '?'}</AvatarFallback>
+                                        </Avatar>
+
+                                        <div className="flex-1 min-w-0">
+                                            <p className={cn("font-black tracking-tight flex items-center gap-2 truncate", isCurrentUser && "text-primary text-lg")}>
+                                                {entry.full_name} {isCurrentUser && <Star className="w-3 h-3 fill-current" />}
+                                            </p>
+                                            <div className="flex items-center gap-2 overflow-hidden">
+                                                <span className="text-[10px] font-bold text-muted-foreground uppercase truncate">@{entry.username}</span>
+                                                <div className="w-1 h-1 bg-muted-foreground/30 rounded-full shrink-0" />
+                                                <span className="text-[10px] font-black text-primary uppercase">Lvl {entry.level}</span>
                                             </div>
                                         </div>
-                                    )
-                                })}
 
-                                {isWidget && (
-                                    <div className="pt-4 flex justify-center">
-                                        <Button
-                                            variant="outline"
-                                            className="w-full gap-2 border-primary/20 hover:bg-primary/10"
-                                            onClick={() => window.open('/leaderboard', '_blank')}
-                                        >
-                                            See Full Leaderboard <ExternalLink className="w-4 h-4" />
-                                        </Button>
-                                    </div>
-                                )}
-                            </div>
+                                        <div className="text-right shrink-0">
+                                            <p className="text-xl font-black tracking-tighter leading-none">
+                                                {variant === 'gamer' ? (entry.total_wins || 0) : entry.xp.toLocaleString()}
+                                            </p>
+                                            <p className="text-[10px] font-black text-muted-foreground uppercase mt-1">
+                                                {variant === 'gamer' ? "Wins" : "XP"}
+                                            </p>
+                                        </div>
+                                    </motion.div>
+                                )
+                            })}
 
-                            {currentUserId && userRank && isWidget && userRank > 3 && (
-                                <div className="sticky bottom-0 p-4 bg-background/80 backdrop-blur-md border-t border-border flex items-center gap-4">
-                                    <span className="w-8 text-center font-bold text-primary">{userRank}</span>
-                                    <div className="flex-1 font-semibold text-sm">Your Global Rank</div>
-                                    <Button onClick={() => window.open('/leaderboard', '_blank')} variant="ghost" size="sm" className="gap-2">
-                                        View All <ChevronRight className="w-4 h-4" />
+                            {isWidget && (
+                                <div className="pt-6 pb-2">
+                                    <Button
+                                        variant="outline"
+                                        className="w-full h-11 rounded-xl gap-2 border-primary/20 bg-primary/5 hover:bg-primary/10 hover:border-primary/40 font-black uppercase tracking-widest text-[10px] transition-all"
+                                        onClick={() => navigate('/leaderboard')}
+                                    >
+                                        See Full Rankings <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                                     </Button>
                                 </div>
                             )}
-                        </>
-                    )}
-                </CardContent>
-            </Card>
+                        </div>
+
+                        {/* STICKY ME RANKING */}
+                        {currentUserId && userRank && isWidget && userRank > 3 && (
+                            <div className="p-4 bg-primary/5 border-t border-border/50 flex items-center gap-4 animate-in slide-in-from-bottom duration-500">
+                                <div className="w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-black">{userRank}</div>
+                                <div className="flex-1 font-black text-xs uppercase tracking-widest">You are currently ranked #{userRank}</div>
+                                <Button onClick={() => navigate('/leaderboard')} variant="ghost" size="sm" className="font-black uppercase text-[10px] tracking-wider gap-2">
+                                    Full List <ChevronRight className="w-4 h-4" />
+                                </Button>
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
         </div>
     );
 };
+
+const Star = ({ className }: { className?: string }) => (
+    <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" fill="currentColor" />
+    </svg>
+);
 
 export default GameLeaderboard;

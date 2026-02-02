@@ -81,13 +81,25 @@ const UsersPage = () => {
     const fetchUsers = async () => {
         try {
             setLoading(true);
-            const { data, error } = await supabase
+            const { data: profiles, error } = await supabase
                 .from("profiles")
                 .select("*")
                 .order("created_at", { ascending: false });
 
             if (error) throw error;
-            setUsers(data || []);
+
+            // Fetch native wallets for all users
+            const { data: wallets } = await supabase
+                .from("native_wallets")
+                .select("user_id, balance");
+
+            // Map balances to users
+            const usersWithBalance = profiles?.map(profile => {
+                const wallet = wallets?.find(w => w.user_id === profile.id);
+                return { ...profile, balance: wallet?.balance || 0 };
+            });
+
+            setUsers(usersWithBalance || []);
         } catch (error) {
             console.error("Error fetching users:", error);
             toast({
@@ -318,6 +330,7 @@ const UsersPage = () => {
                                 <TableHead className="text-slate-400 font-black uppercase tracking-widest text-[11px] h-14 px-8">User</TableHead>
                                 <TableHead className="text-slate-400 font-black uppercase tracking-widest text-[11px] h-14">Role</TableHead>
                                 <TableHead className="text-slate-400 font-black uppercase tracking-widest text-[11px] h-14">Status</TableHead>
+                                <TableHead className="text-slate-400 font-black uppercase tracking-widest text-[11px] h-14">Wallet</TableHead>
                                 <TableHead className="text-slate-400 font-black uppercase tracking-widest text-[11px] h-14">Joined</TableHead>
                                 <TableHead className="text-right text-slate-400 font-black uppercase tracking-widest text-[11px] h-14 px-8">Actions</TableHead>
                             </TableRow>
@@ -361,6 +374,11 @@ const UsersPage = () => {
                                                 <Badge className="bg-red-50 text-red-600 border-red-100 font-black text-[10px] uppercase tracking-widest px-2 py-0.5 shadow-sm">Banned</Badge>
                                             )}
                                         </div>
+                                    </TableCell>
+                                    <TableCell>
+                                        <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 border-emerald-200 font-mono font-bold">
+                                            ₹{(user.balance || 0).toLocaleString()}
+                                        </Badge>
                                     </TableCell>
                                     <TableCell className="text-slate-400 text-xs font-bold uppercase">
                                         {new Date(user.created_at).toLocaleDateString()}

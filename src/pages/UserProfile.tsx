@@ -38,6 +38,7 @@ interface Profile {
     theme_color?: string | null;
     badges?: string[] | null;
     trust_score?: number | null;
+    balance?: number;
 }
 
 interface Project {
@@ -280,6 +281,9 @@ const UserProfile = () => {
 
         // Sanu's special profile customization
         const isSanu = profileData.username?.toLowerCase() === 'sanu';
+
+
+
         const enhancedProfile: Profile = {
             id: profileData.id,
             username: profileData.username,
@@ -295,7 +299,22 @@ const UserProfile = () => {
             is_verified: isSanu ? true : profileData.is_verified,
             theme_color: isSanu ? '#FFE6EA' : undefined,
         };
-        setProfile(enhancedProfile);
+
+        // Fetch wallet balance
+        let walletBalance = 0;
+        const { data: walletData } = await supabase
+            .from('native_wallets')
+            .select('balance')
+            .eq('user_id', userId)
+            .maybeSingle();
+
+        if (walletData) {
+            walletBalance = walletData.balance;
+        }
+
+        // Extending the local Profile interface to include balance
+        const visibleProfile = { ...enhancedProfile, balance: walletBalance };
+        setProfile(visibleProfile);
 
         // Fetch all data in parallel for better performance
         const [projectsResult, postsResult] = await Promise.all([

@@ -11,6 +11,8 @@ import { HowToPlay } from "@/components/games/HowToPlay";
 import { useMultiplayerGame } from "@/hooks/useMultiplayerGame";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useGameReward } from "@/hooks/useGameReward";
+import { WinCelebration } from "@/components/games/WinCelebration";
 
 const ROWS = 6;
 const COLS = 7;
@@ -21,6 +23,13 @@ const ConnectFour = () => {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const playSound = useGameSounds();
+    const {
+        triggerWinReward,
+        showRewardModal,
+        setShowRewardModal,
+        COIN_REWARD,
+        XP_REWARD
+    } = useGameReward();
     const [board, setBoard] = useState<number[][]>(
         Array(ROWS).fill(null).map(() => Array(COLS).fill(0))
     );
@@ -218,6 +227,13 @@ const ConnectFour = () => {
                     origin: { y: 0.6 },
                     colors: currentPlayer === 1 ? ['#ef4444', '#b91c1c'] : ['#eab308', '#ca8a04']
                 });
+
+                // Reward logic: AI mode (P1 win) or Online mode (My turn win)
+                if (gameMode === 'AI' && currentPlayer === 1) {
+                    triggerWinReward();
+                } else if (gameMode === 'ONLINE' && currentPlayer === myPlayerNum) {
+                    triggerWinReward();
+                }
             }
             // If game over, nextPlayer doesn't matter much for turn, but state needs syncing?
             // Usually we keep next player valid.
@@ -453,6 +469,13 @@ const ConnectFour = () => {
                     </div>
                 </DialogContent>
             </Dialog>
+            {/* Win Celebration Modal */}
+            <WinCelebration
+                isOpen={showRewardModal}
+                onClose={() => setShowRewardModal(false)}
+                coins={COIN_REWARD}
+                xp={XP_REWARD}
+            />
         </div>
     );
 };

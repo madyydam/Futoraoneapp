@@ -58,9 +58,9 @@ export const GamificationBar = ({ userProfile }: GamificationBarProps) => {
 
     // Mock daily challenges if not present
     const challenges: DailyChallenge[] = userProfile?.daily_challenges || [
-        { id: '1', title: "Post a Story", xp: 50, completed: false, current: 0, target: 1 },
-        { id: '2', title: "Like 5 Posts", xp: 25, completed: true, current: 5, target: 5 },
-        { id: '3', title: "Visit Ecosystem", xp: 10, completed: false, current: 0, target: 1 },
+        { id: 'story', title: "Post a Story", xp: 50, completed: false, current: 0, target: 1 },
+        { id: 'likes', title: "Like 5 Posts", xp: 25, completed: false, current: 0, target: 5 },
+        { id: 'comment', title: "Visit Ecosystem", xp: 10, completed: false, current: 0, target: 1 },
     ];
 
     return (

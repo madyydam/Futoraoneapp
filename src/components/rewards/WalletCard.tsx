@@ -1,86 +1,44 @@
-import React, { useEffect } from "react";
+import React from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Wallet, ExternalLink, ChevronRight, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
-import { walletSupabase } from "@/integrations/supabase/walletClient";
 import { supabase } from "@/integrations/supabase/client";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 
-export const WalletCard = () => {
+interface WalletCardProps {
+    customBalance?: number;
+}
+
+export const WalletCard = ({ customBalance }: WalletCardProps) => {
     const navigate = useNavigate();
-    const queryClient = useQueryClient();
 
-    const { data: wallet, isLoading } = useQuery({
-        queryKey: ["futora_wallet_balance"],
+    const { data: walletData, isLoading } = useQuery({
+        queryKey: ["native_wallet_v2"],
         queryFn: async () => {
-            try {
-                const { data: { user } } = await supabase.auth.getUser();
-                if (!user || !user.email) {
-                    console.log("Wallet Sync: No user or email found", user);
-                    return null;
-                }
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) return null;
 
-                console.log("Wallet Sync: Fetching for email", user.email);
+            // @ts-ignore
+            const { data, error } = await supabase
+                .from('native_wallets')
+                .select('*')
+                .eq('user_id', user.id)
+                .maybeSingle();
 
-                const { data, error } = await (walletSupabase as any)
-                    .from("wallets")
-                    .select("id, balance_paise")
-                    .ilike("email", user.email.trim())
-                    .maybeSingle();
-
-                if (error) {
-                    console.error("Wallet Sync: Fetch Error:", error);
-                    return { balance_paise: 0 };
-                }
-
-                console.log("Wallet Sync: Data received:", data);
-                return data || { balance_paise: 0 };
-            } catch (err) {
-                return { balance_paise: 0 };
+            if (error) {
+                console.error("Wallet Card Error:", error);
+                return null;
             }
+
+            return data;
         },
+        enabled: customBalance === undefined,
     });
 
-    // Real-time subscription
-    useEffect(() => {
-        if (!wallet?.id) {
-            return;
-        }
-
-
-        const channel = walletSupabase
-            .channel('wallet-sync-channel')
-            .on(
-                'postgres_changes',
-                {
-                    event: 'UPDATE',
-                    schema: 'public',
-                    table: 'wallets',
-                    filter: `id=eq.${wallet.id}`
-                },
-                (payload) => {
-                    if (payload.new && payload.new.balance_paise !== undefined) {
-                        queryClient.setQueryData(["futora_wallet_balance"], payload.new);
-                    }
-                }
-            )
-            .subscribe((status, err) => {
-                if (err) console.error("Sync: Subscription Error:", err);
-            });
-
-        return () => {
-            walletSupabase.removeChannel(channel);
-        };
-    }, [wallet?.id, queryClient]);
-
-    const handleRefresh = async (e: React.MouseEvent) => {
-        e.stopPropagation();
-        await queryClient.invalidateQueries({ queryKey: ["futora_wallet_balance"] });
-        // Optionally toast
-    };
+    const balance = customBalance !== undefined ? customBalance : walletData?.balance;
 
     const handleRedirect = () => {
         navigate("/wallet");
@@ -115,7 +73,6 @@ export const WalletCard = () => {
                         <div className="flex flex-col">
                             <div className="flex items-center gap-2">
                                 <h3 className="text-sm font-medium text-yellow-500/80 uppercase tracking-widest">Futora Wallet</h3>
-                                <ExternalLink className="w-3 h-3 text-yellow-500/50 group-hover:text-yellow-400 transition-colors" />
                             </div>
 
                             <div className="flex items-baseline gap-2 mt-0.5">
@@ -123,7 +80,7 @@ export const WalletCard = () => {
                                     <Loader2 className="w-6 h-6 animate-spin text-yellow-500" />
                                 ) : (
                                     <span className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-200 via-yellow-400 to-yellow-600 filter drop-shadow-sm">
-                                        {((wallet as any)?.balance_paise / 100 || 0).toLocaleString()}
+                                        {(balance || 0).toLocaleString()}
                                     </span>
                                 )}
                                 <span className="text-xs font-bold text-yellow-500/40">COINS</span>
@@ -131,16 +88,8 @@ export const WalletCard = () => {
                         </div>
                     </div>
 
-                    {/* Action / Refresh */}
+                    {/* Action */}
                     <div className="flex flex-col items-end gap-2">
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={handleRefresh}
-                            className="w-8 h-8 rounded-full text-yellow-500/50 hover:text-yellow-500 hover:bg-yellow-500/10"
-                        >
-                            <Loader2 className={cn("w-4 h-4", isLoading && "animate-spin")} />
-                        </Button>
                         <div className="flex items-center gap-1.5 text-xs font-bold text-yellow-500 group-hover:translate-x-1 transition-transform">
                             <span>Manage</span>
                             <ChevronRight className="w-3.5 h-3.5" />

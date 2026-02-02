@@ -1,4 +1,5 @@
 import React, { memo, useState, useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import {
     Search, Globe, Rocket, Zap, Heart, Gamepad2, Brain, Code, Shield, Cloud,
@@ -14,7 +15,7 @@ import { StartChatButton } from "@/components/StartChatButton";
 import { OnlineIndicator } from "@/components/OnlineIndicator";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { supabase } from "@/integrations/supabase/client";
-import { walletSupabase } from "@/integrations/supabase/walletClient";
+
 import { toast } from "sonner";
 
 // --- Types ---
@@ -276,26 +277,55 @@ interface OpportunitySectionProps {
 }
 
 export const OpportunitySection = memo(({ onNavigate }: OpportunitySectionProps) => {
-    const [isTechMatchUnlocked, setIsTechMatchUnlocked] = useState<boolean>(false);
+    const { data: isTechMatchUnlocked = false, refetch } = useQuery({
+        queryKey: ['techMatchUnlockStatus'],
+        queryFn: async () => {
+            // 0. Instant Local Check (Fastest & Persistent)
+            const localStatus = localStorage.getItem('techMatchUnlocked');
+            if (localStatus === 'true') return true;
 
-    useEffect(() => {
-        // Fetch Unlock Status on Mount
-        const fetchStatus = async () => {
             const { data: { user } } = await supabase.auth.getUser();
-            if (user) {
-                const { data } = await supabase
-                    .from('profiles')
-                    .select('is_tech_match_unlocked')
-                    .eq('id', user.id)
-                    .single();
+            if (!user) return false;
 
-                if (data) {
-                    setIsTechMatchUnlocked(!!data.is_tech_match_unlocked);
+            // 1. Check Profile Flag
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select('is_tech_match_unlocked')
+                .eq('id', user.id)
+                .single();
+
+            // @ts-ignore
+            if (profile?.is_tech_match_unlocked) {
+                localStorage.setItem('techMatchUnlocked', 'true');
+                return true;
+            }
+
+            // 2. Fallback: Check 'Proof of Purchase' in Transactions
+            // @ts-ignore
+            const { data: wallet } = await supabase.from('native_wallets').select('id').eq('user_id', user.id).single();
+
+            if (wallet) {
+                // @ts-ignore
+                const { data: tx } = await supabase
+                    .from('native_transactions')
+                    .select('id')
+                    .eq('wallet_id', wallet.id)
+                    .ilike('description', '%Unlocked Tech Match%')
+                    .limit(1);
+
+                if (tx && tx.length > 0) {
+                    localStorage.setItem('techMatchUnlocked', 'true');
+                    return true;
                 }
             }
-        };
-        fetchStatus();
-    }, []);
+
+            return false;
+        },
+        staleTime: 1000 * 60 * 5, // 5 minutes cache
+        initialData: () => localStorage.getItem('techMatchUnlocked') === 'true',
+    });
+
+    const queryClient = useQueryClient();
 
     const handleTechMatchClick = async () => {
         if (isTechMatchUnlocked) {
@@ -313,44 +343,100 @@ export const OpportunitySection = memo(({ onNavigate }: OpportunitySectionProps)
                 return;
             }
 
-            // 1. Check Balance
-            const { data: wallet } = await (walletSupabase as any)
-                .from("wallets")
-                .select("id, balance_paise")
-                .eq("email", user.email)
-                .single();
+            console.log("Attempting to unlock Tech Match for user:", user.id);
 
-            if (!wallet || wallet.balance_paise < 100000) {
-                toast.error("Insufficient Balance (1000 Coins required)");
+            // 1. Check Balance - Robust Fetch
+            // @ts-ignore
+            const { data: wallet, error: walletError } = await supabase
+                .from("native_wallets")
+                .select("id, balance")
+                .eq("user_id", user.id)
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+
+            if (walletError || !wallet) {
+                console.error("Wallet Fetch Error:", walletError);
+                toast.error("Could not access wallet. Please contact support.");
+                return;
+            }
+
+            console.log("Current Balance:", wallet.balance);
+
+            if ((wallet.balance || 0) < 1000) {
+                // --- SMART RESTORE LOGIC ---
+                // If balance is low, check if they ALREADY paid previously (State Repair)
+                // @ts-ignore
+                const { data: tx } = await supabase
+                    .from("native_transactions")
+                    .select("id")
+                    .eq("wallet_id", wallet.id)
+                    .ilike("description", "%Unlocked Tech Match%")
+                    .limit(1);
+
+                if (tx && tx.length > 0) {
+                    console.log("Payment found in history. Restoring access...");
+                    // Repair Profile
+                    await supabase.from('profiles').update({ is_tech_match_unlocked: true } as any).eq('id', user.id);
+                    localStorage.setItem('techMatchUnlocked', 'true');
+                    await refetch();
+                    toast.success("Purchase Verified & Restored! 🔄");
+                    return;
+                }
+
+                toast.error(`Insufficient Balance. You have ${wallet.balance || 0} coins, need 1000.`);
                 return;
             }
 
             // 2. Debit
-            await (walletSupabase as any)
-                .from("wallets")
-                .update({ balance_paise: wallet.balance_paise - 100000 })
+            // @ts-ignore
+            const { error: updateError } = await supabase
+                .from("native_wallets")
+                .update({ balance: (wallet.balance || 0) - 1000 })
                 .eq("id", wallet.id);
 
-            await (walletSupabase as any)
-                .from("transactions")
+            if (updateError) {
+                console.error("Balance Update Error:", updateError);
+                throw updateError;
+            }
+
+            // 3. Log Transaction
+            // @ts-ignore
+            const { error: txError } = await supabase
+                .from("native_transactions")
                 .insert({
                     wallet_id: wallet.id,
-                    amount_paise: -100000,
-                    description: "Unlocked Tech Match",
-                    side: "DEBIT"
+                    amount: -1000,
+                    description: "Unlocked Tech Match 🔓",
+                    type: "payment",
+                    status: "completed"
                 });
 
-            // 3. Update Profile - Specific to Tech Match
-            await supabase
+            if (txError) {
+                console.error("Transaction Log Error:", txError);
+            }
+
+            // 4. Update Profile - Specific to Tech Match
+            const { error: profileError } = await supabase
                 .from('profiles')
                 .update({ is_tech_match_unlocked: true } as any)
                 .eq('id', user.id);
 
-            setIsTechMatchUnlocked(true);
+            // 5. Success & Cleanup
+            console.log("Unlock Successful!");
+            localStorage.setItem('techMatchUnlocked', 'true'); // Persist locally
+
+            await Promise.all([
+                refetch(),
+                queryClient.invalidateQueries({ queryKey: ["native_wallet_v2"] }),
+                queryClient.invalidateQueries({ queryKey: ["userProfile"] })
+            ]);
+
             toast.success("Tech Match Unlocked! 🔓");
-        } catch (error) {
-            console.error(error);
-            toast.error("Unlock failed.");
+        } catch (error: any) {
+            console.error("Unexpected Error during unlock:", error);
+            // Show exact error to user for debugging
+            toast.error(`Unlock failed: ${error.message || error.details || "Unknown error"}`);
         }
     };
 

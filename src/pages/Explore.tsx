@@ -25,87 +25,48 @@ const Explore = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  useEffect(() => {
-    fetchCurrentUser();
-    fetchPeople();
-
-    console.log("Setting up real-time profile sync for Explore...");
-    const channel = supabase
-      .channel('explore-profile-sync')
-      .on(
-        'postgres_changes',
-        {
-          event: '*', // Listen to all profile changes
-          schema: 'public',
-          table: 'profiles'
-        },
-        (payload) => {
-          console.log("Real-time profile update received in Explore:", payload);
-          const updatedProfile = payload.new as any;
-
-          if (!updatedProfile || !updatedProfile.id) return;
-
-          // Update people grid
-          setPeople(currentPeople => {
-            const index = currentPeople.findIndex(p => p.id === updatedProfile.id);
-            if (index === -1) return currentPeople;
-
-            console.log(`Updating person ${updatedProfile.username} in grid. is_verified: ${updatedProfile.is_verified}`);
-            const newPeople = [...currentPeople];
-            newPeople[index] = {
-              ...newPeople[index],
-              username: updatedProfile.username || newPeople[index].username,
-              full_name: updatedProfile.full_name || newPeople[index].full_name,
-              avatar_url: updatedProfile.avatar_url || newPeople[index].avatar_url,
-              is_verified: updatedProfile.is_verified !== undefined ? updatedProfile.is_verified : newPeople[index].is_verified
-            };
-            return newPeople;
-          });
-
-          // Update search results
-          setSearchResults(currentResults => {
-            const index = currentResults.findIndex(p => p.id === updatedProfile.id);
-            if (index === -1) return currentResults;
-
-            const newResults = [...currentResults];
-            newResults[index] = {
-              ...newResults[index],
-              username: updatedProfile.username || newResults[index].username,
-              full_name: updatedProfile.full_name || newResults[index].full_name,
-              avatar_url: updatedProfile.avatar_url || newResults[index].avatar_url,
-              is_verified: updatedProfile.is_verified !== undefined ? updatedProfile.is_verified : newResults[index].is_verified
-            };
-            return newResults;
-          });
-        }
-      )
-      .subscribe((status) => {
-        console.log(`Explore real-time subscription status: ${status}`);
-      });
-
-    return () => {
-      console.log("Cleaning up Explore real-time profile sync...");
-      supabase.removeChannel(channel);
-    };
-  }, []);
-
-  // Debounced search effect
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (searchQuery.trim().length > 0) {
-        performSearch(searchQuery);
-      } else {
-        setSearchResults([]);
-        setShowResults(false);
-      }
-    }, 300); // 300ms debounce
-
-    return () => clearTimeout(timer);
-  }, [searchQuery]);
-
+  // Move callbacks before useEffect to satisfy linter and modify dependency arrays
   const fetchCurrentUser = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
     setCurrentUser(user);
+  }, []);
+
+  const fetchPeople = useCallback(async () => {
+    setLoadingPeople(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, username, full_name, avatar_url, is_verified")
+        .neq("id", user?.id || "")
+        .order("created_at", { ascending: false })
+        .limit(4);
+
+      if (error) throw error;
+
+      // Optimize: Parallel fetch is good, keeping it.
+      const usersWithCounts = await Promise.all(
+        (data || []).map(async (profile) => {
+          const { count } = await supabase
+            .from("follows")
+            .select("*", { count: "exact", head: true })
+            .eq("following_id", profile.id);
+
+          return {
+            ...profile,
+            is_verified: profile.is_verified,
+            follower_count: count || 0,
+          };
+        })
+      );
+
+      setPeople(usersWithCounts);
+    } catch (error) {
+      console.error("Error fetching people:", error);
+    } finally {
+      setLoadingPeople(false);
+    }
   }, []);
 
   const performSearch = useCallback(async (query: string) => {
@@ -128,43 +89,56 @@ const Explore = () => {
     }
   }, []);
 
-  const fetchPeople = async () => {
-    setLoadingPeople(true);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
+  useEffect(() => {
+    fetchCurrentUser();
+    fetchPeople();
 
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("id, username, full_name, avatar_url, is_verified")
-        .neq("id", user?.id || "")
-        .order("created_at", { ascending: false })
-        .limit(4);
+    console.log("Setting up real-time profile sync for Explore...");
+    const channel = supabase
+      .channel('explore-profile-sync')
+      .on(
+        'postgres_changes',
+        {
+          event: '*', // Listen to all profile changes
+          schema: 'public',
+          table: 'profiles'
+        },
+        (payload) => {
+          console.log("Real-time profile update received in Explore:", payload);
+          // Use unknown then intersection for cleaner casting
+          const updatedProfile = payload.new as unknown as (UserProfile & { [key: string]: unknown });
 
-      if (error) throw error;
+          if (!updatedProfile || !updatedProfile.id) return;
 
-      // Optimize: Use a single query for counts if possible, or keep as is if volume is low.
-      const usersWithCounts = await Promise.all(
-        (data || []).map(async (profile) => {
-          const { count } = await supabase
-            .from("follows")
-            .select("*", { count: "exact", head: true })
-            .eq("following_id", profile.id);
-
-          return {
-            ...profile,
-            is_verified: profile.is_verified,
-            follower_count: count || 0,
+          // Helper to update specific profile in a list
+          const updateList = (list: UserProfile[]) => {
+            return list.map(p => {
+              if (p.id === updatedProfile.id) {
+                return {
+                  ...p,
+                  username: updatedProfile.username || p.username,
+                  full_name: updatedProfile.full_name || p.full_name,
+                  avatar_url: updatedProfile.avatar_url || p.avatar_url,
+                  is_verified: updatedProfile.is_verified !== undefined ? updatedProfile.is_verified : p.is_verified
+                };
+              }
+              return p;
+            });
           };
-        })
-      );
 
-      setPeople(usersWithCounts);
-    } catch (error) {
-      console.error("Error fetching people:", error);
-    } finally {
-      setLoadingPeople(false);
-    }
-  };
+          setPeople(currentPeople => updateList(currentPeople));
+          setSearchResults(currentResults => updateList(currentResults));
+        }
+      )
+      .subscribe((status) => {
+        console.log(`Explore real-time subscription status: ${status}`);
+      });
+
+    return () => {
+      console.log("Cleaning up Explore real-time profile sync...");
+      supabase.removeChannel(channel);
+    };
+  }, [fetchCurrentUser, fetchPeople]);
 
   const handleCategoryClick = useCallback((categoryName: string) => {
     toast({

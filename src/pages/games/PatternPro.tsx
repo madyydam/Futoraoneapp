@@ -8,6 +8,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useGameSounds } from "@/hooks/useGameSounds";
 import { HowToPlay } from "@/components/games/HowToPlay";
 import { Card } from "@/components/ui/card";
+import { useGameReward } from "@/hooks/useGameReward";
+import { WinCelebration } from "@/components/games/WinCelebration";
 
 const COLORS = ["bg-red-500", "bg-blue-500", "bg-green-500", "bg-yellow-500", "bg-purple-500", "bg-pink-500"];
 const SEQUENCE_LENGTH_START = 3;
@@ -16,6 +18,13 @@ const TIME_PER_TILE = 800; // ms to show each tile
 const PatternPro = () => {
     const navigate = useNavigate();
     const playSound = useGameSounds();
+    const {
+        triggerWinReward,
+        showRewardModal,
+        setShowRewardModal,
+        COIN_REWARD,
+        XP_REWARD
+    } = useGameReward();
     const [sequence, setSequence] = useState<number[]>([]);
     const [userSequence, setUserSequence] = useState<number[]>([]);
     const [isPlaying, setIsPlaying] = useState(false);
@@ -217,6 +226,13 @@ const PatternPro = () => {
                     </motion.div>
                 )}
             </AnimatePresence>
+            {/* Win Celebration Modal */}
+            <WinCelebration
+                isOpen={showRewardModal}
+                onClose={() => setShowRewardModal(false)}
+                coins={COIN_REWARD}
+                xp={XP_REWARD}
+            />
         </div>
     );
 };

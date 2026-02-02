@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, memo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -6,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { LogOut, Github, Linkedin, Instagram, Globe, MapPin, Edit, Eye, Shield, QrCode, Settings } from "lucide-react";
+import { LogOut, Github, Linkedin, Instagram, Globe, MapPin, Edit, Eye, Shield, QrCode, Settings, MessageSquareWarning } from "lucide-react";
 import { motion } from "framer-motion";
 import type { User } from "@supabase/supabase-js";
 import { useToast } from "@/hooks/use-toast";
@@ -137,16 +138,11 @@ const Profile = () => {
   const [followersModalTab, setFollowersModalTab] = useState<"followers" | "following">("followers");
   const [qrCodeDialogOpen, setQrCodeDialogOpen] = useState(false);
 
-  useEffect(() => {
-    const fetchUserData = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        navigate("/auth");
-        return;
-      }
-      setUser(user);
+  const { data: profileData, isLoading, refetch } = useQuery({
+    queryKey: ['userProfile', user?.id],
+    queryFn: async () => {
+      if (!user?.id) return null;
 
-      // Execute all queries in parallel for faster loading
       const [profileResult, projectsResult, postsResult, followersResult, followingResult] =
         await Promise.all([
           supabase
@@ -156,19 +152,12 @@ const Profile = () => {
             .single(),
           supabase
             .from("projects")
-            .select(`
-              *,
-              project_likes(id)
-            `)
+            .select(`*, project_likes(id)`)
             .eq("user_id", user.id)
             .order('created_at', { ascending: false }),
           supabase
             .from("posts")
-            .select(`
-              *,
-              likes(id),
-              comments(id)
-            `)
+            .select(`*, likes(id), comments(id)`)
             .eq("user_id", user.id)
             .order('created_at', { ascending: false }),
           supabase
@@ -181,59 +170,56 @@ const Profile = () => {
             .eq("follower_id", user.id)
         ]);
 
+      let profile = profileResult.data as unknown as Profile;
+
       // Apply custom theme for @sanu
-      const profileData = profileResult.data as unknown as Profile;
-      if (profileData?.username?.toLowerCase() === 'sanu') {
-        profileData.verification_category = 'creator';
-        profileData.theme_color = '#FFE6EA'; // Light pink
-        profileData.is_verified = true;
+      if (profile?.username?.toLowerCase() === 'sanu') {
+        profile = {
+          ...profile,
+          verification_category: 'creator',
+          theme_color: '#FFE6EA',
+          is_verified: true
+        };
       }
 
-      setProfile(profileData);
-      setProjects((projectsResult.data as unknown as Project[]) || []);
-      setPosts((postsResult.data as unknown as Post[]) || []);
-      setFollowerCount(followersResult.count || 0);
-      setFollowingCount(followingResult.count || 0);
+      return {
+        profile,
+        projects: (projectsResult.data as unknown as Project[]) || [],
+        posts: (postsResult.data as unknown as Post[]) || [],
+        followerCount: followersResult.count || 0,
+        followingCount: followingResult.count || 0
+      };
+    },
+    enabled: !!user?.id,
+  });
 
+  // Effects to sync query data to local state if needed, or just use data directly
+  useEffect(() => {
+    if (profileData) {
+      setProfile(profileData.profile);
+      setProjects(profileData.projects);
+      setPosts(profileData.posts);
+      setFollowerCount(profileData.followerCount);
+      setFollowingCount(profileData.followingCount);
       setLoading(false);
-    };
+    }
+  }, [profileData]);
 
-    fetchUserData();
+  // Auth check
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) navigate("/auth");
+      else setUser(user);
+    });
   }, [navigate]);
 
-  const fetchFollowerCounts = useCallback(async (uid: string) => {
-    const { count: followers } = await supabase
-      .from("follows")
-      .select("*", { count: "exact", head: true })
-      .eq("following_id", uid);
-
-    const { count: following } = await supabase
-      .from("follows")
-      .select("*", { count: "exact", head: true })
-      .eq("follower_id", uid);
-
-    setFollowerCount(followers || 0);
-    setFollowingCount(following || 0);
-  }, []);
+  const fetchFollowerCounts = useCallback(async () => {
+    await refetch();
+  }, [refetch]);
 
   const refreshProfile = useCallback(async () => {
-    if (!user) return;
-    const { data: profileData } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", user.id)
-      .single();
-
-    // Apply custom theme for @sanu
-    const updatedProfile = profileData as unknown as Profile;
-    if (updatedProfile?.username?.toLowerCase() === 'sanu') {
-      updatedProfile.verification_category = 'creator';
-      updatedProfile.theme_color = '#FFE6EA'; // Light pink
-      updatedProfile.is_verified = true;
-    }
-
-    setProfile(updatedProfile);
-  }, [user]);
+    await refetch();
+  }, [refetch]);
 
   const handleLogout = useCallback(async () => {
     setLogoutDialogOpen(true);
@@ -245,7 +231,7 @@ const Profile = () => {
     navigate("/");
   }, [toast, navigate]);
 
-  if (loading) {
+  if (loading || isLoading) {
     return <CartoonLoader />;
   }
 
@@ -519,11 +505,21 @@ const Profile = () => {
             </Button>
           )}
 
+          {/* Feedback Button */}
+          <Button
+            onClick={() => navigate("/feedback")}
+            variant="outline"
+            className="w-full border-muted-foreground/30 text-foreground hover:bg-secondary flex items-center justify-center gap-2 h-12 rounded-xl mb-3"
+          >
+            <MessageSquareWarning size={18} className="text-amber-500" />
+            <span className="font-semibold">Report a Problem / Suggest a Feature</span>
+          </Button>
+
           {/* Logout Button */}
           <Button
             onClick={handleLogout}
             variant="outline"
-            className="w-full border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground"
+            className="w-full border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground h-12 rounded-xl"
           >
             <LogOut size={18} className="mr-2" />
             Logout

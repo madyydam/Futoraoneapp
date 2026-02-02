@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Briefcase, Loader2, CheckCircle2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 interface ApplyFounderDialogProps {
     listingId: string;
@@ -25,12 +26,32 @@ export const ApplyFounderDialog = ({ listingId, listingRole, trigger }: ApplyFou
         setLoading(true);
 
         try {
-            // Simulate network delay - feature coming soon
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            const { data: { user } } = await supabase.auth.getUser();
+
+            if (!user) {
+                toast({
+                    title: "Authentication Required",
+                    description: "Please sign in to connect with this founder.",
+                    variant: "destructive"
+                });
+                return;
+            }
+
+            const { error } = await supabase
+                .from('founder_applications' as any)
+                .insert({
+                    listing_id: listingId,
+                    applicant_id: user.id,
+                    message: message,
+                    contact_info: contactInfo,
+                    status: 'pending'
+                });
+
+            if (error) throw error;
 
             toast({
                 title: "Application Sent! 🚀",
-                description: `Your interest in the ${listingRole} role has been noted. Full feature coming soon!`,
+                description: `Your interest in the ${listingRole} role has been sent successfully.`,
                 className: "bg-green-500 text-white border-none"
             });
 
@@ -38,11 +59,11 @@ export const ApplyFounderDialog = ({ listingId, listingRole, trigger }: ApplyFou
             setMessage("");
             setContactInfo("");
 
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error applying:", error);
             toast({
                 title: "Error sending application",
-                description: "Something went wrong. Please try again.",
+                description: error.message || "Something went wrong. Please try again.",
                 variant: "destructive"
             });
         } finally {

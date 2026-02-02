@@ -9,6 +9,8 @@ import { useGameSounds } from "@/hooks/useGameSounds";
 import { HowToPlay } from "@/components/games/HowToPlay";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { useGameReward } from "@/hooks/useGameReward";
+import { WinCelebration } from "@/components/games/WinCelebration";
 
 const WORDS = [
     "REACT", "JAVASCRIPT", "TYPESCRIPT", "COMPONENT", "FUNCTION",
@@ -21,6 +23,13 @@ const WORDS = [
 const WordBlitz = () => {
     const navigate = useNavigate();
     const playSound = useGameSounds();
+    const {
+        triggerWinReward,
+        showRewardModal,
+        setShowRewardModal,
+        COIN_REWARD,
+        XP_REWARD
+    } = useGameReward();
     const [currentWord, setCurrentWord] = useState("");
     const [scrambled, setScrambled] = useState("");
     const [userInput, setUserInput] = useState("");
@@ -87,6 +96,11 @@ const WordBlitz = () => {
             });
         } else {
             toast.success(`Game Over! Score: ${score}`, { icon: "🎯" });
+        }
+
+        // Reward logic: Any completed game with a score > 0
+        if (score > 0) {
+            triggerWinReward();
         }
     };
 
@@ -241,6 +255,13 @@ const WordBlitz = () => {
                     )}
                 </AnimatePresence>
             </div>
+            {/* Win Celebration Modal */}
+            <WinCelebration
+                isOpen={showRewardModal}
+                onClose={() => setShowRewardModal(false)}
+                coins={COIN_REWARD}
+                xp={XP_REWARD}
+            />
         </div>
     );
 };

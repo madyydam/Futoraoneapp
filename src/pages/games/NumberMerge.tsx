@@ -8,6 +8,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useGameSounds } from "@/hooks/useGameSounds";
 import { HowToPlay } from "@/components/games/HowToPlay";
 import { Card } from "@/components/ui/card";
+import { useGameReward } from "@/hooks/useGameReward";
+import { WinCelebration } from "@/components/games/WinCelebration";
 
 type Tile = number | null;
 type Board = Tile[][];
@@ -18,6 +20,13 @@ const GOAL = 2048;
 const NumberMerge = () => {
     const navigate = useNavigate();
     const playSound = useGameSounds();
+    const {
+        triggerWinReward,
+        showRewardModal,
+        setShowRewardModal,
+        COIN_REWARD,
+        XP_REWARD
+    } = useGameReward();
     const [board, setBoard] = useState<Board>([]);
     const [score, setScore] = useState(0);
     const [bestScore, setBestScore] = useState(0);
@@ -117,6 +126,7 @@ const NumberMerge = () => {
                                 origin: { y: 0.6 }
                             });
                             toast.success("You reached 2048! 🎉");
+                            triggerWinReward();
                         }, 300);
                     }
                     i += 2;
@@ -187,6 +197,9 @@ const NumberMerge = () => {
                 setGameOver(true);
                 playSound('lose');
                 toast.error("Game Over! No more moves.", { icon: "💀" });
+                if (score > 100) {
+                    triggerWinReward();
+                }
             }
         }
     };
@@ -348,6 +361,13 @@ const NumberMerge = () => {
                     </motion.div>
                 )}
             </AnimatePresence>
+            {/* Win Celebration Modal */}
+            <WinCelebration
+                isOpen={showRewardModal}
+                onClose={() => setShowRewardModal(false)}
+                coins={COIN_REWARD}
+                xp={XP_REWARD}
+            />
         </div>
     );
 };

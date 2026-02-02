@@ -213,6 +213,32 @@ export const Stories = memo(() => {
         }
     };
 
+    const handleInvite = useCallback(async () => {
+        const shareData = {
+            title: 'Join FutoraOne!',
+            text: 'Connect with developers, share projects, and earn rewards on FutoraOne.',
+            url: 'https://futora1.vercel.app',
+        };
+
+        if (navigator.share) {
+            try {
+                await navigator.share(shareData);
+            } catch (error) {
+                console.log('Error sharing:', error);
+            }
+        } else {
+            try {
+                await navigator.clipboard.writeText(shareData.url);
+                toast({
+                    title: "Link copied!",
+                    description: "Invitation link copied to clipboard.",
+                });
+            } catch (err) {
+                console.error('Failed to copy: ', err);
+            }
+        }
+    }, [toast]);
+
     return (
         <>
             <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
@@ -250,7 +276,10 @@ export const Stories = memo(() => {
                 </div>
 
                 {/* Invite Placeholder */}
-                <div className="flex flex-col items-center gap-1 min-w-[72px] cursor-pointer group">
+                <div
+                    className="flex flex-col items-center gap-1 min-w-[72px] cursor-pointer group"
+                    onClick={handleInvite}
+                >
                     <div className="relative p-[3px] rounded-full border-2 border-dashed border-primary/30 group-hover:border-primary/60 transition-colors">
                         <div className="w-16 h-16 rounded-full bg-primary/5 flex items-center justify-center">
                             <Share2 className="w-6 h-6 text-primary/60 group-hover:text-primary transition-colors" />

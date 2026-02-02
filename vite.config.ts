@@ -20,10 +20,10 @@ export default defineConfig(({ mode }) => {
     },
     // Only define value if we want to force them (useful for certain deployment environments)
     // but typically Vite handles this. We'll keep it but point to the correct variables.
-    define: {
-      "import.meta.env.VITE_SUPABASE_URL": JSON.stringify(SUPABASE_URL),
-      "import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY": JSON.stringify(SUPABASE_KEY),
-    },
+    // define: {
+    //   "import.meta.env.VITE_SUPABASE_URL": JSON.stringify(SUPABASE_URL),
+    //   "import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY": JSON.stringify(SUPABASE_KEY),
+    // },
     plugins: [
       react(),
       mode === "development" && componentTagger(),

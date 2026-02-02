@@ -10,6 +10,8 @@ import { HowToPlay } from "@/components/games/HowToPlay";
 import { Card } from "@/components/ui/card";
 import { useMultiplayerGame } from "@/hooks/useMultiplayerGame";
 import { Input } from "@/components/ui/input";
+import { useGameReward } from "@/hooks/useGameReward";
+import { WinCelebration } from "@/components/games/WinCelebration";
 
 type GameMode = "SOLO" | "ONLINE";
 type GameState = "WAITING" | "READY" | "GO" | "RESULT";
@@ -17,6 +19,13 @@ type GameState = "WAITING" | "READY" | "GO" | "RESULT";
 const ReflexMaster = () => {
     const navigate = useNavigate();
     const playSound = useGameSounds();
+    const {
+        triggerWinReward,
+        showRewardModal,
+        setShowRewardModal,
+        COIN_REWARD,
+        XP_REWARD
+    } = useGameReward();
     const [gameMode, setGameMode] = useState<GameMode>("SOLO");
     const [gameState, setGameState] = useState<GameState>("WAITING");
     const [reactionTime, setReactionTime] = useState<number | null>(null);
@@ -134,7 +143,10 @@ const ReflexMaster = () => {
                         spread: 70,
                         origin: { y: 0.6 }
                     });
+                } else {
+                    toast.success(`Reaction: ${reaction}ms`, { icon: "⚡" });
                 }
+                triggerWinReward();
                 setGameState("RESULT");
             } else {
                 // Online: notify opponent
@@ -334,6 +346,13 @@ const ReflexMaster = () => {
                     </motion.div>
                 )}
             </AnimatePresence>
+            {/* Win Celebration Modal */}
+            <WinCelebration
+                isOpen={showRewardModal}
+                onClose={() => setShowRewardModal(false)}
+                coins={COIN_REWARD}
+                xp={XP_REWARD}
+            />
         </div>
     );
 };

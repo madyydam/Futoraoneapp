@@ -9,6 +9,8 @@ import { useGameSounds } from "@/hooks/useGameSounds";
 import { HowToPlay } from "@/components/games/HowToPlay";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { useGameReward } from "@/hooks/useGameReward";
+import { WinCelebration } from "@/components/games/WinCelebration";
 
 const OPERATIONS = ['+', '-', '×', '÷'] as const;
 type Operation = typeof OPERATIONS[number];
@@ -23,6 +25,13 @@ interface Problem {
 const SpeedMath = () => {
     const navigate = useNavigate();
     const playSound = useGameSounds();
+    const {
+        triggerWinReward,
+        showRewardModal,
+        setShowRewardModal,
+        COIN_REWARD,
+        XP_REWARD
+    } = useGameReward();
     const [difficulty, setDifficulty] = useState<'easy' | 'medium' | 'hard'>('easy');
     const [problem, setProblem] = useState<Problem | null>(null);
     const [userAnswer, setUserAnswer] = useState("");
@@ -108,6 +117,11 @@ const SpeedMath = () => {
             });
         } else {
             toast.success(`Game Over! Score: ${score}`, { icon: "🎯" });
+        }
+
+        // Reward logic: Any completed game with a score > 0
+        if (score > 0) {
+            triggerWinReward();
         }
     };
 
@@ -279,6 +293,13 @@ const SpeedMath = () => {
                     )}
                 </AnimatePresence>
             </div>
+            {/* Win Celebration Modal */}
+            <WinCelebration
+                isOpen={showRewardModal}
+                onClose={() => setShowRewardModal(false)}
+                coins={COIN_REWARD}
+                xp={XP_REWARD}
+            />
         </div>
     );
 };

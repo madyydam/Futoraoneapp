@@ -2,21 +2,31 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { GigListing, GigCard } from "@/components/gigs/GigCard";
 import { CreateGigDialog } from "@/components/gigs/CreateGigDialog";
+import { MarketplaceFilterDrawer } from "@/components/marketplace/MarketplaceFilterDrawer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ArrowLeft, Search, Filter, Briefcase } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { BottomNav } from "@/components/BottomNav";
 import { useToast } from "@/hooks/use-toast";
+import { useDebounce } from "../hooks/use-debounce";
 
 // Mock data deleted - now using real database listings
 
 const GigMarketplace = () => {
+    const [searchParams, setSearchParams] = useSearchParams();
     const [gigs, setGigs] = useState<GigListing[]>([]);
     const [loading, setLoading] = useState(true);
-    const [searchTerm, setSearchTerm] = useState("");
-    const [activeFilter, setActiveFilter] = useState("All");
+    const [searchTerm, setSearchTerm] = useState(searchParams.get("search") || "");
+    const debouncedSearch = useDebounce(searchTerm, 500);
+
+    const [filters, setFilters] = useState({
+        category: searchParams.getAll("category"),
+        priceRange: searchParams.getAll("priceRange"),
+        location: searchParams.getAll("location")
+    });
+
     const [currentUserId, setCurrentUserId] = useState<string | null>(null);
     const navigate = useNavigate();
     const { toast } = useToast();
@@ -24,11 +34,41 @@ const GigMarketplace = () => {
     const fetchGigs = useCallback(async () => {
         setLoading(true);
         try {
-            // 1. Fetch gigs
-            const { data: gigsData, error: gigsError } = await supabase
+            let query = supabase
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 .from('gig_listings' as any)
-                .select('*')
-                .order('created_at', { ascending: false });
+                .select('*');
+
+            // Search (case-insensitive)
+            if (debouncedSearch) {
+                query = query.or(`title.ilike.%${debouncedSearch}%,description.ilike.%${debouncedSearch}%`);
+            }
+
+            // Category filter (using skills_required as proxy)
+            if (filters.category.length > 0) {
+                query = query.overlaps('skills_required', filters.category);
+            }
+
+            // Location filter
+            if (filters.location.length > 0) {
+                query = query.in('location', filters.location);
+            }
+
+            // Price filtering
+            if (filters.priceRange.length > 0) {
+                const priceFilters: string[] = [];
+                filters.priceRange.forEach(range => {
+                    if (range === "< ₹500") priceFilters.push("price.lt.500");
+                    if (range === "₹500 - ₹2000") priceFilters.push("and(price.gte.500,price.lte.2000)");
+                    if (range === "₹2000 - ₹5000") priceFilters.push("and(price.gte.2000,price.lte.5000)");
+                    if (range === "₹5000+") priceFilters.push("price.gt.5000");
+                });
+                if (priceFilters.length > 0) {
+                    query = query.or(priceFilters.join(','));
+                }
+            }
+
+            const { data: gigsData, error: gigsError } = await query.order('created_at', { ascending: false });
 
             if (gigsError) throw gigsError;
 
@@ -37,8 +77,16 @@ const GigMarketplace = () => {
                 return;
             }
 
-            // 2. Fetch profiles
-            const userIds = [...new Set((gigsData as any[]).map(g => g.user_id))];
+            // 2. Fetch profiles for these gigs manually to avoid join issues
+            // Explicitly cast to any[] first because the table definition might be missing in generated types
+            const rawGigs = gigsData as unknown as GigListing[];
+            const userIds = [...new Set(rawGigs.map(g => g.user_id))];
+
+            if (userIds.length === 0) {
+                setGigs(rawGigs);
+                return;
+            }
+
             const { data: profilesData, error: profilesError } = await supabase
                 .from('profiles')
                 .select('id, full_name, username, avatar_url')
@@ -48,13 +96,13 @@ const GigMarketplace = () => {
                 console.error("Error fetching profiles:", profilesError);
             }
 
-            // 3. Merge
+            // 3. Merge data
             const profilesMap = (profilesData || []).reduce((acc, profile) => {
                 acc[profile.id] = profile;
                 return acc;
-            }, {} as Record<string, any>);
+            }, {} as Record<string, { full_name: string | null; username: string | null; avatar_url: string | null }>);
 
-            const combinedGigs = (gigsData as any[]).map(gig => ({
+            const combinedGigs = rawGigs.map(gig => ({
                 ...gig,
                 profiles: profilesMap[gig.user_id] || {
                     full_name: 'Unknown User',
@@ -63,9 +111,10 @@ const GigMarketplace = () => {
                 }
             }));
 
-            setGigs(combinedGigs as GigListing[]);
+            setGigs(combinedGigs);
 
-        } catch (error: any) {
+        } catch (error) {
+            const err = error as Error;
             console.error("Error fetching gigs:", error);
             setGigs([]);
             toast({
@@ -76,7 +125,33 @@ const GigMarketplace = () => {
         } finally {
             setLoading(false);
         }
-    }, [toast]);
+    }, [debouncedSearch, filters, toast]);
+
+    // Update URL when filters/search change
+    useEffect(() => {
+        const params = new URLSearchParams();
+        if (debouncedSearch) params.set("search", debouncedSearch);
+
+        filters.category.forEach(v => params.append("category", v));
+        filters.priceRange.forEach(v => params.append("priceRange", v));
+        filters.location.forEach(v => params.append("location", v));
+
+        setSearchParams(params, { replace: true });
+        fetchGigs();
+
+        // Subscribe to real-time updates
+        const channel = supabase
+            .channel('gig-listings-all')
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            .on('postgres_changes' as any, { event: '*', table: 'gig_listings' }, () => {
+                fetchGigs();
+            })
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [debouncedSearch, filters, fetchGigs, setSearchParams]);
 
     useEffect(() => {
         const fetchUser = async () => {
@@ -84,20 +159,28 @@ const GigMarketplace = () => {
             setCurrentUserId(user?.id || null);
         };
         fetchUser();
-        fetchGigs();
-    }, [fetchGigs]);
+    }, []);
 
-    const filteredGigs = useMemo(() => gigs.filter(gig => {
-        const matchesSearch =
-            gig.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            gig.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            gig.skills_required?.some(skill => skill.toLowerCase().includes(searchTerm.toLowerCase()));
+    const handleFilterChange = (key: string, value: string) => {
+        setFilters(prev => {
+            const current = (prev as Record<string, string[]>)[key] || [];
+            const updated = current.includes(value)
+                ? current.filter((v: string) => v !== value)
+                : [...current, value];
+            return { ...prev, [key]: updated };
+        });
+    };
 
-        // Basic status filter for now
-        const matchesFilter = activeFilter === "All" || gig.status === "open";
+    const handleResetFilters = () => {
+        setFilters({
+            category: [],
+            priceRange: [],
+            location: []
+        });
+        setSearchTerm("");
+    };
 
-        return matchesSearch && matchesFilter;
-    }), [gigs, searchTerm, activeFilter]);
+    const filteredGigs = gigs;
 
     return (
         <div className="min-h-screen bg-background pb-20">
@@ -128,6 +211,27 @@ const GigMarketplace = () => {
                         </div>
                         <CreateGigDialog onGigCreated={fetchGigs} />
                     </div>
+
+                    {/* Filters */}
+                    <div className="flex items-center justify-between mt-4">
+                        <div className="flex gap-2 items-center overflow-x-auto pb-2 scrollbar-hide flex-1">
+                            <MarketplaceFilterDrawer
+                                type="gig"
+                                filters={filters}
+                                onFilterChange={handleFilterChange}
+                                onReset={handleResetFilters}
+                            />
+                            {(filters.category.length > 0 || filters.priceRange.length > 0 || filters.location.length > 0) && (
+                                <div className="flex gap-1">
+                                    {[...filters.category, ...filters.priceRange, ...filters.location].map(f => (
+                                        <Badge key={f} variant="secondary" className="px-2 py-0.5 text-[10px]">
+                                            {f}
+                                        </Badge>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -153,6 +257,8 @@ const GigMarketplace = () => {
                             key={gig.id}
                             gig={gig}
                             currentUserId={currentUserId}
+                            onDelete={(id) => setGigs(prev => prev.filter(g => g.id !== id))}
+                            onUpdate={fetchGigs}
                         />
                     ))
                 )}

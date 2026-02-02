@@ -13,7 +13,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import { Search, Coins, ArrowUpRight, ArrowDownLeft } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { walletSupabase } from "@/integrations/supabase/walletClient";
+
 import { Badge } from "@/components/ui/badge";
 
 interface UserBalance {
@@ -37,26 +37,27 @@ const AdminCoins = () => {
     const fetchData = async () => {
         setLoading(true);
         try {
-            // 1. Fetch all profiles from FutoraOne
+            // Fetch all profiles
             const { data: profiles, error: profileError } = await supabase
                 .from('profiles')
                 .select('id, username, full_name, avatar_url, email');
 
             if (profileError) throw profileError;
 
-            // 2. Fetch all wallets from FutoraPay
-            const { data: wallets, error: walletError } = await (walletSupabase as any)
-                .from('wallets')
-                .select('email, balance_paise');
+            // Fetch all native wallets
+            const { data: wallets, error: walletError } = await supabase
+                .from('native_wallets')
+                .select('user_id, balance');
 
             if (walletError) throw walletError;
 
-            // 3. Merge data
+            // Merge data
             const combinedData = (profiles || []).map(profile => {
-                const wallet = (wallets || []).find(w => w.email === profile.email);
+                const wallet = (wallets || []).find(w => w.user_id === profile.id);
+                // Default to 0 if no wallet found (though trigger should handle creation)
                 return {
                     ...profile,
-                    balance: wallet ? wallet.balance_paise / 100 : 0
+                    balance: wallet ? wallet.balance : 0
                 };
             });
 

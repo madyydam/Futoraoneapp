@@ -18,7 +18,9 @@ import {
     HelpCircle,
     Flag,
     Home,
-    Coins
+    Coins,
+    MessageSquareWarning,
+    Megaphone
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -72,6 +74,8 @@ export const AdminLayout = ({ children }: AdminLayoutProps) => {
         { icon: Activity, label: "Activity Logs", path: "/admin/logs", category: "Management" },
         { icon: BarChart3, label: "Analytics", path: "/admin/analytics", category: "Management" },
         { icon: Database, label: "Database", path: "/admin/database", category: "Tools" },
+        { icon: MessageSquareWarning, label: "App Feedback", path: "/admin/feedback", category: "Tools" },
+        { icon: Megaphone, label: "Pop-Up Broadcasts", path: "/admin/popups", category: "Tools" },
         { icon: Settings, label: "Settings", path: "/admin/settings", category: "Tools" },
     ];
 

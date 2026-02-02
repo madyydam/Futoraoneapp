@@ -29,7 +29,16 @@ interface Post {
     saves?: { id: string; user_id: string }[];
 }
 
-const profileCache = new Map<string, any>();
+// Define cache type
+interface CachedProfile {
+    xp: number;
+    level: number;
+    current_streak: number;
+    longest_streak: number;
+    daily_challenges: unknown; // Keep specific any if structure is unknown or complex json
+}
+
+const profileCache = new Map<string, CachedProfile>();
 
 export const useFeedLogic = () => {
     const [user, setUser] = useState<User | null>(null);
@@ -47,8 +56,25 @@ export const useFeedLogic = () => {
 
     const fetchUserProfile = useCallback(async (userId: string) => {
         if (profileCache.has(userId)) {
-            setUserProfile(profileCache.get(userId));
+            // Safe to cast as defined logic handles it
+            setUserProfile(profileCache.get(userId) as { xp: number; level: number; current_streak: number });
             return;
+        }
+
+        // Cache cleanup: prevent unbounded growth
+        if (profileCache.size > 100) {
+            const oldestKey = profileCache.keys().next().value;
+            profileCache.delete(oldestKey);
+        }
+
+        // Mark daily check-in (streak update) for the current user
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        if (authUser && authUser.id === userId) {
+            // Use safe RPC call, casting as any because the type is not generated
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (supabase.rpc as any)('check_in_streak').then(({ error }: any) => {
+                if (error) console.error('Streak check-in error:', error);
+            });
         }
 
         // Select specific columns to be safe, but handle missing columns gracefully
@@ -59,21 +85,25 @@ export const useFeedLogic = () => {
             .maybeSingle();
 
         if (error) {
-            console.warn("Error fetching user profile stats (expected if columns missing):", error.message);
+            console.warn("Error fetching user profile stats:", error.message);
             return;
         }
 
         if (data) {
-            // Handle potentially missing columns from older schemas
+            // Handle potentially missing columns from older schemas with defined defaults
+            // Using unknown cast first to avoid 'any' lint errors if possible, 
+            // but relying on partial shape since Supabase types might be strict
+            const profileData = data as Record<string, unknown>;
+
             const formattedProfile = {
-                xp: (data as any).xp || 0,
-                level: (data as any).level || 1,
-                current_streak: (data as any).current_streak || 0,
-                longest_streak: (data as any).longest_streak || 0,
-                daily_challenges: (data as any).daily_challenges || null
+                xp: profileData.xp || 0,
+                level: profileData.level || 1,
+                current_streak: profileData.current_streak || 0,
+                longest_streak: profileData.longest_streak || 0,
+                daily_challenges: profileData.daily_challenges || null
             };
             profileCache.set(userId, formattedProfile);
-            setUserProfile(formattedProfile as any);
+            setUserProfile(formattedProfile);
         }
     }, []);
 
@@ -104,8 +134,9 @@ export const useFeedLogic = () => {
             if (formattedPosts.length < POSTS_PER_PAGE) {
                 setHasMore(false);
             }
-        } catch (error: any) {
-            console.error('Error fetching posts:', error);
+        } catch (error) {
+            const err = error as Error;
+            console.error('Error fetching posts:', err);
             toast({
                 title: "Error loading posts",
                 description: "Could not connect to database. Showing cached posts.",
@@ -157,7 +188,7 @@ export const useFeedLogic = () => {
                         fetchUserProfile(session.user.id);
                     }
                 }
-            } catch (e: any) {
+            } catch (e) {
                 console.error("Auth check failed:", e);
                 if (mounted) {
                     navigate("/auth");

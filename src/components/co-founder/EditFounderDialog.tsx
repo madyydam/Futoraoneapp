@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -8,9 +8,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Plus, Rocket } from "lucide-react";
+import { Loader2, Pencil, Rocket } from "lucide-react";
 
-interface CreateListingForm {
+interface EditFounderForm {
     role_needed: string;
     idea_description: string;
     equity_range: string;
@@ -19,53 +19,75 @@ interface CreateListingForm {
     location: string;
 }
 
-export const CreateListingDialog = ({ onPostCreated }: { onPostCreated: () => void }) => {
+interface EditFounderDialogProps {
+    listing: {
+        id: string;
+        role_needed: string;
+        idea_description: string;
+        equity_range: string;
+        stage: string;
+        industry: string;
+        location: string;
+    };
+    onUpdated: () => void;
+}
+
+export const EditFounderDialog = ({ listing, onUpdated }: EditFounderDialogProps) => {
     const [open, setOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const { toast } = useToast();
-    const { register, handleSubmit, reset, setValue, formState: { errors } } = useForm<CreateListingForm>();
+    const { register, handleSubmit, reset, setValue } = useForm<EditFounderForm>({
+        defaultValues: {
+            role_needed: listing.role_needed,
+            idea_description: listing.idea_description,
+            equity_range: listing.equity_range,
+            stage: listing.stage,
+            industry: listing.industry,
+            location: listing.location
+        }
+    });
 
-    const onSubmit = async (data: CreateListingForm) => {
-        setIsLoading(false);
-        try {
-            const { data: { user } } = await supabase.auth.getUser();
-
-            if (!user) {
-                toast({
-                    title: "Authentication Required",
-                    description: "Please sign in to post a listing.",
-                    variant: "destructive"
-                });
-                return;
-            }
-
-            setIsLoading(true);
-
-            const { error } = await supabase.from('founder_listings' as any).insert({
-                user_id: user.id,
-                role_needed: data.role_needed,
-                idea_description: data.idea_description,
-                industry: data.industry,
-                stage: data.stage,
-                equity_range: data.equity_range,
-                location: data.location
+    useEffect(() => {
+        if (open) {
+            reset({
+                role_needed: listing.role_needed,
+                idea_description: listing.idea_description,
+                equity_range: listing.equity_range,
+                stage: listing.stage,
+                industry: listing.industry,
+                location: listing.location
             });
+        }
+    }, [open, listing, reset]);
+
+    const onSubmit = async (data: EditFounderForm) => {
+        setIsLoading(true);
+        try {
+            const { error } = await supabase
+                .from('founder_listings' as any)
+                .update({
+                    role_needed: data.role_needed,
+                    idea_description: data.idea_description,
+                    industry: data.industry,
+                    stage: data.stage,
+                    equity_range: data.equity_range,
+                    location: data.location
+                })
+                .eq('id', listing.id);
 
             if (error) throw error;
 
             toast({
-                title: "Listing Posted!",
-                description: "Good luck finding your co-founder! 🚀 Your listing is now live.",
+                title: "Listing Updated! 🚀",
+                description: "Your co-founder search has been refreshed.",
             });
 
-            reset();
             setOpen(false);
-            onPostCreated();
-
+            onUpdated();
         } catch (error: any) {
-            console.error("Error posting listing:", error);
+            console.error("Error updating listing:", error);
             toast({
-                title: "Error",
+                title: "Update failed",
                 description: error.message || "Something went wrong",
                 variant: "destructive"
             });
@@ -77,16 +99,15 @@ export const CreateListingDialog = ({ onPostCreated }: { onPostCreated: () => vo
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-                <Button className="gap-2 bg-gradient-to-r from-orange-500 to-pink-600 hover:from-orange-600 hover:to-pink-700 shadow-lg border-0">
-                    <Plus className="w-4 h-4" />
-                    Post Listing
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-foreground/50 hover:text-primary hover:bg-primary/10 transition-colors">
+                    <Pencil className="w-4 h-4" />
                 </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2 text-2xl">
                         <Rocket className="w-6 h-6 text-orange-500" />
-                        Find a Co-Founder
+                        Edit Co-Founder Listing
                     </DialogTitle>
                 </DialogHeader>
 
@@ -95,14 +116,13 @@ export const CreateListingDialog = ({ onPostCreated }: { onPostCreated: () => vo
                         <Label htmlFor="role">Role Needed</Label>
                         <Input
                             id="role"
-                            placeholder="e.g. CTO, Marketing Co-founder"
                             {...register("role_needed", { required: true })}
                         />
                     </div>
 
                     <div className="space-y-2">
                         <Label htmlFor="industry">Industry</Label>
-                        <Select onValueChange={(val) => setValue("industry", val)}>
+                        <Select defaultValue={listing.industry} onValueChange={(val) => setValue("industry", val)}>
                             <SelectTrigger>
                                 <SelectValue placeholder="Select Industry" />
                             </SelectTrigger>
@@ -120,7 +140,7 @@ export const CreateListingDialog = ({ onPostCreated }: { onPostCreated: () => vo
 
                     <div className="space-y-2">
                         <Label htmlFor="stage">Startup Stage</Label>
-                        <Select onValueChange={(val) => setValue("stage", val)}>
+                        <Select defaultValue={listing.stage} onValueChange={(val) => setValue("stage", val)}>
                             <SelectTrigger>
                                 <SelectValue placeholder="Current Stage" />
                             </SelectTrigger>
@@ -137,7 +157,6 @@ export const CreateListingDialog = ({ onPostCreated }: { onPostCreated: () => vo
                         <Label htmlFor="equity">Equity Range</Label>
                         <Input
                             id="equity"
-                            placeholder="e.g. 5-10%, Equity Only"
                             {...register("equity_range", { required: true })}
                         />
                     </div>
@@ -146,7 +165,6 @@ export const CreateListingDialog = ({ onPostCreated }: { onPostCreated: () => vo
                         <Label htmlFor="location">Location</Label>
                         <Input
                             id="location"
-                            placeholder="e.g. Bangalore, Remote"
                             {...register("location", { required: true })}
                         />
                     </div>
@@ -155,20 +173,19 @@ export const CreateListingDialog = ({ onPostCreated }: { onPostCreated: () => vo
                         <Label htmlFor="description">The Pitch (Idea)</Label>
                         <Textarea
                             id="description"
-                            placeholder="Describe your vision and what you're building..."
                             className="h-32"
                             {...register("idea_description", { required: true })}
                         />
                     </div>
 
-                    <Button type="submit" className="w-full" disabled={isLoading}>
+                    <Button type="submit" className="w-full bg-gradient-to-r from-orange-500 to-pink-600 text-white font-bold" disabled={isLoading}>
                         {isLoading ? (
                             <>
                                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                Posting...
+                                Saving...
                             </>
                         ) : (
-                            "Post Listing"
+                            "Save Changes"
                         )}
                     </Button>
                 </form>

@@ -6,7 +6,7 @@ import { QueryClient } from "@tanstack/react-query";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persister";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { useFCM } from "@/hooks/useFCM";
+// import { useFCM } from "@/hooks/useFCM";
 import { supabase } from "@/integrations/supabase/client";
 import type { User } from "@supabase/supabase-js";
 
@@ -18,6 +18,8 @@ import { InstallPrompt } from "@/components/pwa/InstallPrompt";
 import { UserPresenceProvider } from "@/contexts/UserPresenceContext";
 import { GlobalErrorBoundary } from "@/components/GlobalErrorBoundary";
 import { SectionErrorBoundary } from "@/components/SectionErrorBoundary";
+import { AdminRoute } from "@/components/AdminRoute";
+import { BroadcastPopup } from "@/components/BroadcastPopup";
 
 // Core pages - Static imports for speed
 import Index from "./pages/Index";
@@ -60,6 +62,9 @@ import AdminLogs from "./pages/Admin/SystemLogs";
 import AdminDatabase from "./pages/Admin/Database";
 import AdminCoins from "./pages/Admin/Coins";
 import AdminNotifications from "./pages/Admin/Notifications";
+import AdminPopups from "./pages/Admin/Popups";
+import AdminFeedback from "./pages/Admin/AdminFeedback";
+import AdminLogin from "./pages/Admin/Login";
 
 
 import AIEnhancer from "./pages/AIEnhancer";
@@ -85,7 +90,8 @@ import LeaderboardFull from "./pages/LeaderboardFull";
 import HallOfFameFull from "./pages/HallOfFameFull";
 import SelectAvatar from "./pages/SelectAvatar";
 import CodeDuel from "./pages/games/CodeDuel";
-import WalletConnect from "./pages/WalletRedirect";
+import FeedbackPage from "./pages/FeedbackPage";
+
 import Wallet from "./pages/Wallet";
 import Ecosystem from "./pages/Ecosystem";
 
@@ -103,21 +109,7 @@ const persister = createSyncStoragePersister({
 });
 
 const App = () => {
-  const [user, setUser] = useState<User | null>(null);
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  useFCM(user);
+  // useFCM(user); // Disabled pending new Firebase setup
 
 
   return (
@@ -135,6 +127,7 @@ const App = () => {
             <GlobalErrorBoundary>
               <BrowserRouter>
                 <ScrollToTop />
+                <BroadcastPopup />
                 <Routes>
                   <Route path="/" element={<Welcome />} />
                   <Route path="/auth" element={<Auth />} />
@@ -164,6 +157,7 @@ const App = () => {
                   <Route path="/profile-views" element={<ProfileViews />} />
                   <Route path="/project-ideas" element={<ProjectIdeas />} />
                   <Route path="/ai-enhancer" element={<AIEnhancer />} />
+                  <Route path="/feedback" element={<FeedbackPage />} />
 
                   {/* Feature sections with error boundaries */}
                   <Route path="/founders-corner" element={
@@ -257,66 +251,81 @@ const App = () => {
                   } />
 
                   {/* Admin sections with error boundaries */}
-                  <Route path="/admin" element={
-                    <SectionErrorBoundary sectionName="Admin Dashboard" fallbackRoute="/feed">
-                      <AdminDashboard />
-                    </SectionErrorBoundary>
-                  } />
-                  <Route path="/admin/users" element={
-                    <SectionErrorBoundary sectionName="Admin Users" fallbackRoute="/admin">
-                      <AdminUsers />
-                    </SectionErrorBoundary>
-                  } />
-                  <Route path="/admin/coins" element={
-                    <SectionErrorBoundary sectionName="Admin Coins" fallbackRoute="/admin">
-                      <AdminCoins />
-                    </SectionErrorBoundary>
-                  } />
-                  <Route path="/admin/notifications" element={
-                    <SectionErrorBoundary sectionName="Admin Notifications" fallbackRoute="/admin">
-                      <AdminNotifications />
-                    </SectionErrorBoundary>
-                  } />
-                  <Route path="/admin/moderation" element={
-                    <SectionErrorBoundary sectionName="Admin Moderation" fallbackRoute="/admin">
-                      <AdminModeration />
-                    </SectionErrorBoundary>
-                  } />
-                  <Route path="/admin/analytics" element={
-                    <SectionErrorBoundary sectionName="Admin Analytics" fallbackRoute="/admin">
-                      <AdminAnalytics />
-                    </SectionErrorBoundary>
-                  } />
-                  <Route path="/admin/finance" element={
-                    <SectionErrorBoundary sectionName="Admin Finance" fallbackRoute="/admin">
-                      <AdminFinance />
-                    </SectionErrorBoundary>
-                  } />
-                  <Route path="/admin/settings" element={
-                    <SectionErrorBoundary sectionName="Admin Settings" fallbackRoute="/admin">
-                      <AdminSettings />
-                    </SectionErrorBoundary>
-                  } />
-                  <Route path="/admin/reports" element={
-                    <SectionErrorBoundary sectionName="Admin Reports" fallbackRoute="/admin">
-                      <AdminReports />
-                    </SectionErrorBoundary>
-                  } />
-                  <Route path="/admin/logs" element={
-                    <SectionErrorBoundary sectionName="Admin Logs" fallbackRoute="/admin">
-                      <AdminLogs />
-                    </SectionErrorBoundary>
-                  } />
-                  <Route path="/admin/database" element={
-                    <SectionErrorBoundary sectionName="Admin Database" fallbackRoute="/admin">
-                      <AdminDatabase />
-                    </SectionErrorBoundary>
-                  } />
+                  <Route path="/admin/login" element={<AdminLogin />} />
+
+                  {/* Admin Protected Routes */}
+                  <Route element={<AdminRoute />}>
+                    <Route path="/admin" element={
+                      <SectionErrorBoundary sectionName="Admin Dashboard" fallbackRoute="/feed">
+                        <AdminDashboard />
+                      </SectionErrorBoundary>
+                    } />
+                    <Route path="/admin/users" element={
+                      <SectionErrorBoundary sectionName="Admin Users" fallbackRoute="/admin">
+                        <AdminUsers />
+                      </SectionErrorBoundary>
+                    } />
+                    <Route path="/admin/coins" element={
+                      <SectionErrorBoundary sectionName="Admin Coins" fallbackRoute="/admin">
+                        <AdminCoins />
+                      </SectionErrorBoundary>
+                    } />
+                    <Route path="/admin/notifications" element={
+                      <SectionErrorBoundary sectionName="Admin Notifications" fallbackRoute="/admin">
+                        <AdminNotifications />
+                      </SectionErrorBoundary>
+                    } />
+                    <Route path="/admin/moderation" element={
+                      <SectionErrorBoundary sectionName="Admin Moderation" fallbackRoute="/admin">
+                        <AdminModeration />
+                      </SectionErrorBoundary>
+                    } />
+                    <Route path="/admin/analytics" element={
+                      <SectionErrorBoundary sectionName="Admin Analytics" fallbackRoute="/admin">
+                        <AdminAnalytics />
+                      </SectionErrorBoundary>
+                    } />
+                    <Route path="/admin/finance" element={
+                      <SectionErrorBoundary sectionName="Admin Finance" fallbackRoute="/admin">
+                        <AdminFinance />
+                      </SectionErrorBoundary>
+                    } />
+                    <Route path="/admin/settings" element={
+                      <SectionErrorBoundary sectionName="Admin Settings" fallbackRoute="/admin">
+                        <AdminSettings />
+                      </SectionErrorBoundary>
+                    } />
+                    <Route path="/admin/reports" element={
+                      <SectionErrorBoundary sectionName="Admin Reports" fallbackRoute="/admin">
+                        <AdminReports />
+                      </SectionErrorBoundary>
+                    } />
+                    <Route path="/admin/logs" element={
+                      <SectionErrorBoundary sectionName="Admin Logs" fallbackRoute="/admin">
+                        <AdminLogs />
+                      </SectionErrorBoundary>
+                    } />
+                    <Route path="/admin/database" element={
+                      <SectionErrorBoundary sectionName="Admin Database" fallbackRoute="/admin">
+                        <AdminDatabase />
+                      </SectionErrorBoundary>
+                    } />
+                    <Route path="/admin/feedback" element={
+                      <SectionErrorBoundary sectionName="Admin Feedback" fallbackRoute="/admin">
+                        <AdminFeedback />
+                      </SectionErrorBoundary>
+                    } />
+                    <Route path="/admin/popups" element={
+                      <SectionErrorBoundary sectionName="Admin Popups" fallbackRoute="/admin">
+                        <AdminPopups />
+                      </SectionErrorBoundary>
+                    } />
+                  </Route>
 
                   <Route path="/leaderboard" element={<LeaderboardFull />} />
                   <Route path="/hall-of-fame" element={<HallOfFameFull />} />
                   <Route path="/select-avatar" element={<SelectAvatar />} />
-                  <Route path="/wallet-connect" element={<WalletConnect />} />
+
                   <Route path="/wallet" element={<Wallet />} />
 
                   {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

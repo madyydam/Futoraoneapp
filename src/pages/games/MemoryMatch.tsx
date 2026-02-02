@@ -10,6 +10,8 @@ import { HowToPlay } from "@/components/games/HowToPlay";
 import { Card } from "@/components/ui/card";
 import { useMultiplayerGame } from "@/hooks/useMultiplayerGame";
 import { Input } from "@/components/ui/input";
+import { useGameReward } from "@/hooks/useGameReward";
+import { WinCelebration } from "@/components/games/WinCelebration";
 
 const CARDS_DATA = [
     { id: 1, icon: "🐶", matchId: 1 },
@@ -113,6 +115,13 @@ PvPStatCard.displayName = "PvPStatCard";
 const MemoryMatch = () => {
     const navigate = useNavigate();
     const playSound = useGameSounds();
+    const {
+        triggerWinReward,
+        showRewardModal,
+        setShowRewardModal,
+        COIN_REWARD,
+        XP_REWARD
+    } = useGameReward();
     const [cards, setCards] = useState<CardType[]>([]);
     const [flippedCards, setFlippedCards] = useState<CardType[]>([]);
     const [isLock, setIsLock] = useState(false);
@@ -207,14 +216,14 @@ const MemoryMatch = () => {
 
             if (amIWinner) {
                 triggerConfetti();
+                triggerWinReward();
             } else if (isDraw) {
                 triggerConfetti();
             } else {
                 // Loss - nothing
             }
-
+        } else {
             // Solo Win
-
             if (!bestScore || moves + 1 < bestScore) {
                 setBestScore(moves + 1);
                 localStorage.setItem("memory_best_score", (moves + 1).toString());
@@ -223,6 +232,7 @@ const MemoryMatch = () => {
                 toast.success(`Complete in ${moves + 1} moves!`, { icon: "🧠" });
             }
             triggerConfetti();
+            triggerWinReward();
         }
     }, [bestScore, gameMode, isHost, moves, playSound, scores, triggerConfetti]); // sendMove omitted as per instruction example
 
@@ -562,6 +572,13 @@ const MemoryMatch = () => {
                     </motion.div>
                 )}
             </AnimatePresence>
+            {/* Win Celebration Modal */}
+            <WinCelebration
+                isOpen={showRewardModal}
+                onClose={() => setShowRewardModal(false)}
+                coins={COIN_REWARD}
+                xp={XP_REWARD}
+            />
         </div>
     );
 };

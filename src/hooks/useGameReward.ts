@@ -1,96 +1,113 @@
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { supabase } from "@/integrations/supabase/client";
-import { walletSupabase } from "@/integrations/supabase/walletClient";
 import { toast } from "sonner";
 import confetti from 'canvas-confetti';
 
-const REWARD_AMOUNT = 10; // Coins per win
+const COIN_REWARD = 10; // Coins per win
+const XP_REWARD = 50;   // XP per win
 
 export const useGameReward = () => {
+    const [showRewardModal, setShowRewardModal] = useState(false);
+
     const triggerWinReward = useCallback(async () => {
         try {
             // Celebrate immediately!
             confetti({
-                particleCount: 100,
-                spread: 70,
-                origin: { y: 0.6 },
+                particleCount: 150,
+                spread: 100,
+                origin: { y: 0.3 },
                 colors: ['#FFD700', '#FFA500', '#FF4500']
             });
 
-            // 1. Get current user email
+            // Show the premium centered modal
+            setShowRewardModal(true);
+
+            // 1. Get current user
             const { data: { user } } = await supabase.auth.getUser();
-            if (!user || !user.email) {
+            if (!user) {
                 console.error("Reward Error: No user logged in");
                 return;
             }
 
-            // 2. Fetch current wallet
-            let { data: wallet, error: fetchError } = await (walletSupabase as any)
-                .from("wallets")
-                .select("id, balance_paise")
-                .eq("email", user.email)
-                .maybeSingle();
+            // Optimized: Use process_game_win RPC (Handles XP, Wins, Balance, Transactions in one go)
+            const { error: rpcError } = await (supabase.rpc as any)('process_game_win', {
+                u_id: user.id,
+                xp_amt: XP_REWARD,
+                coin_amt: COIN_REWARD
+            });
 
-            if (!wallet) {
-                console.log("Reward: Creating new wallet for", user.email);
-                const { data: newWallet, error: createError } = await (walletSupabase as any)
-                    .from("wallets")
-                    .insert({
-                        email: user.email,
-                        balance_paise: 0,
-                        full_name: user.user_metadata?.full_name || user.email.split('@')[0]
-                    })
-                    .select()
-                    .single();
+            if (rpcError) {
+                console.warn("Reward RPC failed, using manual fallback", rpcError);
 
-                if (createError) {
-                    console.error("Reward Error: Could not create wallet", createError);
-                    toast.error("Could not initialize your wallet.");
-                    return;
-                }
-                wallet = newWallet;
-            }
+                // --- FALLBACK LOGIC (Existing manual updates) ---
 
-            // 3. Update Balance (Add 10 coins = 1000 paise if logic assumes paise, or simple units)
-            // Assuming wallet stores "paise" (100 paise = 1 coin) based on 'balance_paise' name.
-            // User asked for "10 coins". So 10 * 100 = 1000 paise.
-            const rewardInPaise = REWARD_AMOUNT * 100;
-            const newBalance = (wallet.balance_paise || 0) + rewardInPaise;
+                // 2. Fetch current wallet
+                const { data: wallet } = await (supabase
+                    .from("native_wallets" as any)
+                    .select("id, balance")
+                    .eq("user_id", user.id)
+                    .maybeSingle() as any);
 
-            const { error: updateError } = await (walletSupabase as any)
-                .from("wallets")
-                .update({ balance_paise: newBalance })
-                .eq("id", wallet.id);
+                if (wallet) {
+                    const newBalance = (wallet.balance || 0) + COIN_REWARD;
+                    await (supabase
+                        .from("native_wallets" as any)
+                        .update({ balance: newBalance })
+                        .eq("id", wallet.id) as any);
 
-            if (updateError) {
-                console.error("Reward Error: Could not update balance", updateError);
-                toast.error("Failed to deposit coins.");
-            } else {
-                // 4. Create Transaction Record (Sync with FutoraPay History)
-                const { error: txError } = await (walletSupabase as any)
-                    .from("transactions")
-                    .insert({
-                        wallet_id: wallet.id,
-                        amount_paise: rewardInPaise,
-                        description: "Game Win Reward",
-                        type: "reward",
-                        side: "CREDIT", // Important for UI to show green
-                        category: "game_reward",
-                        status: "completed"
-                    });
-
-                if (txError) {
-                    console.error("Reward Warning: Could not create transaction record", txError);
-                    // Don't fail the whole flow if history fails, money is what matters
+                    // Log Transaction
+                    await (supabase
+                        .from("native_transactions" as any)
+                        .insert({
+                            wallet_id: wallet.id,
+                            amount: COIN_REWARD,
+                            description: "Game Win Reward 🎮",
+                            type: "cashback",
+                            status: "completed"
+                        }) as any);
                 }
 
-                toast.success(`You won! +${REWARD_AMOUNT} Coins added to your wallet! 🪙`);
+                // 3. Update Profile (XP + Wins)
+                const { data: profile } = await supabase.from('profiles').select('xp, total_wins').eq('id', user.id).single() as any;
+                const newWinCount = (profile?.total_wins || 0) + 1;
+
+                await supabase
+                    .from("profiles")
+                    .update({
+                        xp: (profile?.xp || 0) + XP_REWARD,
+                        total_wins: newWinCount,
+                        last_activity_date: new Date().toISOString()
+                    } as any)
+                    .eq('id', user.id);
+
+                // --- END FALLBACK ---
             }
+
+            // Achievement Checks (Still checking locally for immediate feedback)
+            const { data: profileStats } = await supabase.from('profiles').select('total_wins').eq('id', user.id).single() as any;
+            const finalWinCount = profileStats?.total_wins || 0;
+
+            if (finalWinCount === 10) {
+                await (supabase.rpc as any)('unlock_achievement', { ach_id: 'game_wizard' });
+                toast.success("New Achievement: Game Wizard! 🧙‍♂️");
+            }
+
+            // ... existing achievement logic ...
+
+            // 4. Force refresh of any leaderboard components
+            window.dispatchEvent(new CustomEvent('leaderboard-update'));
 
         } catch (err) {
             console.error("Reward Hook Error:", err);
+            toast.error("An error occurred while processing rewards.");
         }
-    }, []);
+    }, [setShowRewardModal]);
 
-    return { triggerWinReward };
+    return {
+        triggerWinReward,
+        showRewardModal,
+        setShowRewardModal,
+        COIN_REWARD,
+        XP_REWARD
+    };
 };

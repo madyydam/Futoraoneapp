@@ -12,6 +12,7 @@ import { HowToPlay } from "@/components/games/HowToPlay";
 import { useMultiplayerGame } from "@/hooks/useMultiplayerGame";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { WinCelebration } from "@/components/games/WinCelebration";
 
 type Player = "X" | "O" | null;
 type GameMode = "PVP" | "AI" | "ONLINE";
@@ -143,6 +144,13 @@ const TicTacToe = () => {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const playSound = useGameSounds();
+    const {
+        triggerWinReward,
+        showRewardModal,
+        setShowRewardModal,
+        COIN_REWARD,
+        XP_REWARD
+    } = useGameReward();
     const [board, setBoard] = useState<Player[]>(Array(9).fill(null));
     const [xIsNext, setXIsNext] = useState(true);
     const [winner, setWinner] = useState<"X" | "O" | "Draw" | null>(null);
@@ -266,6 +274,13 @@ const TicTacToe = () => {
                         origin: { y: 0.6 },
                         colors: calculatedWinner === "X" ? ['#3b82f6', '#2563eb'] : ['#ec4899', '#db2777']
                     });
+                }
+
+                // Reward logic: AI mode (X win) or Online mode (My turn win) or Local (X win - simple)
+                if (gameMode === 'AI' && calculatedWinner === 'X') {
+                    triggerWinReward();
+                } else if (gameMode === 'ONLINE' && ((calculatedWinner === 'X' && isHost) || (calculatedWinner === 'O' && !isHost))) {
+                    triggerWinReward();
                 }
             } else {
                 playSound('draw');
@@ -474,6 +489,13 @@ const TicTacToe = () => {
                     </div>
                 </DialogContent>
             </Dialog>
+            {/* Win Celebration Modal */}
+            <WinCelebration
+                isOpen={showRewardModal}
+                onClose={() => setShowRewardModal(false)}
+                coins={COIN_REWARD}
+                xp={XP_REWARD}
+            />
         </div>
     );
 };

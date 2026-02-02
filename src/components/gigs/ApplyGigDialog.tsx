@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Zap, Loader2, Send } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 interface ApplyGigDialogProps {
     gigId: string;
@@ -27,23 +28,44 @@ export const ApplyGigDialog = ({ gigId, gigTitle, gigBudget, trigger }: ApplyGig
         setLoading(true);
 
         try {
-            // Simulate - feature coming soon
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            const { data: { user } } = await supabase.auth.getUser();
+
+            if (!user) {
+                toast({
+                    title: "Authentication Required",
+                    description: "Please sign in to apply for this gig.",
+                    variant: "destructive"
+                });
+                return;
+            }
+
+            const { error } = await supabase
+                .from('gig_applications' as any)
+                .insert({
+                    gig_id: gigId,
+                    applicant_id: user.id,
+                    proposal: proposal,
+                    bid_amount: parseFloat(bidAmount),
+                    expected_timeline: timeline,
+                    status: 'pending'
+                });
+
+            if (error) throw error;
 
             toast({
                 title: "Application Submitted! ⚡",
-                description: `Your proposal for "${gigTitle}" has been noted. Full feature coming soon!`,
+                description: `Your proposal for "${gigTitle}" has been sent successfully.`,
             });
 
             setOpen(false);
             setProposal("");
             setTimeline("");
 
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error applying:", error);
             toast({
                 title: "Error sending application",
-                description: "Something went wrong. Please try again.",
+                description: error.message || "Something went wrong. Please try again.",
                 variant: "destructive"
             });
         } finally {

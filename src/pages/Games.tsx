@@ -181,7 +181,7 @@ const Games = React.memo(() => {
                     {/* Decorative background for leaderboard */}
                     <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-purple-500/10 rounded-[2rem] -m-4 blur-xl" />
                     <div className="relative bg-card/50 backdrop-blur-sm rounded-[2rem] border border-border p-6 shadow-xl">
-                        <GameLeaderboard currentUserId={userId} />
+                        <GameLeaderboard currentUserId={userId} variant="gamer" />
                     </div>
                 </motion.div>
 

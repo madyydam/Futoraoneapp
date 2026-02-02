@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import confetti from "canvas-confetti";
 import { useGameReward } from "@/hooks/useGameReward";
+import { WinCelebration } from "@/components/games/WinCelebration";
 import { motion, AnimatePresence } from "framer-motion";
 import { useGameSounds } from "@/hooks/useGameSounds";
 import { HowToPlay } from "@/components/games/HowToPlay";
@@ -42,7 +43,13 @@ ChoiceButton.displayName = "ChoiceButton";
 const RockPaperScissors = () => {
     const navigate = useNavigate();
     const playSound = useGameSounds();
-    const { triggerWinReward } = useGameReward();
+    const {
+        triggerWinReward,
+        showRewardModal,
+        setShowRewardModal,
+        COIN_REWARD,
+        XP_REWARD
+    } = useGameReward();
     const [p1Choice, setP1Choice] = useState<Choice>(null);
     const [p2Choice, setP2Choice] = useState<Choice>(null);
     const [turn, setTurn] = useState<1 | 2>(1); // For Stats/Turn display
@@ -473,6 +480,13 @@ const RockPaperScissors = () => {
                 </AnimatePresence>
             </div>
 
+            {/* Win Celebration Modal */}
+            <WinCelebration
+                isOpen={showRewardModal}
+                onClose={() => setShowRewardModal(false)}
+                coins={COIN_REWARD}
+                xp={XP_REWARD}
+            />
         </div>
     );
 };
