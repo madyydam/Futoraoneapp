@@ -13,6 +13,7 @@ import type { User } from "@supabase/supabase-js";
 import { useToast } from "@/hooks/use-toast";
 import { EditProfileDialog } from "@/components/EditProfileDialog";
 import { LogoutDialog } from "@/components/LogoutDialog";
+import { useHelpTour } from "@/contexts/HelpTourContext";
 import { BottomNav } from "@/components/BottomNav";
 import { FollowersModal } from "@/components/FollowersModal";
 import { ProfileProjects } from "@/components/ProfileProjects";
@@ -137,6 +138,22 @@ const Profile = () => {
   const [followersModalOpen, setFollowersModalOpen] = useState(false);
   const [followersModalTab, setFollowersModalTab] = useState<"followers" | "following">("followers");
   const [qrCodeDialogOpen, setQrCodeDialogOpen] = useState(false);
+  const { registerAction } = useHelpTour();
+
+  // Register tour actions
+  useEffect(() => {
+    const unregisterEdit = registerAction("openEditProfile", () => setEditDialogOpen(true));
+    const unregisterAvatar = registerAction("openAvatarEdit", () => navigate("/select-avatar"));
+    const unregisterWallet = registerAction("openWallet", () => navigate("/wallet"));
+    const unregisterLeaderboard = registerAction("openLeaderboard", () => navigate("/leaderboard"));
+
+    return () => {
+      unregisterEdit();
+      unregisterAvatar();
+      unregisterWallet();
+      unregisterLeaderboard();
+    };
+  }, [registerAction, navigate]);
 
   const { data: profileData, isLoading, refetch } = useQuery({
     queryKey: ['userProfile', user?.id],
@@ -260,8 +277,12 @@ const Profile = () => {
           <Card className="bg-card border-border">
             <CardContent className="p-6">
               <div className="flex items-start justify-between mb-4">
-                <div className="relative">
-                  <div className={`rounded-full ${profile?.verification_category === 'creator'
+                <div
+                  className="relative cursor-pointer group"
+                  id="edit-avatar-trigger"
+                  onClick={() => navigate("/select-avatar")}
+                >
+                  <div className={`rounded-full transition-transform group-hover:scale-105 ${profile?.verification_category === 'creator'
                     ? "p-[3px] bg-gradient-to-tr from-[#FFD700] via-[#FDB931] to-[#C0B283] shadow-[0_0_15px_rgba(255,215,0,0.5)]"
                     : ""
                     }`}>
@@ -275,9 +296,12 @@ const Profile = () => {
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <ModeToggle />
+                  <div id="theme-toggle">
+                    <ModeToggle />
+                  </div>
 
                   <Button
+                    id="edit-profile-btn"
                     variant="outline"
                     size="sm"
                     className="border-border text-foreground"
@@ -317,7 +341,7 @@ const Profile = () => {
               </div>
 
               {/* Social Links - Always visible, smart click handling */}
-              <div className="flex gap-3 mt-4">
+              <div className="flex gap-3 mt-4" id="social-links">
                 <SocialLinkButton
                   url={profile?.github_url}
                   icon={<Github size={18} />}
@@ -349,7 +373,7 @@ const Profile = () => {
               </div>
 
               {/* Stats */}
-              <div className="flex gap-6 mt-4 pt-4 border-t border-border">
+              <div className="flex gap-6 mt-4 pt-4 border-t border-border" id="followers-following">
                 <div>
                   <p className="text-xl font-bold text-foreground">{projects.length}</p>
                   <p className="text-sm text-muted-foreground">Projects</p>
@@ -395,7 +419,9 @@ const Profile = () => {
           )}
 
           {/* Wallet Section */}
-          <WalletCard />
+          <div id="wallet-card-trigger">
+            <WalletCard />
+          </div>
 
           {/* Stats Dashboard */}
           <ProfileStatsCard
@@ -435,7 +461,7 @@ const Profile = () => {
 
           {/* Badges Section */}
           {profile?.badges && profile.badges.length > 0 && (
-            <Card className="bg-card border-border">
+            <Card className="bg-card border-border" id="badges-section">
               <CardContent className="p-4">
                 <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
                   Validation Badges
@@ -507,6 +533,7 @@ const Profile = () => {
 
           {/* Feedback Button */}
           <Button
+            id="report-problem-btn"
             onClick={() => navigate("/feedback")}
             variant="outline"
             className="w-full border-muted-foreground/30 text-foreground hover:bg-secondary flex items-center justify-center gap-2 h-12 rounded-xl mb-3"

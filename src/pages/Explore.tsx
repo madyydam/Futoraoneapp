@@ -3,15 +3,14 @@ import { useNavigate } from "react-router-dom";
 import { BottomNav } from "@/components/BottomNav";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { useDebounce } from "@/hooks/use-debounce";
 import { SEO } from "@/components/SEO";
-import {
-  ExploreHeader,
-  OpportunitySection,
-  UserGrid,
-  CategoryGrid,
-  TrendingSection,
-  UserProfile
-} from "@/components/explore/ExploreComponents";
+import { ExploreHeader, UserProfile, SearchResult } from "@/components/explore/ExploreHeader";
+import { OpportunitySection } from "@/components/explore/OpportunitySection";
+import { UserGrid } from "@/components/explore/UserGrid";
+import { CategoryGrid } from "@/components/explore/CategoryGrid";
+import { TrendingSection } from "@/components/explore/TrendingSection";
+import { TRENDING_TOPICS, TRENDING_PROJECTS } from "@/components/explore/exploreConstants";
 import type { User } from "@supabase/supabase-js";
 
 const Explore = () => {
@@ -19,7 +18,7 @@ const Explore = () => {
   const [people, setPeople] = useState<UserProfile[]>([]);
   const [loadingPeople, setLoadingPeople] = useState(true);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [searchResults, setSearchResults] = useState<UserProfile[]>([]);
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [showResults, setShowResults] = useState(false);
   const navigate = useNavigate();
@@ -70,24 +69,70 @@ const Explore = () => {
   }, []);
 
   const performSearch = useCallback(async (query: string) => {
+    if (!query.trim()) return;
     setSearchLoading(true);
     setShowResults(true);
+
     try {
-      const { data, error } = await supabase
+      // 1. Search People (Supabase)
+      const { data: profiles, error } = await supabase
         .from("profiles")
         .select("id, username, full_name, avatar_url, is_verified")
         .or(`username.ilike.%${query}%,full_name.ilike.%${query}%`)
-        .limit(5);
+        .limit(3);
 
-      if (!error && data) {
-        setSearchResults(data);
-      }
+      const peopleResults: SearchResult[] = (profiles || []).map(p => ({
+        id: p.id,
+        type: 'person',
+        title: p.full_name || p.username,
+        subtitle: p.username,
+        image: p.avatar_url,
+        is_verified: p.is_verified,
+        meta: 'Member'
+      }));
+
+      // 2. Search Topics (Local Constants)
+      const topicResults: SearchResult[] = TRENDING_TOPICS
+        .filter(t => t.tag.toLowerCase().includes(query.toLowerCase()))
+        .slice(0, 2)
+        .map(t => ({
+          id: t.tag,
+          type: 'topic',
+          title: t.tag,
+          subtitle: `${t.posts} Posts`,
+          meta: 'Trending'
+        }));
+
+      // 3. Search Projects (Local Constants)
+      const projectResults: SearchResult[] = TRENDING_PROJECTS
+        .filter(p => p.title.toLowerCase().includes(query.toLowerCase()) || p.tech.some(t => t.toLowerCase().includes(query.toLowerCase())))
+        .slice(0, 2)
+        .map(p => ({
+          id: p.title,
+          type: 'project',
+          title: p.title,
+          subtitle: `by ${p.author}`,
+          meta: `${p.likes} Likes`
+        }));
+
+      setSearchResults([...peopleResults, ...topicResults, ...projectResults]);
     } catch (error) {
       console.error("Search error:", error);
     } finally {
       setSearchLoading(false);
     }
   }, []);
+
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
+
+  useEffect(() => {
+    if (debouncedSearchQuery.trim()) {
+      performSearch(debouncedSearchQuery);
+    } else {
+      setSearchResults([]);
+      setShowResults(false);
+    }
+  }, [debouncedSearchQuery, performSearch]);
 
   useEffect(() => {
     fetchCurrentUser();
@@ -111,23 +156,33 @@ const Explore = () => {
           if (!updatedProfile || !updatedProfile.id) return;
 
           // Helper to update specific profile in a list
-          const updateList = (list: UserProfile[]) => {
-            return list.map(p => {
-              if (p.id === updatedProfile.id) {
-                return {
-                  ...p,
-                  username: updatedProfile.username || p.username,
-                  full_name: updatedProfile.full_name || p.full_name,
-                  avatar_url: updatedProfile.avatar_url || p.avatar_url,
-                  is_verified: updatedProfile.is_verified !== undefined ? updatedProfile.is_verified : p.is_verified
-                };
-              }
-              return p;
-            });
-          };
+          // Update people list
+          setPeople(currentPeople => currentPeople.map(p => {
+            if (p.id === updatedProfile.id) {
+              return {
+                ...p,
+                username: updatedProfile.username || p.username,
+                full_name: updatedProfile.full_name || p.full_name,
+                avatar_url: updatedProfile.avatar_url || p.avatar_url,
+                is_verified: updatedProfile.is_verified !== undefined ? updatedProfile.is_verified : p.is_verified
+              };
+            }
+            return p;
+          }));
 
-          setPeople(currentPeople => updateList(currentPeople));
-          setSearchResults(currentResults => updateList(currentResults));
+          // Update search results
+          setSearchResults(currentResults => currentResults.map(p => {
+            if (p.type === 'person' && p.id === updatedProfile.id) {
+              return {
+                ...p,
+                title: updatedProfile.full_name || p.title,
+                subtitle: updatedProfile.username || p.subtitle,
+                image: updatedProfile.avatar_url || p.image,
+                is_verified: updatedProfile.is_verified !== undefined ? updatedProfile.is_verified : p.is_verified
+              } as SearchResult;
+            }
+            return p;
+          }));
         }
       )
       .subscribe((status) => {

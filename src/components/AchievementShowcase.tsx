@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, memo, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
+import { useHelpTour } from "@/contexts/HelpTourContext";
 import { motion, AnimatePresence, Variants } from "framer-motion";
 import {
     Trophy,
@@ -24,6 +25,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
+import { useQuery } from "@tanstack/react-query";
 
 interface Achievement {
     id: string;
@@ -69,100 +71,119 @@ const IconMap: { [key: string]: React.ElementType } = {
 export const AchievementShowcase = memo(({ userId }: { userId?: string }) => {
     const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState<'badges' | 'leaderboard'>('badges');
-    const [achievements, setAchievements] = useState<Achievement[]>(DEFAULT_ACHIEVEMENTS);
-    const [leaderboard, setLeaderboard] = useState<LeaderboardUser[]>([]);
-    const [loading, setLoading] = useState(true);
     const [showAllBadges, setShowAllBadges] = useState(false);
-    const [currentUserRank, setCurrentUserRank] = useState<{ rank: number, user: LeaderboardUser } | null>(null);
     const [currentViewerId, setCurrentViewerId] = useState<string | null>(null);
     const { toast } = useToast();
+    const { registerAction } = useHelpTour();
 
-    const fetchData = useCallback(async () => {
-        setLoading(true);
-        try {
-            // Determine which user to fetch for
-            let targetId = userId;
-            if (!targetId) {
-                const { data: { user } } = await supabase.auth.getUser();
-                if (user) targetId = user.id;
-            }
+    // Register tour actions
+    useEffect(() => {
+        const unregisterBadges = registerAction("openBadges", () => setActiveTab("badges"));
+        const unregisterLeaderboard = registerAction("openLeaderboard", () => setActiveTab("leaderboard"));
 
-            if (!targetId) {
-                setLoading(false);
-                return;
-            }
+        return () => {
+            unregisterBadges();
+            unregisterLeaderboard();
+        };
+    }, [registerAction]);
 
-            setCurrentViewerId(targetId);
+    const targetId = useMemo(() => userId || currentViewerId, [userId, currentViewerId]);
 
-            // Fetch developer-defined achievements (Master list)
-            const { data: masterData } = await supabase
+    // Auth User Query
+    const { data: authUser } = useQuery({
+        queryKey: ["auth_user"],
+        queryFn: async () => {
+            const { data: { user } } = await supabase.auth.getUser();
+            return user;
+        },
+        enabled: !userId,
+        staleTime: Infinity,
+    });
+
+    useEffect(() => {
+        if (authUser) setCurrentViewerId(authUser.id);
+    }, [authUser]);
+
+    // Master Achievements Query
+    const { data: masterAchievements = [] } = useQuery({
+        queryKey: ["master_achievements"],
+        queryFn: async () => {
+            const { data, error } = await (supabase as any)
                 .from('master_achievements')
                 .select('*')
                 .order('xp_reward', { ascending: true });
+            if (error) throw error;
+            return data;
+        },
+        staleTime: 1000 * 60 * 60, // 1 hour
+    });
 
-            // Fetch user-unlocked achievements
-            const { data: userData } = await supabase
+    // User Unlocked Achievements Query
+    const { data: userUnlocked = [] } = useQuery({
+        queryKey: ["user_achievements", targetId],
+        queryFn: async () => {
+            if (!targetId) return [];
+            const { data, error } = await (supabase as any)
                 .from('user_achievements')
                 .select('achievement_id, unlocked_at')
                 .eq('user_id', targetId);
+            if (error) throw error;
+            return data;
+        },
+        enabled: !!targetId,
+    });
 
-            if (masterData) {
-                const mergedAchievements = masterData.map((master: any) => {
-                    const userUnlock = userData?.find(u => u.achievement_id === master.id);
-                    return {
-                        id: master.id,
-                        title: master.title,
-                        description: master.description,
-                        icon_name: master.icon_name,
-                        xp_reward: master.xp_reward,
-                        unlocked_at: userUnlock?.unlocked_at
-                    };
-                });
-                setAchievements(mergedAchievements);
-            }
-
-            // Fetch leaderboard from profiles (using real XP data)
-            const { data: profiles } = await supabase
+    // Leaderboard Query
+    const { data: profiles = [], isLoading: profilesLoading } = useQuery({
+        queryKey: ["leaderboard_top"],
+        queryFn: async () => {
+            const { data, error } = await supabase
                 .from('profiles')
                 .select('*')
                 .limit(100)
                 .order('xp', { ascending: false });
+            if (error) throw error;
+            return data;
+        },
+        staleTime: 1000 * 60 * 5, // 5 minutes
+    });
 
-            if (profiles) {
-                // Map to our LeaderboardUser interface, handling missing columns
-                const sortedUsers = (profiles as any[]).map(p => ({
-                    id: p.id,
-                    username: p.username,
-                    avatar_url: p.avatar_url,
-                    xp: p.xp || 0,
-                    level: p.level || 1
-                }));
+    // Processed Achievements
+    const achievements = useMemo(() => {
+        if (!masterAchievements || masterAchievements.length === 0) return DEFAULT_ACHIEVEMENTS;
+        return masterAchievements.map((master: any) => {
+            const userUnlock = userUnlocked?.find(u => u.achievement_id === master.id);
+            return {
+                id: master.id,
+                title: master.title,
+                description: master.description,
+                icon_name: master.icon_name,
+                xp_reward: master.xp_reward,
+                unlocked_at: userUnlock?.unlocked_at
+            };
+        });
+    }, [masterAchievements, userUnlocked]);
 
-                const userIndex = sortedUsers.findIndex(u => u.id === targetId);
+    // Processed Leaderboard
+    const leaderboardData = useMemo(() => {
+        const sortedUsers = (profiles as any[]).map(p => ({
+            id: p.id,
+            username: p.username,
+            avatar_url: p.avatar_url,
+            xp: p.xp || 0,
+            level: p.level || 1
+        }));
 
-                // Show top 10 for better experience
-                setLeaderboard(sortedUsers.slice(0, 10));
+        const userIndex = targetId ? sortedUsers.findIndex(u => u.id === targetId) : -1;
+        const top10 = sortedUsers.slice(0, 10);
+        const userRank = userIndex >= 10 ? { rank: userIndex + 1, user: sortedUsers[userIndex] } : null;
 
-                if (userIndex >= 10) {
-                    setCurrentUserRank({
-                        rank: userIndex + 1,
-                        user: sortedUsers[userIndex]
-                    });
-                } else {
-                    setCurrentUserRank(null);
-                }
-            }
+        return { top10, userRank };
+    }, [profiles, targetId]);
 
-        } catch (error) {
-            console.error("Error fetching gamification data:", error);
-        } finally {
-            setLoading(false);
-        }
-    }, [userId]);
-
-    useEffect(() => {
-        fetchData();
-    }, [fetchData]);
+    const loading = profilesLoading;
+    const leaderboard = leaderboardData.top10;
+    const currentUserRank = leaderboardData.userRank;
 
     const handleShare = useCallback(async () => {
         const unlockedCount = achievements.filter(a => a.unlocked_at).length;
@@ -188,7 +209,6 @@ export const AchievementShowcase = memo(({ userId }: { userId?: string }) => {
         }
     }, [achievements, toast]);
 
-    // Enhanced animation variants with proper typing
     const containerVariants: Variants = {
         hidden: { opacity: 0, scale: 0.95 },
         visible: {
@@ -249,11 +269,10 @@ export const AchievementShowcase = memo(({ userId }: { userId?: string }) => {
         }
     };
 
-    // Determine which achievements to display
     const visibleAchievements = showAllBadges ? achievements : achievements.slice(0, 4);
 
     return (
-        <Card className="bg-white/10 dark:bg-black/20 backdrop-blur-lg border-white/20 dark:border-white/10 overflow-hidden">
+        <Card id="achievement-hall-of-fame" className="bg-white/10 dark:bg-black/20 backdrop-blur-lg border-white/20 dark:border-white/10 overflow-hidden">
             <div className="p-6">
                 <div className="flex items-center justify-between mb-6">
                     <h2 className="text-2xl font-bold flex items-center gap-2 bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-transparent">
@@ -289,7 +308,7 @@ export const AchievementShowcase = memo(({ userId }: { userId?: string }) => {
                     </div>
                 </div>
 
-                <div className="flex bg-muted/20 p-1 rounded-xl mb-6">
+                <div id="achievement-tabs" className="flex bg-muted/20 p-1 rounded-xl mb-6">
                     <button
                         className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === 'badges'
                             ? 'bg-primary text-primary-foreground shadow-lg'

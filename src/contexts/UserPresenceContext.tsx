@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, ReactNode, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { User } from "@supabase/supabase-js";
 import { RealtimeChannel } from "@supabase/supabase-js";
@@ -159,8 +159,10 @@ export const UserPresenceProvider = ({ children }: { children: ReactNode }) => {
         };
     }, [user]);
 
+    const value = useMemo(() => ({ onlineUsers }), [onlineUsers]);
+
     return (
-        <UserPresenceContext.Provider value={{ onlineUsers }}>
+        <UserPresenceContext.Provider value={value}>
             {children}
         </UserPresenceContext.Provider>
     );

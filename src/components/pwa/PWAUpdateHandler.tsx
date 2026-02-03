@@ -14,13 +14,11 @@ export const PWAUpdateHandler = () => {
         },
     });
 
-    if (!sw) return null;
-
     const {
-        offlineReady: [offlineReady, setOfflineReady],
-        needUpdate: [needUpdate, setNeedUpdate],
-        updateServiceWorker,
-    } = sw;
+        offlineReady: [offlineReady, setOfflineReady] = [false, () => { }],
+        needUpdate: [needUpdate, setNeedUpdate] = [false, () => { }],
+        updateServiceWorker = () => { },
+    } = sw || {};
 
     const close = () => {
         setOfflineReady(false);

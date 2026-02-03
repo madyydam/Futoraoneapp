@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
+import { Client } from 'pg';
 
 // Load environment variables
 dotenv.config();
@@ -31,7 +32,6 @@ async function applyMigration() {
         // Let's check package.json for 'pg'. It was there!
 
         // Changing approach to use 'pg' directly as it is more reliable for raw SQL migrations
-        const { Client } = require('pg');
 
         // Connection string construction (assuming Supabase standard format)
         // postgres://postgres:[password]@db.[project-ref].supabase.co:5432/postgres

@@ -31,7 +31,7 @@ export const useGameSounds = () => {
                 case 'click':
                     createOscillator('square', 400, 0.05, context);
                     break;
-                case 'win':
+                case 'win': {
                     // Fanfare-ish sequence
                     const now = context.currentTime;
                     [523.25, 659.25, 783.99, 1046.50].forEach((freq, i) => {
@@ -47,6 +47,7 @@ export const useGameSounds = () => {
                         osc.stop(now + i * 0.1 + 0.3);
                     });
                     break;
+                }
                 case 'lose':
                     createOscillator('sawtooth', 150, 0.4, context);
                     break;

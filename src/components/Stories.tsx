@@ -241,7 +241,7 @@ export const Stories = memo(() => {
 
     return (
         <>
-            <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
+            <div id="stories-row" className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
                 {/* My Story */}
                 <div
                     className="flex flex-col items-center gap-1 min-w-[72px] cursor-pointer relative group"

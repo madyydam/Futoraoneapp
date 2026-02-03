@@ -140,7 +140,7 @@ export const FeedPost = memo(({ post, currentUser, onLike, onSave, onShare, onDe
             />
           </div>
 
-          <div className="px-6 pb-4 pt-2">
+          <div className="px-6 pb-4 pt-2" id={index === 0 ? "post-actions-0" : undefined}>
             <PostActions
               likeCount={post.likes.length}
               commentCount={post.comments.length}

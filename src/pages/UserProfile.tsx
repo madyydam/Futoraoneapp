@@ -21,6 +21,10 @@ import { ProfileHeader } from "@/components/profile/ProfileHeader";
 import { ProfileStats } from "@/components/profile/ProfileStats";
 import { ProfileTabs } from "@/components/profile/ProfileTabs";
 import { SEO } from "@/components/SEO";
+import { DynamicProfileHeader } from "@/components/profile/DynamicProfileHeader";
+import { VibeSelector } from "@/components/profile/VibeSelector";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Palette, Sparkles } from "lucide-react";
 
 interface Profile {
     id: string;
@@ -36,6 +40,8 @@ interface Profile {
     is_verified?: boolean | null;
     verification_category?: string | null;
     theme_color?: string | null;
+    vibe_mood?: string | null;
+    vibe_status?: string | null;
     badges?: string[] | null;
     trust_score?: number | null;
     balance?: number;
@@ -88,6 +94,7 @@ const UserProfile = () => {
 
     const [isBlocked, setIsBlocked] = useState(false);
     const [showBlockDialog, setShowBlockDialog] = useState(false);
+    const [isVibeModalOpen, setIsVibeModalOpen] = useState(false);
 
     useTrackProfileView(userId, currentUser?.id);
     const { mutualCount } = useMutualFollowers(currentUser?.id, userId);
@@ -254,6 +261,44 @@ const UserProfile = () => {
         }
     };
 
+    const handleSaveVibe = async (vibe: { mood: string; color: string; status: string }) => {
+        if (!userId) return;
+
+        try {
+            const { error } = await supabase
+                .from('profiles')
+                .update({
+                    theme_color: vibe.color,
+                    bio: vibe.status,
+                    // @ts-ignore
+                    vibe_mood: vibe.mood,
+                })
+                .eq('id', userId);
+
+            if (error) throw error;
+
+            toast({
+                title: "Vibe Locked! 🚀",
+                description: "Your profile has been updated with your new energy.",
+            });
+
+            setProfile(prev => prev ? {
+                ...prev,
+                theme_color: vibe.color,
+                bio: vibe.status,
+                vibe_mood: vibe.mood
+            } : null);
+            setIsVibeModalOpen(false);
+        } catch (error) {
+            console.error('Error saving vibe:', error);
+            toast({
+                title: "Error",
+                description: "Failed to update vibe",
+                variant: "destructive",
+            });
+        }
+    };
+
     const fetchData = useCallback(async () => {
         const { data: { user } } = await supabase.auth.getUser();
         setCurrentUser(user);
@@ -297,7 +342,9 @@ const UserProfile = () => {
             tech_skills: profileData.tech_skills,
             verification_category: isSanu ? 'creator' : profileData.verification_category,
             is_verified: isSanu ? true : profileData.is_verified,
-            theme_color: isSanu ? '#FFE6EA' : undefined,
+            theme_color: isSanu ? '#FFE6EA' : profileData.theme_color,
+            vibe_mood: (profileData as any).vibe_mood || '😎',
+            vibe_status: profileData.bio,
         };
 
         // Fetch wallet balance
@@ -365,18 +412,35 @@ const UserProfile = () => {
                 description={profile?.bio || `Check out ${profile?.full_name || 'this user'}'s profile on Futora.`}
                 image={profile?.avatar_url || undefined}
             />
-            <div className="relative h-32 w-full">
-                {!profile?.theme_color && <div className="absolute inset-0 gradient-primary" />}
-                {profile?.theme_color && <div className="absolute inset-0 bg-black/5" />}
+            <DynamicProfileHeader
+                color={profile?.theme_color || null}
+                mood={profile?.vibe_mood || undefined}
+            />
+
+            <div className="absolute top-4 left-4 z-20">
                 <Button
                     variant="ghost"
                     size="icon"
-                    className="absolute top-4 left-4 text-foreground hover:bg-black/10"
+                    className="text-white hover:bg-black/10 backdrop-blur-md rounded-full"
                     onClick={() => navigate(-1)}
                 >
                     <ArrowLeft className="w-6 h-6" />
                 </Button>
             </div>
+
+            {currentUser?.id === userId && (
+                <div className="absolute top-4 right-4 z-20">
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setIsVibeModalOpen(true)}
+                        className="bg-white/20 hover:bg-white/30 text-white backdrop-blur-md rounded-full gap-2 border border-white/30"
+                    >
+                        <Sparkles className="w-4 h-4" />
+                        Set Vibe
+                    </Button>
+                </div>
+            )}
 
             <div className="px-3 sm:px-4 -mt-12 sm:-mt-16 relative z-10">
                 <motion.div
@@ -490,6 +554,25 @@ const UserProfile = () => {
                 }}
                 username={profile?.username || ""}
             />
+
+            <Dialog open={isVibeModalOpen} onOpenChange={setIsVibeModalOpen}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="text-2xl font-bold flex items-center gap-2">
+                            <Sparkles className="w-6 h-6 text-primary" />
+                            Your Energy, Your Vibe
+                        </DialogTitle>
+                    </DialogHeader>
+                    <VibeSelector
+                        initialVibe={{
+                            mood: profile?.vibe_mood || '😎',
+                            color: profile?.theme_color || '#3B82F6',
+                            status: profile?.bio || ''
+                        }}
+                        onSave={handleSaveVibe}
+                    />
+                </DialogContent>
+            </Dialog>
 
             <BottomNav />
         </div>

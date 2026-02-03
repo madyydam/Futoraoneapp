@@ -180,7 +180,11 @@ export const ProfileHeader = memo(({
                                             className="text-destructive focus:text-destructive cursor-pointer"
                                             onClick={(e) => {
                                                 e.stopPropagation();
-                                                isBlocked ? onUnblockUser() : onBlockUser();
+                                                if (isBlocked) {
+                                                    onUnblockUser();
+                                                } else {
+                                                    onBlockUser();
+                                                }
                                             }}
                                         >
                                             {isBlocked ? "Unblock User" : "Block User"}

@@ -43,11 +43,13 @@ export default function Wallet() {
             if (!user) return null;
 
             // @ts-ignore
-            let { data: walletRecord, error } = await supabase
+            const { data: walletRecordRaw, error } = await supabase
                 .from('native_wallets')
                 .select('*')
                 .eq('user_id', user.id)
                 .maybeSingle();
+
+            let walletRecord = walletRecordRaw;
 
             // Auto-create wallet if missing (Welcome Bonus Logic)
             if (!walletRecord) {

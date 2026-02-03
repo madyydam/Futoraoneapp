@@ -38,6 +38,7 @@ export const BottomNav = React.memo(() => {
         <Button
           variant={isActive("/feed") ? "default" : "ghost"}
           size="icon"
+          id="nav-home"
           className={`rounded-xl transition-all ${isActive("/feed") ? "bg-primary text-primary-foreground shadow-md" : "hover:bg-muted"}`}
           onClick={() => handleNavigate("/feed")}
         >
@@ -73,6 +74,7 @@ export const BottomNav = React.memo(() => {
           <Button
             variant={isActive("/messages") ? "default" : "ghost"}
             size="icon"
+            id="messages-tab-link"
             className={`rounded-xl transition-all ${isActive("/messages") ? "bg-primary text-primary-foreground shadow-md" : "hover:bg-muted"}`}
             onClick={() => handleNavigate("/messages")}
           >

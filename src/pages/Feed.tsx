@@ -10,6 +10,7 @@ import { FeedSkeleton } from "@/components/feed/FeedSkeleton";
 import { AchievementShowcase } from "@/components/AchievementShowcase";
 import { GamificationBar } from "@/components/GamificationBar";
 import { useFeedLogic } from "@/hooks/useFeedLogic";
+import { useHelpTour } from "@/contexts/HelpTourContext";
 
 // Lazy load Stories component
 const Stories = lazy(() => import("@/components/Stories").then(m => ({ default: m.Stories })));
@@ -30,6 +31,17 @@ const Feed = () => {
   } = useFeedLogic();
 
   const { ref, inView } = useInView();
+  const { startTour, completedTours } = useHelpTour();
+
+  useEffect(() => {
+    // Start mandatory tour for first-time users
+    if (!loading && user && !completedTours.includes("feed")) {
+      const timer = setTimeout(() => {
+        startTour("feed", true);
+      }, 1500); // Small delay for content to settle
+      return () => clearTimeout(timer);
+    }
+  }, [loading, user, completedTours, startTour]);
 
   useEffect(() => {
     if (inView && hasMore && !loading) {
@@ -57,7 +69,9 @@ const Feed = () => {
         </div>
 
         {/* Gamification Bar */}
-        <GamificationBar userProfile={userProfile as any} />
+        <div id="gamification-bar">
+          <GamificationBar userProfile={userProfile as any} />
+        </div>
 
         {/* Posts */}
         <div className="space-y-6">

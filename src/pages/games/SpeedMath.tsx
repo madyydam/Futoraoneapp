@@ -59,11 +59,11 @@ const SpeedMath = () => {
     }, [isPlaying, timeLeft]);
 
     const generateProblem = (): Problem => {
-        let num1: number, num2: number, operation: Operation, answer: number;
+        let num1: number, num2: number, answer: number;
 
         const maxNum = difficulty === 'easy' ? 20 : difficulty === 'medium' ? 50 : 100;
 
-        operation = OPERATIONS[Math.floor(Math.random() * OPERATIONS.length)];
+        const operation = OPERATIONS[Math.floor(Math.random() * OPERATIONS.length)];
 
         switch (operation) {
             case '+':
