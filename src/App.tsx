@@ -114,27 +114,6 @@ const persister = createSyncStoragePersister({
   storage: window.localStorage,
 });
 
-const OnboardingAutoStart = () => {
-  const { startTour, completedTours, activeTour } = useHelpTour();
-
-  useEffect(() => {
-    const isAuth = !!localStorage.getItem('supabase.auth.token') || !!document.cookie.includes('sb-');
-
-    // If user is logged in, not in a tour, and has not completed the 'feed' tour
-    if (!activeTour && !completedTours.includes('feed')) {
-      // Delay slightly to ensure UI is ready
-      const timer = setTimeout(() => {
-        // Only start if we are on the feed or home
-        if (window.location.pathname === '/feed' || window.location.pathname === '/') {
-          startTour('feed', true); // mandatory = true
-        }
-      }, 2000);
-      return () => clearTimeout(timer);
-    }
-  }, [completedTours, activeTour, startTour]);
-
-  return null;
-};
 
 const App = () => {
   return (
@@ -152,7 +131,6 @@ const App = () => {
             <HelpTourProvider>
               <GlobalErrorBoundary>
                 <BrowserRouter>
-                  <OnboardingAutoStart />
                   <ScrollToTop />
                   <BroadcastPopup />
                   <GlobalTourSystem />

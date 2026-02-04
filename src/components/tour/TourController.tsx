@@ -191,11 +191,9 @@ export const TourController = () => {
                                 </div>
                                 <h4 className="font-bold text-lg">{activeStep.title}</h4>
                             </div>
-                            {!isMandatory && (
-                                <Button variant="ghost" size="icon" className="h-8 w-8 -mr-2" onClick={endTour}>
-                                    <X className="w-4 h-4" />
-                                </Button>
-                            )}
+                            <Button variant="ghost" size="icon" className="h-8 w-8 -mr-2" onClick={endTour}>
+                                <X className="w-4 h-4" />
+                            </Button>
                         </div>
 
                         <p className="text-sm text-muted-foreground leading-relaxed mb-4">

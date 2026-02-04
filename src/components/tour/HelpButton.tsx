@@ -25,9 +25,10 @@ export const HelpButton = ({ currentPageId }: HelpButtonProps) => {
                 <Button
                     size="icon"
                     variant="ghost"
-                    className="w-8 h-8 rounded-full bg-primary/5 backdrop-blur-sm border border-primary/10 hover:bg-primary/10 transition-all"
+                    className="w-10 h-10 rounded-full bg-primary/10 backdrop-blur-sm border-2 border-primary/20 hover:bg-primary/20 transition-all shadow-sm hover:scale-110 active:scale-95"
+                    title="Help & Tour"
                 >
-                    <HelpCircle className="w-5 h-5 text-muted-foreground/70" />
+                    <HelpCircle className="w-6 h-6 text-primary" />
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-64 p-3 rounded-2xl shadow-xl border-primary/20 backdrop-blur-lg">

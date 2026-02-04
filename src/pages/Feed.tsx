@@ -33,15 +33,6 @@ const Feed = () => {
   const { ref, inView } = useInView();
   const { startTour, completedTours } = useHelpTour();
 
-  useEffect(() => {
-    // Start mandatory tour for first-time users
-    if (!loading && user && !completedTours.includes("feed")) {
-      const timer = setTimeout(() => {
-        startTour("feed", true);
-      }, 1500); // Small delay for content to settle
-      return () => clearTimeout(timer);
-    }
-  }, [loading, user, completedTours, startTour]);
 
   useEffect(() => {
     if (inView && hasMore && !loading) {
