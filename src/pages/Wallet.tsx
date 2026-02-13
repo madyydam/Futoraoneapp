@@ -2,8 +2,9 @@ import React, { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ArrowUpRight, ArrowDownLeft, Plus, Scan, Wallet as WalletIcon, MoreHorizontal, CreditCard, User, History, Zap, Lock, Eye, EyeOff, Copy } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, ArrowDownLeft, Plus, Scan, Wallet as WalletIcon, MoreHorizontal, CreditCard, User, History, Zap, Lock, Eye, EyeOff, Copy, MapPin, Github, Linkedin, Instagram, Globe, Shield, QrCode, Settings, Edit } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { motion, AnimatePresence } from "framer-motion";
@@ -27,6 +28,54 @@ interface Transaction {
     status: 'completed' | 'pending' | 'failed';
 }
 
+interface ProfileData {
+    id: string;
+    username: string;
+    full_name: string;
+    avatar_url: string | null;
+    bio: string | null;
+    location: string | null;
+    github_url: string | null;
+    linkedin_url: string | null;
+    instagram_url: string | null;
+    portfolio_url: string | null;
+    banner_url: string | null;
+    theme_color: string | null;
+}
+
+// --- Memoized Sub-Components ---
+
+const QuickAction = React.memo(({ icon: Icon, label, color = "bg-zinc-800", onClick }: { icon: any, label: string, color?: string, onClick?: () => void }) => (
+    <button onClick={onClick} className="flex flex-col items-center gap-2 group">
+        <div className={`w-14 h-14 rounded-2xl ${color} flex items-center justify-center border border-white/10 group-hover:scale-105 transition-transform shadow-lg shadow-black/50`}>
+            <Icon className="w-6 h-6 text-white" />
+        </div>
+        <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">{label}</span>
+    </button>
+));
+QuickAction.displayName = "QuickAction";
+
+const TransactionItem = React.memo(({ tx }: { tx: Transaction }) => {
+    const isCredit = ['deposit', 'cashback'].includes(tx.type);
+    return (
+        <div className="flex items-center justify-between p-4 bg-card/30 backdrop-blur-md rounded-2xl border border-white/5 mb-2 hover:bg-card/50 transition-colors">
+            <div className="flex items-center gap-4">
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isCredit ? 'bg-emerald-500/10 text-emerald-500' : 'bg-rose-500/10 text-rose-500'}`}>
+                    {isCredit ? <ArrowDownLeft className="w-5 h-5" /> : <ArrowUpRight className="w-5 h-5" />}
+                </div>
+                <div>
+                    <p className="font-bold text-sm text-white">{tx.description}</p>
+                    <p className="text-[10px] text-muted-foreground uppercase font-medium">{new Date(tx.created_at).toLocaleDateString()}</p>
+                </div>
+            </div>
+            <span className={`font-black tracking-tight ${isCredit ? 'text-emerald-400' : 'text-white'}`}>
+                {isCredit ? '+' : '-'} ₹{Math.abs(tx.amount).toLocaleString()}
+            </span>
+        </div>
+    );
+});
+TransactionItem.displayName = "TransactionItem";
+
 // --- Main Component ---
 export default function Wallet() {
     const navigate = useNavigate();
@@ -35,11 +84,19 @@ export default function Wallet() {
     const [loading, setLoading] = useState(true);
     const [showBalance, setShowBalance] = useState(true);
 
-    // --- Data Fetching ---
-    const { data: walletData, isLoading: walletLoading, refetch: refetchWallet } = useQuery({
-        queryKey: ["native_wallet_v2"],
+    // Get current user once
+    const { data: user } = useQuery({
+        queryKey: ["auth_user"],
         queryFn: async () => {
             const { data: { user } } = await supabase.auth.getUser();
+            return user;
+        }
+    });
+
+    // --- Data Fetching ---
+    const { data: walletData, isLoading: walletLoading, refetch: refetchWallet } = useQuery({
+        queryKey: ["native_wallet_v2", user?.id],
+        queryFn: async () => {
             if (!user) return null;
 
             // @ts-ignore
@@ -76,7 +133,8 @@ export default function Wallet() {
                 }
             }
             return walletRecord as unknown as WalletData;
-        }
+        },
+        enabled: !!user
     });
 
     const { data: transactionsData, isLoading: txLoading } = useQuery({
@@ -95,6 +153,20 @@ export default function Wallet() {
         enabled: !!walletData?.id
     });
 
+    const { data: profile } = useQuery({
+        queryKey: ["user_profile_wallet", user?.id],
+        queryFn: async () => {
+            if (!user) return null;
+            const { data } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', user.id)
+                .single();
+            return data as unknown as ProfileData;
+        },
+        enabled: !!user
+    });
+
     useEffect(() => {
         if (walletLoading || txLoading) return;
         setLoading(false);
@@ -102,38 +174,6 @@ export default function Wallet() {
 
     const currentWallet = walletData;
     const transactions = transactionsData || [];
-
-
-    // --- Sub-Components ---
-
-    const QuickAction = ({ icon: Icon, label, color = "bg-zinc-800" }: any) => (
-        <button className="flex flex-col items-center gap-2 group">
-            <div className={`w-14 h-14 rounded-2xl ${color} flex items-center justify-center border border-white/10 group-hover:scale-105 transition-transform shadow-lg shadow-black/50`}>
-                <Icon className="w-6 h-6 text-white" />
-            </div>
-            <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">{label}</span>
-        </button>
-    );
-
-    const TransactionItem = ({ tx }: { tx: Transaction }) => {
-        const isCredit = ['deposit', 'cashback'].includes(tx.type);
-        return (
-            <div className="flex items-center justify-between p-4 bg-card/30 backdrop-blur-md rounded-2xl border border-white/5 mb-2 hover:bg-card/50 transition-colors">
-                <div className="flex items-center gap-4">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isCredit ? 'bg-emerald-500/10 text-emerald-500' : 'bg-rose-500/10 text-rose-500'}`}>
-                        {isCredit ? <ArrowDownLeft className="w-5 h-5" /> : <ArrowUpRight className="w-5 h-5" />}
-                    </div>
-                    <div>
-                        <p className="font-bold text-sm text-white">{tx.description}</p>
-                        <p className="text-[10px] text-muted-foreground uppercase font-medium">{new Date(tx.created_at).toLocaleDateString()}</p>
-                    </div>
-                </div>
-                <span className={`font-black tracking-tight ${isCredit ? 'text-emerald-400' : 'text-white'}`}>
-                    {isCredit ? '+' : '-'} ₹{Math.abs(tx.amount).toLocaleString()}
-                </span>
-            </div>
-        );
-    };
 
     return (
         <div className="min-h-screen bg-[#050505] text-white flex flex-col font-sans selection:bg-cyan-500/30">
@@ -200,7 +240,12 @@ export default function Wallet() {
 
                             {/* Quick Actions */}
                             <div className="flex justify-between items-start px-2">
-                                <div onClick={() => setActiveTab("transfer")}><QuickAction icon={ArrowUpRight} label="Send" color="bg-gradient-to-b from-cyan-500 to-blue-600 border-none" /></div>
+                                <QuickAction
+                                    icon={ArrowUpRight}
+                                    label="Send"
+                                    color="bg-gradient-to-b from-cyan-500 to-blue-600 border-none"
+                                    onClick={() => setActiveTab("transfer")}
+                                />
                                 <QuickAction icon={ArrowDownLeft} label="Receive" />
                                 <QuickAction icon={Plus} label="Top Up" />
                                 <QuickAction icon={Scan} label="Scan" />
@@ -338,11 +383,120 @@ export default function Wallet() {
                                             <p className="text-[10px] text-muted-foreground">Enabled for all merchants</p>
                                         </div>
                                     </div>
-                                    <div className="w-10 h-6 bg-emerald-500 rounded-full relative cursor-pointer"><div className="absolute right-1 top-1 w-4 h-4 bg-white rounded-full shadow-sm"></div></div>
                                 </div>
                             </div>
                         </TabsContent>
 
+                        {/* === PROFILE TAB === */}
+                        <TabsContent value="profile" className="mt-0 space-y-6">
+                            {/* Profile Header Card */}
+                            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+                                <Card className="bg-[#0A0A0A] border-white/10 rounded-[2rem] overflow-hidden relative shadow-2xl">
+                                    <div
+                                        className="h-24 w-full bg-cover bg-center opacity-40"
+                                        style={{
+                                            backgroundImage: profile?.banner_url ? `url(${profile.banner_url})` : undefined,
+                                            backgroundColor: profile?.theme_color || '#1e1b4b'
+                                        }}
+                                    >
+                                        {!profile?.banner_url && !profile?.theme_color && <div className="absolute inset-0 bg-gradient-to-r from-cyan-900 to-purple-900" />}
+                                    </div>
+                                    <CardContent className="px-6 pb-6 pt-0 -mt-10 relative z-10">
+                                        <div className="flex items-end justify-between mb-4">
+                                            <div className="relative">
+                                                <Avatar className="h-24 w-24 border-4 border-[#0A0A0A] shadow-xl">
+                                                    <AvatarImage src={profile?.avatar_url || undefined} className="object-cover" />
+                                                    <AvatarFallback className="bg-zinc-800 text-cyan-400 text-2xl font-black">
+                                                        {profile?.full_name?.[0] || 'U'}
+                                                    </AvatarFallback>
+                                                </Avatar>
+                                                <div className="absolute bottom-1 right-1 bg-emerald-500 w-5 h-5 rounded-full border-4 border-[#0A0A0A]" />
+                                            </div>
+                                            <div className="flex gap-2 mb-2">
+                                                <Button variant="ghost" size="icon" className="rounded-full bg-white/5 hover:bg-white/10 h-10 w-10">
+                                                    <Edit className="w-4 h-4" />
+                                                </Button>
+                                                <Button variant="ghost" size="icon" className="rounded-full bg-white/5 hover:bg-white/10 h-10 w-10">
+                                                    <QrCode className="w-4 h-4" />
+                                                </Button>
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-1">
+                                            <div className="flex items-center gap-2">
+                                                <h2 className="text-2xl font-black text-white tracking-tight">{profile?.full_name}</h2>
+                                                <Shield className="w-5 h-5 text-cyan-500 fill-cyan-500/20" />
+                                            </div>
+                                            <p className="text-cyan-500/80 font-bold text-sm">@{profile?.username}</p>
+                                        </div>
+
+                                        {profile?.bio && (
+                                            <p className="text-zinc-400 text-xs mt-3 leading-relaxed font-medium">
+                                                {profile.bio}
+                                            </p>
+                                        )}
+
+                                        <div className="flex items-center gap-4 mt-4 text-[10px] font-black uppercase tracking-widest text-zinc-500">
+                                            <div className="flex items-center gap-1.5">
+                                                <MapPin className="w-3.5 h-3.5" />
+                                                <span>{profile?.location || "India"}</span>
+                                            </div>
+                                            <div className="flex items-center gap-1.5">
+                                                <Zap className="w-3.5 h-3.5 text-yellow-500" />
+                                                <span>Trust Score: 98</span>
+                                            </div>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            </motion.div>
+
+                            {/* Social Connectivity */}
+                            <div className="grid grid-cols-2 gap-3">
+                                <Card className="bg-white/5 border-white/5 rounded-2xl p-4 flex items-center gap-4 hover:bg-white/10 transition-colors cursor-pointer group">
+                                    <div className="w-10 h-10 rounded-xl bg-zinc-800 flex items-center justify-center border border-white/5 group-hover:scale-110 transition-transform">
+                                        <Github className="w-5 h-5 text-white" />
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">GitHub</p>
+                                        <p className="text-xs font-bold text-white">Connected</p>
+                                    </div>
+                                </Card>
+                                <Card className="bg-white/5 border-white/5 rounded-2xl p-4 flex items-center gap-4 hover:bg-white/10 transition-colors cursor-pointer group">
+                                    <div className="w-10 h-10 rounded-xl bg-zinc-800 flex items-center justify-center border border-white/5 group-hover:scale-110 transition-transform">
+                                        <Linkedin className="w-5 h-5 text-sky-400" />
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">LinkedIn</p>
+                                        <p className="text-xs font-bold text-white">View Profile</p>
+                                    </div>
+                                </Card>
+                            </div>
+
+                            {/* Wallet Settings / More Details */}
+                            <div className="space-y-3 pb-8">
+                                <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em] px-2">Account Links</h3>
+                                <div className="space-y-2">
+                                    {[
+                                        { icon: Globe, label: "Portfolio Website", detail: profile?.portfolio_url || "Not Connected" },
+                                        { icon: Instagram, label: "Instagram Handle", detail: profile?.instagram_url ? `@${profile.username}` : "Not Connected" },
+                                        { icon: Lock, label: "Privacy Settings", detail: "Advanced Protection active" },
+                                    ].map((item, i) => (
+                                        <div key={i} className="flex items-center justify-between p-4 bg-zinc-900/40 rounded-2xl border border-white/5 hover:border-white/10 transition-all cursor-pointer group">
+                                            <div className="flex items-center gap-4">
+                                                <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-zinc-400 group-hover:text-cyan-400 transition-colors">
+                                                    <item.icon className="w-5 h-5" />
+                                                </div>
+                                                <div>
+                                                    <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">{item.label}</p>
+                                                    <p className="text-xs font-bold text-white/90 truncate max-w-[150px]">{item.detail}</p>
+                                                </div>
+                                            </div>
+                                            <MoreHorizontal className="w-5 h-5 text-zinc-600" />
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </TabsContent>
                     </AnimatePresence>
 
                     {/* Bottom Nav (Tabs List) - Sticky */}
@@ -360,14 +514,13 @@ export default function Wallet() {
                                 <CreditCard className="w-5 h-5" />
                                 <span className="text-[8px] font-bold">Cards</span>
                             </TabsTrigger>
-                            <TabsTrigger value="profile" disabled className="flex flex-col gap-1 h-full opacity-50">
+                            <TabsTrigger value="profile" className="flex flex-col gap-1 h-full data-[state=active]:bg-white/10 data-[state=active]:text-cyan-400 rounded-full transition-all">
                                 <User className="w-5 h-5" />
                                 <span className="text-[8px] font-bold">Profile</span>
                             </TabsTrigger>
                         </TabsList>
                     </div>
                 </Tabs>
-
             </div>
         </div>
     );

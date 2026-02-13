@@ -12,7 +12,9 @@ import type { User } from "@supabase/supabase-js";
 import { Badge } from "@/components/ui/badge";
 import { CartoonLoader } from "@/components/CartoonLoader";
 import { CreateGroupDialog } from "@/components/chat/CreateGroupDialog";
+import { CreateCommunityDialog } from "@/components/chat/CreateCommunityDialog";
 import { GroupsList } from "@/components/chat/GroupsList";
+import { CommunitiesList } from "@/components/chat/CommunitiesList";
 import { OnlineIndicator } from "@/components/OnlineIndicator";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -22,7 +24,7 @@ import {
   ContextMenuTrigger,
   ContextMenuSeparator,
 } from "@/components/ui/context-menu";
-import { Pin, PinOff, Archive as ArchiveIcon, Trash2, ArrowLeft, MessageSquarePlus, Filter, Archive } from "lucide-react";
+import { Pin, PinOff, Archive as ArchiveIcon, Trash2, ArrowLeft, MessageSquarePlus, Filter, Archive, Plus } from "lucide-react";
 import { ActiveUsersList } from "@/components/chat/ActiveUsersList";
 import { toast } from "sonner";
 
@@ -158,7 +160,7 @@ const Messages = () => {
   const [conversations, setConversations] = useState<ConversationWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeTab, setActiveTab] = useState<'direct' | 'groups'>('direct');
+  const [activeTab, setActiveTab] = useState<'chats' | 'groups' | 'communities'>('chats');
   const [showUnreadOnly, setShowUnreadOnly] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
 
@@ -378,25 +380,31 @@ const Messages = () => {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
-              placeholder="Search chats..."
+              placeholder="Search messages and groups..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-10 bg-muted/50 border-0 focus-visible:ring-1 focus-visible:ring-primary/50"
             />
           </div>
 
-          <div className="flex gap-2 border-b border-border/50 -mb-4 pb-0">
+          <div className="flex p-1 bg-muted/30 rounded-full items-center justify-between gap-1">
             <button
-              onClick={() => setActiveTab('direct')}
-              className={`pb-3 px-4 text-sm font-medium transition-all border-b-2 ${activeTab === 'direct' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+              onClick={() => setActiveTab('chats')}
+              className={`flex-1 py-2 px-4 text-sm font-medium transition-all rounded-full ${activeTab === 'chats' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
             >
-              <MessageCircle className="w-4 h-4 inline-block mr-2" /> Direct
+              Chats
             </button>
             <button
               onClick={() => setActiveTab('groups')}
-              className={`pb-3 px-4 text-sm font-medium transition-all border-b-2 ${activeTab === 'groups' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+              className={`flex-1 py-2 px-4 text-sm font-medium transition-all rounded-full ${activeTab === 'groups' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
             >
-              <Users className="w-4 h-4 inline-block mr-2" /> Groups
+              Groups
+            </button>
+            <button
+              onClick={() => setActiveTab('communities')}
+              className={`flex-1 py-2 px-4 text-sm font-medium transition-all rounded-full ${activeTab === 'communities' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+            >
+              Communities
             </button>
           </div>
         </div>
@@ -407,7 +415,7 @@ const Messages = () => {
 
         {loading ? (
           <CartoonLoader />
-        ) : activeTab === 'direct' ? (
+        ) : activeTab === 'chats' ? (
           <div className="space-y-2 mt-4">
             {filteredConversations.length === 0 ? (
               <div className="text-center py-16 space-y-4">
@@ -433,18 +441,65 @@ const Messages = () => {
               </AnimatePresence>
             )}
           </div>
-        ) : (
+        ) : activeTab === 'groups' ? (
           <div className="mt-4">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="font-semibold">Your Groups</h2>
-              <CreateGroupDialog />
+              <h2 className="font-semibold px-1">Suggested Groups</h2>
             </div>
             <GroupsList currentUserId={user?.id || ''} />
+          </div>
+        ) : (
+          <div className="mt-4">
+            <CommunitiesList currentUserId={user?.id || ''} />
           </div>
         )}
       </div>
 
       <BottomNav />
+
+      {/* Floating Action Button for Groups & Communities */}
+      <AnimatePresence mode="wait">
+        {activeTab === 'groups' && (
+          <motion.div
+            key="groups-fab"
+            initial={{ opacity: 0, scale: 0.5, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.5, y: 20 }}
+            className="fixed bottom-24 right-6 z-50"
+          >
+            <CreateGroupDialog
+              trigger={
+                <Button
+                  size="icon"
+                  className="h-14 w-14 rounded-full shadow-lg bg-primary hover:bg-primary/90 text-white"
+                >
+                  <Plus className="h-6 w-6" />
+                </Button>
+              }
+            />
+          </motion.div>
+        )}
+        {activeTab === 'communities' && (
+          <motion.div
+            key="communities-fab"
+            initial={{ opacity: 0, scale: 0.5, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.5, y: 20 }}
+            className="fixed bottom-24 right-6 z-50"
+          >
+            <CreateCommunityDialog
+              trigger={
+                <Button
+                  size="icon"
+                  className="h-14 w-14 rounded-full shadow-lg bg-primary hover:bg-primary/90 text-white"
+                >
+                  <Plus className="h-6 w-6" />
+                </Button>
+              }
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

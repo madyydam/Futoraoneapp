@@ -68,6 +68,7 @@ const ApplicationsDashboard = lazy(() => import("./pages/ApplicationsDashboard")
 const UpcomingFeatures = lazy(() => import("./pages/UpcomingFeatures"));
 const TechMatch = lazy(() => import("./pages/TechMatch"));
 const GroupChat = lazy(() => import("./pages/GroupChat"));
+const CommunityChat = lazy(() => import("./pages/CommunityChat"));
 const Games = lazy(() => import("./pages/Games"));
 
 // Game pages
@@ -195,6 +196,16 @@ const App = () => {
                       <Route path="/messages/group/:groupId" element={
                         <SectionErrorBoundary sectionName="Group Chat" fallbackRoute="/messages">
                           <GroupChat />
+                        </SectionErrorBoundary>
+                      } />
+                      <Route path="/messages/community/:communityId" element={
+                        <SectionErrorBoundary sectionName="Community" fallbackRoute="/messages">
+                          <CommunityChat />
+                        </SectionErrorBoundary>
+                      } />
+                      <Route path="/messages/community/:communityId/channel/:channelId" element={
+                        <SectionErrorBoundary sectionName="Community Chat" fallbackRoute="/messages">
+                          <CommunityChat />
                         </SectionErrorBoundary>
                       } />
                       <Route path="/post/:postId" element={<PostDetails />} />
