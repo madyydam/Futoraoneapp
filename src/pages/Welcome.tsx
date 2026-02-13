@@ -23,7 +23,7 @@ const itemVariants: Variants = {
 
 const Welcome = () => {
   const navigate = useNavigate();
-  const [isStandalone, setIsStandalone] = useState(true);
+  const [isStandalone, setIsStandalone] = useState(false);
 
   useEffect(() => {
     const checkStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;

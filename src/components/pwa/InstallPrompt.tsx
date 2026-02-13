@@ -9,38 +9,38 @@ export const InstallPrompt = () => {
     const [isIOS, setIsIOS] = useState(false);
 
     useEffect(() => {
-        // Force show for debugging if URL has ?debug_install=true
-        if (window.location.search.includes('debug_install=true')) {
-            setIsVisible(true);
-        }
+        // Debug flag
+        (window as any).DEBUG_PWA_INSTALL = () => setIsVisible(true);
 
         const isIOSDevice = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
         setIsIOS(isIOSDevice);
 
         const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
-
         if (isStandalone) return;
 
-        // Auto-show after 5 seconds
-        const autoShowTimer = setTimeout(() => {
-            const hasDismissed = localStorage.getItem('pwa-dismissed');
-            if (!hasDismissed || (Date.now() - parseInt(hasDismissed) > 86400000)) {
-                // For iOS we show instructions, so we can always show if not dismissed
-                // For Android we need the prompt
-                if (isIOSDevice || window.dispatchEvent(new Event('beforeinstallprompt'))) {
-                    setIsVisible(true);
-                }
-            }
-        }, 5000);
-
+        // Capture the prompt event
         const handler = (e: any) => {
             console.log('PWA: beforeinstallprompt event fired');
             e.preventDefault();
             setDeferredPrompt(e);
-            setIsVisible(true); // Show automatically when we have the prompt
+
+            // Check if dismissed recently
+            const hasDismissed = localStorage.getItem('pwa-dismissed');
+            if (!hasDismissed || (Date.now() - parseInt(hasDismissed) > 86400000)) {
+                setIsVisible(true);
+            }
         };
 
         window.addEventListener('beforeinstallprompt', handler);
+
+        // For iOS, check dismissal separately since there's no event
+        if (isIOSDevice) {
+            const hasDismissed = localStorage.getItem('pwa-dismissed');
+            if (!hasDismissed || (Date.now() - parseInt(hasDismissed) > 86400000)) {
+                const timer = setTimeout(() => setIsVisible(true), 3000);
+                return () => clearTimeout(timer);
+            }
+        }
 
         const showHandler = () => {
             console.log('PWA: Manual show event received');
@@ -49,11 +49,10 @@ export const InstallPrompt = () => {
         window.addEventListener('show-pwa-install', showHandler);
 
         return () => {
-            clearTimeout(autoShowTimer);
             window.removeEventListener('beforeinstallprompt', handler);
             window.removeEventListener('show-pwa-install', showHandler);
         };
-    }, []); // Stable effect
+    }, []);
 
     const handleInstallClick = async () => {
         if (!deferredPrompt) {
