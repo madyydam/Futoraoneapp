@@ -1,29 +1,48 @@
-import { useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { useState, useEffect } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Plus, Users, Globe, Lock, ImageIcon, Upload } from "lucide-react";
+import { Users, Globe, Lock, Upload } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { toast as sonnerToast } from "sonner";
+import { toast } from "sonner";
 import imageCompression from 'browser-image-compression';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
-interface CreateGroupDialogProps {
-    onGroupCreated?: () => void;
-    trigger?: React.ReactNode;
+interface Group {
+    id: string;
+    name: string;
+    description: string;
+    avatar_url: string | null;
+    is_public: boolean;
 }
 
-export function CreateGroupDialog({ onGroupCreated, trigger }: CreateGroupDialogProps) {
-    const [open, setOpen] = useState(false);
+interface EditGroupDialogProps {
+    group: Group;
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    onGroupUpdated?: () => void;
+}
+
+export function EditGroupDialog({ group, open, onOpenChange, onGroupUpdated }: EditGroupDialogProps) {
     const [loading, setLoading] = useState(false);
-    const [name, setName] = useState("");
-    const [description, setDescription] = useState("");
-    const [isPublic, setIsPublic] = useState(true);
+    const [name, setName] = useState(group.name);
+    const [description, setDescription] = useState(group.description || "");
+    const [isPublic, setIsPublic] = useState(group.is_public);
     const [iconFile, setIconFile] = useState<File | null>(null);
-    const [iconPreview, setIconPreview] = useState<string | null>(null);
+    const [iconPreview, setIconPreview] = useState<string | null>(group.avatar_url);
+
+    useEffect(() => {
+        if (open) {
+            setName(group.name);
+            setDescription(group.description || "");
+            setIsPublic(group.is_public);
+            setIconPreview(group.avatar_url);
+            setIconFile(null);
+        }
+    }, [open, group]);
 
     const handleIconChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -44,8 +63,7 @@ export function CreateGroupDialog({ onGroupCreated, trigger }: CreateGroupDialog
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) throw new Error("Not authenticated");
 
-            // 1. Upload Icon if selected
-            let avatarUrl = null;
+            let avatarUrl = group.avatar_url;
             if (iconFile) {
                 const options = {
                     maxSizeMB: 0.5,
@@ -79,68 +97,41 @@ export function CreateGroupDialog({ onGroupCreated, trigger }: CreateGroupDialog
                 avatarUrl = publicUrl;
             }
 
-            // 2. Create Group
-            const { data: group, error: groupError } = await supabase
+            const { error } = await supabase
                 .from('groups' as any)
-                .insert({
+                .update({
                     name,
                     description,
                     avatar_url: avatarUrl,
                     is_public: isPublic,
-                    created_by: user.id
+                    updated_at: new Date().toISOString()
                 })
-                .select()
-                .single();
+                .eq('id', group.id);
 
-            if (groupError) throw groupError;
-            const groupId = (group as any).id;
+            if (error) throw error;
 
-            // 2. Add Creator as Admin
-            const { error: memberError } = await supabase
-                .from('group_members' as any)
-                .insert({
-                    group_id: groupId,
-                    user_id: user.id,
-                    role: 'admin'
-                });
-
-            if (memberError) throw memberError;
-
-            sonnerToast.success("Group created successfully!");
-            setOpen(false);
-            onGroupCreated?.();
-            setName("");
-            setDescription("");
-            setIconFile(null);
-            setIconPreview(null);
+            toast.success("Group updated successfully!");
+            onOpenChange(false);
+            onGroupUpdated?.();
         } catch (error) {
-            console.error('Error creating group:', error);
-            sonnerToast.error("Failed to create group");
+            console.error('Error updating group:', error);
+            toast.error("Failed to update group");
         } finally {
             setLoading(false);
         }
     };
 
     return (
-        <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-                {trigger || (
-                    <Button size="sm" className="gap-2">
-                        <Plus className="h-4 w-4" />
-                        Create Group
-                    </Button>
-                )}
-            </DialogTrigger>
+        <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-[425px]">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
                         <Users className="w-5 h-5 text-primary" />
-                        Create New Group
+                        Edit Group Details
                     </DialogTitle>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-6 pt-4">
                     <div className="space-y-4">
-                        {/* Icon Upload Section */}
                         <div className="flex flex-col items-center gap-4 py-2">
                             <div className="relative group">
                                 <Avatar className="h-20 w-20 border-2 border-primary/20 shadow-xl">
@@ -154,23 +145,22 @@ export function CreateGroupDialog({ onGroupCreated, trigger }: CreateGroupDialog
                                     <input type="file" accept="image/*" className="hidden" onChange={handleIconChange} />
                                 </label>
                             </div>
-                            <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Group Icon</p>
+                            <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Change Icon</p>
                         </div>
+
                         <div className="space-y-2">
                             <Label htmlFor="name">Group Name</Label>
                             <Input
                                 id="name"
-                                placeholder="Enter group name..."
                                 value={name}
                                 onChange={(e) => setName(e.target.value)}
                                 required
                             />
                         </div>
                         <div className="space-y-2">
-                            <Label htmlFor="description">Description (Optional)</Label>
+                            <Label htmlFor="description">Description</Label>
                             <Textarea
                                 id="description"
-                                placeholder="What's this group about?"
                                 value={description}
                                 onChange={(e) => setDescription(e.target.value)}
                                 className="resize-none h-24"
@@ -191,9 +181,9 @@ export function CreateGroupDialog({ onGroupCreated, trigger }: CreateGroupDialog
                         </div>
                     </div>
                     <div className="flex gap-3 justify-end">
-                        <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+                        <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
                         <Button type="submit" disabled={loading} className="min-w-[100px]">
-                            {loading ? "Creating..." : "Create Group"}
+                            {loading ? "Saving..." : "Save Changes"}
                         </Button>
                     </div>
                 </form>

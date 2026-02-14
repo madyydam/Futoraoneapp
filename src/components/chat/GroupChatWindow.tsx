@@ -9,6 +9,14 @@ import { MessageBubble } from "@/components/chat/MessageBubble";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
+import { EditGroupDialog } from "@/components/chat/EditGroupDialog";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Settings, LogOut, Info } from "lucide-react";
 
 interface Message {
     id: string;
@@ -26,6 +34,7 @@ interface Group {
     name: string;
     description: string;
     avatar_url: string | null;
+    is_public: boolean;
 }
 
 export function GroupChatWindow({ groupId, currentUserId }: { groupId: string; currentUserId: string }) {
@@ -35,6 +44,8 @@ export function GroupChatWindow({ groupId, currentUserId }: { groupId: string; c
     const [group, setGroup] = useState<Group | null>(null);
     const [loading, setLoading] = useState(true);
     const [sending, setSending] = useState(false);
+    const [userRole, setUserRole] = useState<'admin' | 'member' | null>(null);
+    const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
     const scrollToBottom = (behavior: ScrollBehavior = "smooth") => {
@@ -45,17 +56,17 @@ export function GroupChatWindow({ groupId, currentUserId }: { groupId: string; c
         try {
             // 1. Fetch Group Details
             const { data: groupData, error: groupError } = await supabase
-                .from('groups' as any)
+                .from('groups')
                 .select('*')
                 .eq('id', groupId)
                 .single();
 
             if (groupError) throw groupError;
-            setGroup(groupData as any);
+            setGroup(groupData as Group);
 
             // 2. Fetch Messages with Sender Profiles
             const { data: messagesData, error: messagesError } = await supabase
-                .from('messages' as any)
+                .from('messages')
                 .select(`
                     *,
                     profiles:sender_id (
@@ -67,7 +78,19 @@ export function GroupChatWindow({ groupId, currentUserId }: { groupId: string; c
                 .order('created_at', { ascending: true });
 
             if (messagesError) throw messagesError;
-            setMessages(messagesData as any);
+            setMessages(messagesData as Message[]);
+
+            // 3. Fetch current user role
+            const { data: memberData } = await supabase
+                .from('group_members')
+                .select('role')
+                .eq('group_id', groupId)
+                .eq('user_id', currentUserId)
+                .single();
+
+            if (memberData) {
+                setUserRole(memberData.role as 'admin' | 'member');
+            }
         } catch (error) {
             console.error("Error fetching group data:", error);
             toast.error("Failed to load group chat");
@@ -94,17 +117,17 @@ export function GroupChatWindow({ groupId, currentUserId }: { groupId: string; c
                 async (payload) => {
                     // Fetch profile for the new message
                     const { data: profile } = await supabase
-                        .from('profiles' as any)
+                        .from('profiles')
                         .select('full_name, avatar_url')
                         .eq('id', payload.new.sender_id)
                         .single();
 
-                    const enrichedMsg = {
-                        ...payload.new,
-                        profiles: profile
+                    const enrichedMsg: Message = {
+                        ...(payload.new as any),
+                        profiles: profile as { full_name: string; avatar_url: string | null }
                     };
 
-                    setMessages(prev => [...prev, enrichedMsg as any]);
+                    setMessages(prev => [...prev, enrichedMsg]);
                     if (payload.new.sender_id !== currentUserId) {
                         scrollToBottom();
                     }
@@ -131,7 +154,7 @@ export function GroupChatWindow({ groupId, currentUserId }: { groupId: string; c
 
         try {
             const { error } = await supabase
-                .from('messages' as any)
+                .from('messages')
                 .insert({
                     group_id: groupId,
                     sender_id: currentUserId,
@@ -185,7 +208,33 @@ export function GroupChatWindow({ groupId, currentUserId }: { groupId: string; c
                 <div className="flex items-center gap-1">
                     <Button variant="ghost" size="icon" className="hidden sm:flex text-muted-foreground rounded-full"><Video className="h-5 w-5" /></Button>
                     <Button variant="ghost" size="icon" className="hidden sm:flex text-muted-foreground rounded-full"><Phone className="h-5 w-5" /></Button>
-                    <Button variant="ghost" size="icon" className="text-muted-foreground rounded-full"><MoreVertical className="h-5 w-5" /></Button>
+
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="text-muted-foreground rounded-full">
+                                <MoreVertical className="h-5 w-5" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48 rounded-xl shadow-xl border-border/50">
+                            <DropdownMenuItem className="gap-2 focus:bg-primary/10">
+                                <Info className="h-4 w-4" />
+                                Group Info
+                            </DropdownMenuItem>
+                            {userRole === 'admin' && (
+                                <DropdownMenuItem
+                                    className="gap-2 focus:bg-primary/10"
+                                    onClick={() => setIsEditDialogOpen(true)}
+                                >
+                                    <Settings className="h-4 w-4" />
+                                    Edit Group
+                                </DropdownMenuItem>
+                            )}
+                            <DropdownMenuItem className="gap-2 text-destructive focus:text-destructive focus:bg-destructive/10">
+                                <LogOut className="h-4 w-4" />
+                                Leave Group
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                 </div>
             </header>
 
@@ -281,6 +330,15 @@ export function GroupChatWindow({ groupId, currentUserId }: { groupId: string; c
                     </div>
                 </form>
             </div>
+
+            {group && (
+                <EditGroupDialog
+                    group={group}
+                    open={isEditDialogOpen}
+                    onOpenChange={setIsEditDialogOpen}
+                    onGroupUpdated={fetchGroupData}
+                />
+            )}
         </div>
     );
 }

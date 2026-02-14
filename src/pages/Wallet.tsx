@@ -99,19 +99,22 @@ export default function Wallet() {
         queryFn: async () => {
             if (!user) return null;
 
-            // @ts-ignore
-            const { data: walletRecordRaw, error } = await supabase
+            const { data: walletRecord, error } = await supabase
                 .from('native_wallets')
                 .select('*')
                 .eq('user_id', user.id)
                 .maybeSingle();
 
-            let walletRecord = walletRecordRaw;
+            if (error) {
+                console.error("Wallet Fetch Error:", error);
+                return null;
+            }
+
+            let walletData = walletRecord;
 
             // Auto-create wallet if missing (Welcome Bonus Logic)
-            if (!walletRecord) {
+            if (!walletData) {
                 console.log("Creating new wallet...");
-                // @ts-ignore
                 const { data: newWallet, error: createError } = await supabase
                     .from('native_wallets')
                     .insert([{ user_id: user.id, balance: 1000.00 }])
@@ -119,10 +122,9 @@ export default function Wallet() {
                     .single();
 
                 if (createError) throw createError;
-                walletRecord = newWallet;
+                walletData = newWallet;
 
                 if (newWallet) {
-                    // @ts-ignore
                     await supabase.from('native_transactions').insert({
                         wallet_id: newWallet.id,
                         type: 'cashback',
@@ -132,7 +134,7 @@ export default function Wallet() {
                     });
                 }
             }
-            return walletRecord as unknown as WalletData;
+            return walletData as WalletData;
         },
         enabled: !!user
     });
@@ -141,14 +143,18 @@ export default function Wallet() {
         queryKey: ["native_transactions", walletData?.id],
         queryFn: async () => {
             if (!walletData?.id) return [];
-            // @ts-ignore
-            const { data } = await supabase
+            const { data, error } = await supabase
                 .from('native_transactions')
                 .select('*')
                 .eq('wallet_id', walletData.id)
                 .order('created_at', { ascending: false })
                 .limit(10);
-            return (data || []) as unknown as Transaction[];
+
+            if (error) {
+                console.error("Transactions Fetch Error:", error);
+                return [];
+            }
+            return (data || []) as Transaction[];
         },
         enabled: !!walletData?.id
     });
@@ -162,7 +168,7 @@ export default function Wallet() {
                 .select('*')
                 .eq('id', user.id)
                 .single();
-            return data as unknown as ProfileData;
+            return data as ProfileData;
         },
         enabled: !!user
     });

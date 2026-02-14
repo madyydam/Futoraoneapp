@@ -37,7 +37,7 @@ const FoundersCorner = () => {
         setLoading(true);
         try {
             let query = supabase
-                .from('founder_listings' as any)
+                .from('founder_listings')
                 .select('*');
 
             // Apply filters at query level
@@ -80,7 +80,7 @@ const FoundersCorner = () => {
             const profilesMap = (profilesData || []).reduce((acc, profile) => {
                 acc[profile.id] = profile;
                 return acc;
-            }, {} as Record<string, any>);
+            }, {} as Record<string, { full_name: string | null; username: string | null; avatar_url: string | null }>);
 
             const combinedListings = (listingsData as any[]).map(listing => ({
                 ...listing,

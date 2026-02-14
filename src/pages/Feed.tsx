@@ -61,7 +61,7 @@ const Feed = () => {
 
         {/* Gamification Bar */}
         <div id="gamification-bar">
-          <GamificationBar userProfile={userProfile as any} />
+          <GamificationBar userProfile={userProfile} />
         </div>
 
         {/* Posts */}

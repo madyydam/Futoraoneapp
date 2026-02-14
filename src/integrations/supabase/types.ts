@@ -127,6 +127,124 @@ export type Database = {
           },
         ]
       }
+      communities: {
+        Row: {
+          avatar_url: string | null
+          category: string
+          created_at: string | null
+          created_by: string
+          description: string | null
+          id: string
+          is_public: boolean | null
+          name: string
+          tagline: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          category?: string
+          created_at?: string | null
+          created_by: string
+          description?: string | null
+          id?: string
+          is_public?: boolean | null
+          name: string
+          tagline?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          avatar_url?: string | null
+          category?: string
+          created_at?: string | null
+          created_by?: string
+          description?: string | null
+          id?: string
+          is_public?: boolean | null
+          name?: string
+          tagline?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "communities_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      community_channels: {
+        Row: {
+          community_id: string
+          created_at: string | null
+          description: string | null
+          id: string
+          name: string
+        }
+        Insert: {
+          community_id: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          name: string
+        }
+        Update: {
+          community_id?: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_channels_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "communities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      community_members: {
+        Row: {
+          community_id: string
+          id: string
+          joined_at: string | null
+          role: string | null
+          user_id: string
+        }
+        Insert: {
+          community_id: string
+          id?: string
+          joined_at?: string | null
+          role?: string | null
+          user_id: string
+        }
+        Update: {
+          community_id?: string
+          id?: string
+          joined_at?: string | null
+          role?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_members_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "communities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_members_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       comments: {
         Row: {
           content: string
@@ -257,6 +375,97 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
+        ]
+      }
+      founder_listings: {
+        Row: {
+          created_at: string
+          equity_range: string
+          id: string
+          idea_description: string
+          industry: string
+          location: string
+          role_needed: string
+          stage: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          equity_range: string
+          id?: string
+          idea_description: string
+          industry: string
+          location: string
+          role_needed: string
+          stage: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          equity_range?: string
+          id?: string
+          idea_description?: string
+          industry?: string
+          location?: string
+          role_needed?: string
+          stage?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "founder_listings_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      gig_listings: {
+        Row: {
+          created_at: string
+          currency: string
+          description: string
+          id: string
+          location: string
+          price: number
+          skills_required: string[] | null
+          status: string
+          title: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          currency?: string
+          description: string
+          id?: string
+          location: string
+          price: number
+          skills_required?: string[] | null
+          status?: string
+          title: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          currency?: string
+          description?: string
+          id?: string
+          location?: string
+          price?: number
+          skills_required?: string[] | null
+          status?: string
+          title?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gig_listings_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
         ]
       }
       group_members: {
@@ -426,6 +635,79 @@ export type Database = {
             columns: ["sender_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      native_wallets: {
+        Row: {
+          balance: number
+          created_at: string
+          currency: string
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          balance?: number
+          created_at?: string
+          currency?: string
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          balance?: number
+          created_at?: string
+          currency?: string
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "native_wallets_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      native_transactions: {
+        Row: {
+          amount: number
+          created_at: string
+          description: string | null
+          id: string
+          status: string
+          type: string
+          wallet_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          status?: string
+          type: string
+          wallet_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          status?: string
+          type?: string
+          wallet_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "native_transactions_wallet_id_fkey"
+            columns: ["wallet_id"]
+            isOneToOne: false
+            referencedRelation: "native_wallets"
             referencedColumns: ["id"]
           },
         ]
@@ -606,20 +888,30 @@ export type Database = {
           bio: string | null
           created_at: string
           digest_mode: boolean | null
+          email: string | null
+          current_streak: number | null
+          daily_challenges: Json | null
           fcm_token: string | null
           full_name: string
           github_url: string | null
           id: string
+          instagram_url: string | null
+          is_tech_match_unlocked: boolean | null
           is_verified: boolean | null
+          last_activity_date: string | null
           last_digest_at: string | null
+          level: number | null
           linkedin_url: string | null
           location: string | null
+          longest_streak: number | null
           one_signal_player_id: string | null
           portfolio_url: string | null
           tech_skills: string[] | null
           updated_at: string
           username: string
+          theme_color: string | null
           verification_category: string | null
+          xp: number | null
         }
         Insert: {
           avatar_url?: string | null
@@ -627,20 +919,30 @@ export type Database = {
           bio?: string | null
           created_at?: string
           digest_mode?: boolean | null
+          current_streak?: number | null
+          daily_challenges?: Json | null
+          email?: string | null
           fcm_token?: string | null
           full_name: string
           github_url?: string | null
           id: string
+          instagram_url?: string | null
+          is_tech_match_unlocked?: boolean | null
           is_verified?: boolean | null
+          last_activity_date?: string | null
           last_digest_at?: string | null
+          level?: number | null
           linkedin_url?: string | null
           location?: string | null
+          longest_streak?: number | null
           one_signal_player_id?: string | null
           portfolio_url?: string | null
           tech_skills?: string[] | null
           updated_at?: string
           username: string
+          theme_color?: string | null
           verification_category?: string | null
+          xp?: number | null
         }
         Update: {
           avatar_url?: string | null
@@ -648,20 +950,30 @@ export type Database = {
           bio?: string | null
           created_at?: string
           digest_mode?: boolean | null
+          current_streak?: number | null
+          daily_challenges?: Json | null
+          email?: string | null
           fcm_token?: string | null
           full_name?: string
           github_url?: string | null
           id?: string
+          instagram_url?: string | null
+          is_tech_match_unlocked?: boolean | null
           is_verified?: boolean | null
+          last_activity_date?: string | null
           last_digest_at?: string | null
+          level?: number | null
           linkedin_url?: string | null
           location?: string | null
+          longest_streak?: number | null
           one_signal_player_id?: string | null
           portfolio_url?: string | null
           tech_skills?: string[] | null
           updated_at?: string
           username?: string
+          theme_color?: string | null
           verification_category?: string | null
+          xp?: number | null
         }
         Relationships: []
       }

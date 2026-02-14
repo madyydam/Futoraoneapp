@@ -21,7 +21,6 @@ export const WalletCard = ({ customBalance }: WalletCardProps) => {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) return null;
 
-            // @ts-ignore
             const { data, error } = await supabase
                 .from('native_wallets')
                 .select('*')

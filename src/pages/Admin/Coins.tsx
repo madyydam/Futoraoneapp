@@ -52,11 +52,15 @@ const AdminCoins = () => {
             if (walletError) throw walletError;
 
             // Merge data
-            const combinedData = (profiles || []).map(profile => {
+            const combinedData: UserBalance[] = (profiles || []).map(profile => {
                 const wallet = (wallets || []).find(w => w.user_id === profile.id);
                 // Default to 0 if no wallet found (though trigger should handle creation)
                 return {
-                    ...profile,
+                    id: profile.id,
+                    username: profile.username,
+                    full_name: profile.full_name,
+                    avatar_url: profile.avatar_url || '',
+                    email: (profile as any).email || '',
                     balance: wallet ? wallet.balance : 0
                 };
             });

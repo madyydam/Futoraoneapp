@@ -27,10 +27,10 @@ export interface Post {
 const PAGE_SIZE = 5;
 
 // Throttle utility
-const throttle = (func: (...args: any[]) => any, limit: number) => {
+const throttle = <T extends (...args: any[]) => any>(func: T, limit: number) => {
     let inThrottle: boolean;
-    let lastResult: any;
-    return function (this: any, ...args: any[]) {
+    let lastResult: ReturnType<T>;
+    return function (this: any, ...args: Parameters<T>) {
         if (!inThrottle) {
             lastResult = func.apply(this, args);
             inThrottle = true;
@@ -149,12 +149,12 @@ export const useFeedLogic = () => {
             .on("postgres_changes", { event: "INSERT", schema: "public", table: "posts" }, () => {
                 setUnreadCount(prev => prev + 1);
             })
-            .on("postgres_changes", { event: "DELETE", schema: "public", table: "posts" }, (payload: any) => {
-                queryClient.setQueryData(["posts_feed"], (old: any) => {
+            .on("postgres_changes" as any, { event: "DELETE", schema: "public", table: "posts" }, (payload: { old: { id: string } }) => {
+                queryClient.setQueryData(["posts_feed"], (old: { pages: { posts: Post[] }[] } | undefined) => {
                     if (!old) return old;
                     return {
                         ...old,
-                        pages: old.pages.map((page: any) => ({
+                        pages: old.pages.map((page) => ({
                             ...page,
                             posts: page.posts.filter((p: Post) => p.id !== payload.old.id)
                         }))
@@ -167,11 +167,11 @@ export const useFeedLogic = () => {
             .channel("profile-sync")
             .on("postgres_changes", { event: "UPDATE", schema: "public", table: "profiles" },
                 throttle((payload: { new: { id: string; username: string; full_name: string; avatar_url: string | null } }) => {
-                    queryClient.setQueryData(["posts_feed"], (old: any) => {
+                    queryClient.setQueryData(["posts_feed"], (old: { pages: { posts: Post[] }[] } | undefined) => {
                         if (!old) return old;
                         return {
                             ...old,
-                            pages: old.pages.map((page: any) => ({
+                            pages: old.pages.map((page) => ({
                                 ...page,
                                 posts: page.posts.map((post: Post) => {
                                     if (post.user_id === payload.new.id) {

@@ -16,13 +16,21 @@ import {
     Search,
     UserPlus,
     Info,
-    LayoutDashboard
+    LayoutDashboard,
+    LogOut
 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CommunityChatWindow } from "@/components/chat/CommunityChatWindow";
 import { CommunityHub } from "@/components/chat/CommunityHub";
+import { EditCommunityDialog } from "@/components/chat/EditCommunityDialog";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export default function CommunityChat() {
     const { communityId, channelId } = useParams();
@@ -31,12 +39,14 @@ export default function CommunityChat() {
     const [channels, setChannels] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState(channelId ? "chat" : "hub");
+    const [userRole, setUserRole] = useState<'admin' | 'moderator' | 'member' | null>(null);
+    const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
     const fetchCommunityData = useCallback(async () => {
         try {
             // 1. Fetch community details
-            const { data: communityData, error: communityError } = await supabase
-                .from('communities' as any)
+            const { data: communityData, error: communityError } = await (supabase as any)
+                .from('communities')
                 .select('*')
                 .eq('id', communityId)
                 .single();
@@ -45,14 +55,29 @@ export default function CommunityChat() {
             setCommunity(communityData);
 
             // 2. Fetch channels
-            const { data: channelsData, error: channelsError } = await supabase
-                .from('community_channels' as any)
+            const { data: channelsData, error: channelsError } = await (supabase as any)
+                .from('community_channels')
                 .select('*')
                 .eq('community_id', communityId)
                 .order('created_at', { ascending: true });
 
             if (channelsError) throw channelsError;
             setChannels(channelsData);
+
+            // 3. Fetch user role
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+                const { data: memberData } = await (supabase as any)
+                    .from('community_members')
+                    .select('role')
+                    .eq('community_id', communityId)
+                    .eq('user_id', user.id)
+                    .maybeSingle();
+
+                if (memberData) {
+                    setUserRole(memberData.role as 'admin' | 'moderator' | 'member');
+                }
+            }
 
             // If no channelId but on chat tab, pick the first one
             if (!channelId && activeTab === "chat" && channelsData.length > 0) {
@@ -92,9 +117,31 @@ export default function CommunityChat() {
                     <h1 className="font-bold text-base truncate">{community?.name}</h1>
                     <p className="text-[10px] text-muted-foreground truncate">{community?.tagline}</p>
                 </div>
-                <Button variant="ghost" size="icon" className="rounded-full">
-                    <Info className="h-5 w-5" />
-                </Button>
+                <div className="flex items-center gap-1">
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="rounded-full">
+                                <MoreVertical className="h-5 w-5" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48 rounded-xl shadow-xl">
+                            <DropdownMenuItem className="gap-2">
+                                <Info className="h-4 w-4" />
+                                Community Info
+                            </DropdownMenuItem>
+                            {userRole === 'admin' && (
+                                <DropdownMenuItem className="gap-2" onClick={() => setIsEditDialogOpen(true)}>
+                                    <Settings className="h-4 w-4" />
+                                    Edit Community
+                                </DropdownMenuItem>
+                            )}
+                            <DropdownMenuItem className="gap-2 text-destructive">
+                                <LogOut className="h-4 w-4" />
+                                Leave Community
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                </div>
             </div>
 
             {/* Navigation Tabs */}
@@ -136,6 +183,15 @@ export default function CommunityChat() {
                     </div>
                 )}
             </div>
+
+            {community && (
+                <EditCommunityDialog
+                    community={community}
+                    open={isEditDialogOpen}
+                    onOpenChange={setIsEditDialogOpen}
+                    onCommunityUpdated={fetchCommunityData}
+                />
+            )}
         </div>
     );
 }

@@ -35,8 +35,7 @@ const GigMarketplace = () => {
         setLoading(true);
         try {
             let query = supabase
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                .from('gig_listings' as any)
+                .from('gig_listings')
                 .select('*');
 
             // Search (case-insensitive)
@@ -142,7 +141,6 @@ const GigMarketplace = () => {
         // Subscribe to real-time updates
         const channel = supabase
             .channel('gig-listings-all')
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             .on('postgres_changes' as any, { event: '*', table: 'gig_listings' }, () => {
                 fetchGigs();
             })

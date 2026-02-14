@@ -36,7 +36,7 @@ interface GamificationBarProps {
         level?: number;
         current_streak?: number;
         longest_streak?: number;
-        daily_challenges?: DailyChallenge[];
+        daily_challenges?: any;
     } | null;
 }
 

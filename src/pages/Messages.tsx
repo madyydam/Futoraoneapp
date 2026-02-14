@@ -209,7 +209,7 @@ const Messages = () => {
         return;
       }
 
-      const convIds = conversationsData.map((cp: any) => cp.conversation_id);
+      const convIds = conversationsData.map(cp => cp.conversation_id);
 
       const { data: participantsList } = await supabase
         .from('conversation_participants')
@@ -252,14 +252,14 @@ const Messages = () => {
       );
       const unreadCountsResults = await Promise.all(unreadCountsPromises);
 
-      const userConversations = (conversationsData as any[]).map((cp: any, idx: number) => {
-        const participant = allParticipants?.find((p: any) => p.conversation_id === cp.conversation_id);
+      const userConversations = conversationsData.map((cp, idx) => {
+        const participant = allParticipants?.find((p) => p.conversation_id === cp.conversation_id);
         const lastMsg = lastMessagesResults[idx]?.data;
         const unreadCount = unreadCountsResults[idx]?.count || 0;
 
         return {
           id: cp.conversation_id,
-          updated_at: cp.conversations.updated_at,
+          updated_at: (cp.conversations as any).updated_at,
           is_pinned: false,
           is_archived: false,
           otherUser: participant?.profiles,

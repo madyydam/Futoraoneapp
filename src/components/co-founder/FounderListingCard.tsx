@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, memo } from "react";
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -45,7 +45,7 @@ interface FounderListingCardProps {
     onUpdate?: () => void;
 }
 
-export const FounderListingCard = ({ listing, currentUserId, onDelete, onUpdate }: FounderListingCardProps) => {
+export const FounderListingCard = memo(({ listing, currentUserId, onDelete, onUpdate }: FounderListingCardProps) => {
     const { toast } = useToast();
     const [isDeleting, setIsDeleting] = useState(false);
 
@@ -53,7 +53,7 @@ export const FounderListingCard = ({ listing, currentUserId, onDelete, onUpdate 
         setIsDeleting(true);
         try {
             const { error } = await supabase
-                .from('founder_listings' as any)
+                .from('founder_listings')
                 .delete()
                 .eq('id', listing.id);
 
@@ -177,4 +177,6 @@ export const FounderListingCard = ({ listing, currentUserId, onDelete, onUpdate 
             </CardFooter>
         </Card>
     );
-};
+});
+
+FounderListingCard.displayName = "FounderListingCard";

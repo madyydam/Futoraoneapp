@@ -49,7 +49,8 @@ export const PostMedia = memo(({ imageUrl, videoUrl, index }: PostMediaProps) =>
                         alt="Post"
                         className="w-full rounded-2xl object-cover mb-4 cursor-pointer shadow-md"
                         loading={index < 3 ? "eager" : "lazy"}
-                        {...({ fetchpriority: index < 3 ? "high" : "auto" } as any)}
+                        // @ts-ignore - fetchpriority is a non-standard attribute for performance
+                        fetchpriority={index < 3 ? "high" : "auto"}
                         decoding="async"
                         onClick={() => setLightboxOpen(true)}
                         whileHover={{ scale: 1.01 }}

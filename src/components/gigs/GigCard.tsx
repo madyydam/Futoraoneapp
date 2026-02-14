@@ -19,7 +19,7 @@ import {
 import { ApplyGigDialog } from "./ApplyGigDialog";
 import { ViewGigApplicationsDialog } from "./ViewGigApplicationsDialog";
 import { EditGigDialog } from "./EditGigDialog";
-import { useState } from "react";
+import { useState, memo } from "react";
 
 export interface GigListing {
     id: string;
@@ -46,7 +46,7 @@ interface GigCardProps {
     onUpdate?: () => void;
 }
 
-export const GigCard = ({ gig, currentUserId, onDelete, onUpdate }: GigCardProps) => {
+export const GigCard = memo(({ gig, currentUserId, onDelete, onUpdate }: GigCardProps) => {
     const { toast } = useToast();
     const [isDeleting, setIsDeleting] = useState(false);
 
@@ -54,7 +54,7 @@ export const GigCard = ({ gig, currentUserId, onDelete, onUpdate }: GigCardProps
         setIsDeleting(true);
         try {
             const { error } = await supabase
-                .from('gig_listings' as any)
+                .from('gig_listings')
                 .delete()
                 .eq('id', gig.id);
 
@@ -196,4 +196,6 @@ export const GigCard = ({ gig, currentUserId, onDelete, onUpdate }: GigCardProps
             <div className="absolute bottom-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-yellow-400/10 to-transparent" />
         </Card>
     );
-};
+});
+
+GigCard.displayName = "GigCard";

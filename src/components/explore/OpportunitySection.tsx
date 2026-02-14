@@ -25,18 +25,18 @@ export const OpportunitySection = memo(({ onNavigate }: OpportunitySectionProps)
                 .eq('id', user.id)
                 .single();
 
-            if ((profile as any)?.is_tech_match_unlocked) {
+            if (profile?.is_tech_match_unlocked) {
                 localStorage.setItem('techMatchUnlocked', 'true');
                 return true;
             }
 
-            const { data: wallet } = await (supabase as any).from('native_wallets').select('id').eq('user_id', user.id).single();
+            const { data: wallet } = await supabase.from('native_wallets').select('id').eq('user_id', user.id).single();
 
             if (wallet) {
-                const { data: tx } = await (supabase as any)
+                const { data: tx } = await supabase
                     .from('native_transactions')
                     .select('id')
-                    .eq('wallet_id', (wallet as any).id)
+                    .eq('wallet_id', wallet.id)
                     .ilike('description', '%Unlocked Tech Match%')
                     .limit(1);
 
@@ -70,7 +70,7 @@ export const OpportunitySection = memo(({ onNavigate }: OpportunitySectionProps)
                 return;
             }
 
-            const { data: wallet, error: walletError } = await (supabase as any)
+            const { data: wallet, error: walletError } = await supabase
                 .from("native_wallets")
                 .select("id, balance")
                 .eq("user_id", user.id)
@@ -84,7 +84,7 @@ export const OpportunitySection = memo(({ onNavigate }: OpportunitySectionProps)
             }
 
             if ((wallet.balance || 0) < 1000) {
-                const { data: tx } = await (supabase as any)
+                const { data: tx } = await supabase
                     .from("native_transactions")
                     .select("id")
                     .eq("wallet_id", wallet.id)
@@ -92,7 +92,7 @@ export const OpportunitySection = memo(({ onNavigate }: OpportunitySectionProps)
                     .limit(1);
 
                 if (tx && tx.length > 0) {
-                    await supabase.from('profiles').update({ is_tech_match_unlocked: true } as any).eq('id', user.id);
+                    await supabase.from('profiles').update({ is_tech_match_unlocked: true }).eq('id', user.id);
                     localStorage.setItem('techMatchUnlocked', 'true');
                     await refetch();
                     toast.success("Purchase Verified & Restored! 🔄");
@@ -103,14 +103,14 @@ export const OpportunitySection = memo(({ onNavigate }: OpportunitySectionProps)
                 return;
             }
 
-            const { error: updateError } = await (supabase as any)
+            const { error: updateError } = await supabase
                 .from("native_wallets")
                 .update({ balance: (wallet.balance || 0) - 1000 })
                 .eq("id", wallet.id);
 
             if (updateError) throw updateError;
 
-            await (supabase as any)
+            await supabase
                 .from("native_transactions")
                 .insert({
                     wallet_id: wallet.id,
@@ -122,7 +122,7 @@ export const OpportunitySection = memo(({ onNavigate }: OpportunitySectionProps)
 
             await supabase
                 .from('profiles')
-                .update({ is_tech_match_unlocked: true } as any)
+                .update({ is_tech_match_unlocked: true })
                 .eq('id', user.id);
 
             localStorage.setItem('techMatchUnlocked', 'true');
