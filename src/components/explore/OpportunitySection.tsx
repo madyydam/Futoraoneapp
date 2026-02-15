@@ -13,34 +13,46 @@ export const OpportunitySection = memo(({ onNavigate }: OpportunitySectionProps)
     const { data: isTechMatchUnlocked = false, refetch } = useQuery({
         queryKey: ['techMatchUnlockStatus'],
         queryFn: async () => {
+            // Priority 1: Instant Local Storage check
             const localStatus = localStorage.getItem('techMatchUnlocked');
             if (localStatus === 'true') return true;
 
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) return false;
 
-            const { data: profile } = await supabase
-                .from('profiles')
-                .select('is_tech_match_unlocked')
-                .eq('id', user.id)
-                .single();
+            // Priority 2: Check all possible unlock vectors in parallel
+            const [profileRes, walletRes] = await Promise.all([
+                supabase
+                    .from('profiles')
+                    .select('is_tech_match_unlocked')
+                    .eq('id', user.id)
+                    .single(),
+                supabase
+                    .from('native_wallets')
+                    .select('id')
+                    .eq('user_id', user.id)
+                    .maybeSingle()
+            ]);
 
-            if (profile?.is_tech_match_unlocked) {
+            // If profile says it's unlocked, we're done
+            if (profileRes.data?.is_tech_match_unlocked) {
                 localStorage.setItem('techMatchUnlocked', 'true');
                 return true;
             }
 
-            const { data: wallet } = await supabase.from('native_wallets').select('id').eq('user_id', user.id).single();
-
-            if (wallet) {
+            // Fallback: Check for existing transaction if profile sync lagged
+            if (walletRes.data?.id) {
                 const { data: tx } = await supabase
                     .from('native_transactions')
                     .select('id')
-                    .eq('wallet_id', wallet.id)
+                    .eq('wallet_id', walletRes.data.id)
                     .ilike('description', '%Unlocked Tech Match%')
-                    .limit(1);
+                    .limit(1)
+                    .maybeSingle();
 
-                if (tx && tx.length > 0) {
+                if (tx) {
+                    // Self-healing: Update profile if transaction found
+                    await supabase.from('profiles').update({ is_tech_match_unlocked: true }).eq('id', user.id);
                     localStorage.setItem('techMatchUnlocked', 'true');
                     return true;
                 }
@@ -48,7 +60,7 @@ export const OpportunitySection = memo(({ onNavigate }: OpportunitySectionProps)
 
             return false;
         },
-        staleTime: 1000 * 60 * 5,
+        staleTime: 1000 * 60 * 10, // 10 minutes cache
         initialData: () => localStorage.getItem('techMatchUnlocked') === 'true',
     });
 

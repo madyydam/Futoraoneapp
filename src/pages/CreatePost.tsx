@@ -129,6 +129,24 @@ const CreatePost = () => {
     setLoading(true);
 
     try {
+      // AI Content Moderation Check
+      const { data: moderationData, error: moderationError } = await supabase.functions.invoke('moderate-content', {
+        body: { content: content.trim() }
+      });
+
+      if (moderationError) {
+        console.error("Moderation error:", moderationError);
+        // We continue if moderation service is down, but log it
+      } else if (moderationData?.flagged) {
+        toast({
+          title: "Content Warning",
+          description: "Your post contains content that violates our community guidelines. Please revise it.",
+          variant: "destructive",
+        });
+        setLoading(false);
+        return;
+      }
+
       let imageUrl = imagePreview;
       let videoUrl = null;
 

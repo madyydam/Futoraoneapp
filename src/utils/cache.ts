@@ -1,9 +1,21 @@
 import { openDB, DBSchema } from 'idb';
 
+interface CachedPost {
+    id: string;
+    content: string;
+    created_at: string;
+    updated_at: string;
+    user_id: string;
+    image_url: string | null;
+    video_url: string | null;
+    is_project_update: boolean | null;
+    project_id: string | null;
+}
+
 interface FutoraDB extends DBSchema {
     posts: {
         key: string;
-        value: any;
+        value: CachedPost;
     };
 }
 
@@ -20,7 +32,7 @@ export const initDB = async () => {
     });
 };
 
-export const savePostsToCache = async (posts: any[]) => {
+export const savePostsToCache = async (posts: CachedPost[]) => {
     const db = await initDB();
     const tx = db.transaction(STORE_NAME, 'readwrite');
     const store = tx.objectStore(STORE_NAME);

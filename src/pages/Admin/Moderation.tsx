@@ -1,6 +1,6 @@
-import { useEffect, useState, useCallback, memo, useMemo } from "react";
+import { useCallback, memo, useMemo, useState } from "react";
 import { AdminLayout } from "@/components/AdminLayout";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -8,7 +8,8 @@ import {
     MessageSquare,
     Trash2,
     Search,
-    Briefcase
+    Briefcase,
+    Loader2
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
@@ -21,6 +22,7 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog"
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 const CommentItem = memo(({ comment, onDelete }: { comment: any; onDelete: (id: string) => void }) => (
     <div className="flex gap-4 items-start border-b border-slate-100 pb-5 last:border-0 hover:bg-slate-50/50 p-2 rounded-xl transition-colors">
@@ -153,121 +155,87 @@ const ProjectCard = memo(({ project, onDelete }: { project: any; onDelete: (id: 
 ProjectCard.displayName = "ProjectCard";
 
 const ModerationPage = () => {
-    const [posts, setPosts] = useState<any[]>([]);
-    const [projects, setProjects] = useState<any[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [selectedPostComments, setSelectedPostComments] = useState<any[]>([]);
-    const [isCommentsOpen, setIsCommentsOpen] = useState(false);
-    const [searchTerm, setSearchTerm] = useState("");
+    const queryClient = useQueryClient();
     const { toast } = useToast();
+    const [searchTerm, setSearchTerm] = useState("");
+    const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
+    const [isCommentsOpen, setIsCommentsOpen] = useState(false);
 
-    const fetchPosts = useCallback(async () => {
-        try {
-            setLoading(true);
+    // Queries
+    const { data: posts = [], isLoading: isLoadingPosts } = useQuery({
+        queryKey: ["admin_posts"],
+        queryFn: async () => {
             const { data, error } = await supabase
                 .from("posts")
-                .select(`
-                    *,
-                    profiles:user_id (
-                        username,
-                        avatar_url
-                    )
-                `)
+                .select("*, profiles:user_id (username, avatar_url)")
                 .order("created_at", { ascending: false });
-
             if (error) throw error;
-            setPosts(data || []);
-        } catch (error) {
-            console.error("Error fetching posts:", error);
-            toast({ title: "Error", description: "Failed to fetch posts", variant: "destructive" });
-        } finally {
-            setLoading(false);
-        }
-    }, [toast]);
+            return data || [];
+        },
+        staleTime: 1000 * 60 * 5,
+    });
 
-    const fetchProjects = useCallback(async () => {
-        try {
+    const { data: projects = [], isLoading: isLoadingProjects } = useQuery({
+        queryKey: ["admin_projects"],
+        queryFn: async () => {
             const { data, error } = await supabase
                 .from("projects")
-                .select(`
-                    *,
-                    profiles:user_id (
-                        username,
-                        avatar_url
-                    )
-                `)
+                .select("*, profiles:user_id (username, avatar_url)")
                 .order("created_at", { ascending: false });
-
             if (error) throw error;
-            setProjects(data || []);
-        } catch (error) {
-            console.error("Error fetching projects:", error);
-        }
-    }, []);
+            return data || [];
+        },
+        staleTime: 1000 * 60 * 5,
+    });
 
-    useEffect(() => {
-        fetchPosts();
-        fetchProjects();
-    }, [fetchPosts, fetchProjects]);
-
-    const deletePost = useCallback(async (postId: string) => {
-        try {
-            const { error } = await supabase.from("posts").delete().eq("id", postId);
-            if (error) throw error;
-            setPosts(prev => prev.filter(p => p.id !== postId));
-            toast({ title: "Post Deleted", description: "The post has been permanently removed." });
-        } catch (error) {
-            console.error("Error deleting post:", error);
-            toast({ title: "Error", description: "Failed to delete post", variant: "destructive" });
-        }
-    }, [toast]);
-
-    const deleteProject = useCallback(async (projectId: string) => {
-        try {
-            const { error } = await supabase.from("projects").delete().eq("id", projectId);
-            if (error) throw error;
-            setProjects(prev => prev.filter(p => p.id !== projectId));
-            toast({ title: "Project Deleted", description: "The project has been removed." });
-        } catch (error) {
-            console.error("Error deleting project:", error);
-            toast({ title: "Error", description: "Failed to delete project", variant: "destructive" });
-        }
-    }, [toast]);
-
-    const fetchComments = useCallback(async (postId: string) => {
-        try {
+    const { data: comments = [], isLoading: isLoadingComments } = useQuery({
+        queryKey: ["admin_comments", selectedPostId],
+        queryFn: async () => {
+            if (!selectedPostId) return [];
             const { data, error } = await supabase
                 .from("comments")
-                .select(`
-                    *,
-                    profiles:user_id (
-                        username,
-                        avatar_url
-                    )
-                `)
-                .eq("post_id", postId)
+                .select("*, profiles:user_id (username, avatar_url)")
+                .eq("post_id", selectedPostId)
                 .order("created_at", { ascending: false });
-
             if (error) throw error;
-            setSelectedPostComments(data || []);
-            setIsCommentsOpen(true);
-        } catch (error) {
-            console.error("Error fetching comments:", error);
-            toast({ title: "Error", description: "Failed to fetch comments", variant: "destructive" });
-        }
-    }, [toast]);
+            return data || [];
+        },
+        enabled: !!selectedPostId,
+    });
 
-    const deleteComment = useCallback(async (commentId: string) => {
-        try {
+    // Mutations
+    const deletePostMutation = useMutation({
+        mutationFn: async (postId: string) => {
+            const { error } = await supabase.from("posts").delete().eq("id", postId);
+            if (error) throw error;
+        },
+        onSuccess: () => {
+            toast({ title: "Post Deleted" });
+            queryClient.invalidateQueries({ queryKey: ["admin_posts"] });
+        }
+    });
+
+    const deleteProjectMutation = useMutation({
+        mutationFn: async (projectId: string) => {
+            const { error } = await supabase.from("projects").delete().eq("id", projectId);
+            if (error) throw error;
+        },
+        onSuccess: () => {
+            toast({ title: "Project Deleted" });
+            queryClient.invalidateQueries({ queryKey: ["admin_projects"] });
+        }
+    });
+
+    const deleteCommentMutation = useMutation({
+        mutationFn: async (commentId: string) => {
             const { error } = await supabase.from("comments").delete().eq("id", commentId);
             if (error) throw error;
-            setSelectedPostComments(prev => prev.filter(c => c.id !== commentId));
-            toast({ title: "Comment Deleted", description: "The comment has been removed." });
-        } catch (error) {
-            console.error("Error deleting comment:", error);
-            toast({ title: "Error", description: "Failed to delete comment", variant: "destructive" });
+        },
+        onSuccess: () => {
+            toast({ title: "Comment Deleted" });
+            queryClient.invalidateQueries({ queryKey: ["admin_comments", selectedPostId] });
         }
-    }, [toast]);
+    });
 
     const filteredPosts = useMemo(() => {
         return posts.filter(post =>
@@ -289,59 +257,74 @@ const ModerationPage = () => {
                 <div className="flex justify-between items-center">
                     <div>
                         <h2 className="text-4xl font-black tracking-tight text-slate-900 mb-2">Content Moderation</h2>
-                        <p className="text-slate-500 font-medium italic">Manage user posts and projects.</p>
+                        <p className="text-slate-500 font-medium italic">ENVIRONMENT SCAN: GLOBAL ASSET AUDIT</p>
                     </div>
                 </div>
 
-                <div className="flex items-center gap-4 bg-white p-2 rounded-2xl border border-slate-200 shadow-xl shadow-slate-200/20 max-w-2xl">
+                <div className="flex items-center gap-4 bg-white/80 backdrop-blur-sm p-2 rounded-[2rem] border border-slate-200 shadow-xl shadow-slate-200/20 max-w-2xl">
                     <div className="relative flex-1">
-                        <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
+                        <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-300 w-5 h-5" />
                         <Input
-                            placeholder="Search posts, projects, or users..."
+                            placeholder="Input signature for asset search..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="pl-14 h-14 bg-transparent border-none focus-visible:ring-0 focus-visible:ring-offset-0 text-slate-900 font-medium placeholder:text-slate-300 text-lg"
+                            className="pl-14 h-14 bg-transparent border-none focus-visible:ring-0 focus-visible:ring-offset-0 text-slate-900 font-bold placeholder:text-slate-300 text-lg tracking-tight"
                         />
                     </div>
                 </div>
 
                 <Tabs defaultValue="posts" className="space-y-8">
-                    <TabsList className="bg-slate-100 p-1 rounded-2xl h-14 border border-slate-200 shadow-inner">
-                        <TabsTrigger value="posts" className="rounded-xl px-8 font-black text-xs uppercase tracking-widest data-[state=active]:bg-white data-[state=active]:text-primary data-[state=active]:shadow-lg shadow-slate-200">Posts</TabsTrigger>
-                        <TabsTrigger value="projects" className="rounded-xl px-8 font-black text-xs uppercase tracking-widest data-[state=active]:bg-white data-[state=active]:text-primary data-[state=active]:shadow-lg shadow-slate-200">Projects</TabsTrigger>
+                    <TabsList className="bg-slate-100/50 p-1 rounded-2xl h-14 border border-slate-200 shadow-inner">
+                        <TabsTrigger value="posts" className="rounded-xl px-10 font-black text-[10px] uppercase tracking-widest data-[state=active]:bg-white data-[state=active]:text-primary data-[state=active]:shadow-lg shadow-slate-200">Neural Feed</TabsTrigger>
+                        <TabsTrigger value="projects" className="rounded-xl px-10 font-black text-[10px] uppercase tracking-widest data-[state=active]:bg-white data-[state=active]:text-primary data-[state=active]:shadow-lg shadow-slate-200">Project Nodes</TabsTrigger>
                     </TabsList>
 
                     <TabsContent value="posts" className="space-y-6">
-                        {loading ? (
-                            <div className="flex justify-center py-20">
-                                <div className="animate-spin rounded-full h-12 w-12 border-4 border-slate-100 border-b-primary"></div>
+                        {isLoadingPosts ? (
+                            <div className="flex flex-col items-center justify-center py-32 gap-4">
+                                <Loader2 className="w-10 h-10 text-primary animate-spin" />
+                                <p className="text-slate-400 font-mono text-[10px] animate-pulse">SYNCHRONIZING FEED DATA...</p>
                             </div>
                         ) : (
-                            <div className="grid gap-6 md:grid-cols-2">
+                            <div className="grid gap-8 md:grid-cols-2">
                                 {filteredPosts.length > 0 ? (
                                     filteredPosts.map(post => (
-                                        <PostCard key={post.id} post={post} onDelete={deletePost} onViewComments={fetchComments} />
+                                        <PostCard
+                                            key={post.id}
+                                            post={post}
+                                            onDelete={(id) => deletePostMutation.mutate(id)}
+                                            onViewComments={(id) => { setSelectedPostId(id); setIsCommentsOpen(true); }}
+                                        />
                                     ))
                                 ) : (
-                                    <p className="text-center text-slate-400 font-medium py-20 col-span-2">No posts found.</p>
+                                    <div className="text-center py-20 col-span-2 opacity-30">
+                                        <p className="text-slate-400 font-mono text-sm uppercase tracking-widest">No active signals found.</p>
+                                    </div>
                                 )}
                             </div>
                         )}
                     </TabsContent>
 
                     <TabsContent value="projects" className="space-y-6">
-                        {loading ? (
-                            <div className="flex justify-center py-20">
-                                <div className="animate-spin rounded-full h-12 w-12 border-4 border-slate-100 border-b-primary"></div>
+                        {isLoadingProjects ? (
+                            <div className="flex flex-col items-center justify-center py-32 gap-4">
+                                <Loader2 className="w-10 h-10 text-primary animate-spin" />
+                                <p className="text-slate-400 font-mono text-[10px] animate-pulse">MAPYING PROJECT NODES...</p>
                             </div>
                         ) : (
-                            <div className="grid gap-6 md:grid-cols-2">
+                            <div className="grid gap-8 md:grid-cols-2">
                                 {filteredProjects.length > 0 ? (
                                     filteredProjects.map(project => (
-                                        <ProjectCard key={project.id} project={project} onDelete={deleteProject} />
+                                        <ProjectCard
+                                            key={project.id}
+                                            project={project}
+                                            onDelete={(id) => deleteProjectMutation.mutate(id)}
+                                        />
                                     ))
                                 ) : (
-                                    <p className="text-center text-slate-400 font-medium py-20 col-span-2">No projects found.</p>
+                                    <div className="text-center py-20 col-span-2 opacity-30">
+                                        <p className="text-slate-400 font-mono text-sm uppercase tracking-widest">Sector clear. No projects found.</p>
+                                    </div>
                                 )}
                             </div>
                         )}
@@ -350,28 +333,35 @@ const ModerationPage = () => {
             </div>
 
             <Dialog open={isCommentsOpen} onOpenChange={setIsCommentsOpen}>
-                <DialogContent className="max-w-2xl max-h-[80vh] bg-white border-slate-200 rounded-[2rem] shadow-2xl p-0 overflow-hidden">
+                <DialogContent className="max-w-2xl max-h-[85vh] bg-white border-slate-200 rounded-[2.5rem] shadow-2xl p-0 overflow-hidden">
                     <DialogHeader className="p-8 bg-slate-50/50 border-b border-slate-100">
-                        <DialogTitle className="text-2xl font-black text-slate-900">Comments</DialogTitle>
-                        <DialogDescription className="text-slate-500 font-medium">
-                            Comments on this post.
+                        <DialogTitle className="text-3xl font-black text-slate-900 tracking-tighter">Comment Registry</DialogTitle>
+                        <DialogDescription className="text-slate-500 font-mono text-[10px] uppercase tracking-widest mt-2">
+                            Auditing communication logs for Asset ID: {selectedPostId?.slice(0, 12)}...
                         </DialogDescription>
                     </DialogHeader>
                     <ScrollArea className="h-[50vh] px-8 py-6">
                         <div className="space-y-6">
-                            {selectedPostComments.length === 0 ? (
-                                <p className="text-center text-slate-400 font-medium py-10 italic">No comments found.</p>
-                            ) : selectedPostComments.map(comment => (
+                            {isLoadingComments ? (
+                                <div className="flex flex-col items-center py-10 gap-3">
+                                    <Loader2 className="w-6 h-6 text-primary animate-spin" />
+                                    <p className="text-slate-400 font-mono text-[9px]">DECRYPTING LOGS...</p>
+                                </div>
+                            ) : comments.length === 0 ? (
+                                <div className="text-center py-10 opacity-30">
+                                    <p className="text-slate-400 font-mono text-xs italic">Log entry empty.</p>
+                                </div>
+                            ) : comments.map(comment => (
                                 <CommentItem
                                     key={comment.id}
                                     comment={comment}
-                                    onDelete={deleteComment}
+                                    onDelete={(id) => deleteCommentMutation.mutate(id)}
                                 />
                             ))}
                         </div>
                     </ScrollArea>
-                    <div className="p-6 bg-slate-50/30 border-t border-slate-100 flex justify-end">
-                        <Button variant="outline" onClick={() => setIsCommentsOpen(false)} className="rounded-xl font-bold">Dismiss Report</Button>
+                    <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-end">
+                        <Button variant="outline" onClick={() => setIsCommentsOpen(false)} className="rounded-2xl font-black text-[10px] uppercase border-slate-200 text-slate-500 hover:bg-white transition-all h-12 px-8 tracking-widest">Exit AUDIT MODE</Button>
                     </div>
                 </DialogContent>
             </Dialog>

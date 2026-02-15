@@ -27,16 +27,14 @@ export interface Post {
 const PAGE_SIZE = 5;
 
 // Throttle utility
-const throttle = <T extends (...args: any[]) => any>(func: T, limit: number) => {
+const throttle = <T extends (...args: any[]) => void>(func: T, limit: number) => {
     let inThrottle: boolean;
-    let lastResult: ReturnType<T>;
-    return function (this: any, ...args: Parameters<T>) {
+    return function (this: ThisParameterType<T>, ...args: Parameters<T>) {
         if (!inThrottle) {
-            lastResult = func.apply(this, args);
+            func.apply(this, args);
             inThrottle = true;
             setTimeout(() => inThrottle = false, limit);
         }
-        return lastResult;
     }
 }
 
@@ -90,15 +88,31 @@ export const useFeedLogic = () => {
             const from = (pageParam as number);
             const to = from + PAGE_SIZE - 1;
 
-            const { data, error } = await supabase
+            // Fetch blocked users to filter them out
+            let blockedIds: string[] = [];
+            if (user) {
+                const { data: blocks } = await supabase
+                    .from('blocks')
+                    .select('blocked_id')
+                    .eq('blocker_id', user.id);
+                blockedIds = blocks?.map(b => b.blocked_id) || [];
+            }
+
+            let query = supabase
                 .from("posts")
                 .select(`
-          *,
-          profiles:user_id (username, full_name, avatar_url, is_verified),
-          likes (id, user_id),
-          comments (id),
-          saves (id, user_id)
-        `)
+                    *,
+                    profiles:user_id (username, full_name, avatar_url, is_verified),
+                    likes (id, user_id),
+                    comments (id),
+                    saves (id, user_id)
+                `);
+
+            if (blockedIds.length > 0) {
+                query = query.not('user_id', 'in', `(${blockedIds.join(',')})`);
+            }
+
+            const { data, error } = await query
                 .order("created_at", { ascending: false })
                 .range(from, to);
 
@@ -198,7 +212,7 @@ export const useFeedLogic = () => {
             supabase.removeChannel(postChannel);
             supabase.removeChannel(profileChannel);
         };
-    }, [user, queryClient]);
+    }, [user, queryClient, setUnreadCount]);
 
     const toggleLike = useCallback(async (postId: string, isLiked: boolean) => {
         if (!user) return;
@@ -293,6 +307,37 @@ export const useFeedLogic = () => {
         }
     }, [queryClient, toast]);
 
+    const reportPost = useCallback(async (postId: string, reason: string, details: string) => {
+        if (!user) return;
+        const { error } = await (supabase.from("reports") as any).insert({
+            reporter_id: user.id,
+            target_id: postId,
+            target_type: 'post',
+            reason: `${reason}: ${details}`.trim()
+        });
+
+        if (error) {
+            toast({ title: "Error", description: "Failed to submit report", variant: "destructive" });
+        } else {
+            toast({ title: "Report Submitted", description: "Thank you for helping keep the community safe." });
+        }
+    }, [user, toast]);
+
+    const blockUser = useCallback(async (targetUserId: string) => {
+        if (!user) return;
+        const { error } = await supabase.from("blocks").insert({
+            blocker_id: user.id,
+            blocked_id: targetUserId
+        });
+
+        if (error) {
+            toast({ title: "Error", description: "Failed to block user", variant: "destructive" });
+        } else {
+            queryClient.invalidateQueries({ queryKey: ["posts_feed"] });
+            toast({ title: "User Blocked", description: "You will no longer see their posts in your feed." });
+        }
+    }, [user, queryClient, toast]);
+
     return {
         user,
         userProfile,
@@ -305,6 +350,8 @@ export const useFeedLogic = () => {
         toggleSave,
         handleShare,
         handleDeletePost,
+        reportPost,
+        blockUser,
         refetchFeed: refetch
     };
 };

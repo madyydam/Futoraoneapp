@@ -27,7 +27,9 @@ const Feed = () => {
     toggleLike,
     toggleSave,
     handleShare,
-    handleDeletePost
+    handleDeletePost,
+    reportPost,
+    blockUser
   } = useFeedLogic();
 
   const { ref, inView } = useInView();
@@ -81,6 +83,8 @@ const Feed = () => {
                   onSave={toggleSave}
                   onShare={handleShare}
                   onDelete={handleDeletePost}
+                  onReport={reportPost}
+                  onBlock={blockUser}
                   index={index}
                 />
               ))}

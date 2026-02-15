@@ -186,6 +186,53 @@ const PostDetails = () => {
         }
     };
 
+    const handleReport = useCallback(async (postId: string, reason: string, details: string) => {
+        if (!user) return;
+        try {
+            const { error } = await (supabase.from('reports') as any).insert({
+                reporter_id: user.id,
+                target_id: postId,
+                target_type: 'post',
+                reason: `${reason}: ${details}`.trim()
+            });
+
+            if (error) throw error;
+            toast({
+                title: "Report Submitted",
+                description: "Thank you for helping keep the community safe.",
+            });
+        } catch (error: any) {
+            toast({
+                title: "Error",
+                description: error.message,
+                variant: "destructive"
+            });
+        }
+    }, [user, toast]);
+
+    const handleBlock = useCallback(async (targetUserId: string) => {
+        if (!user) return;
+        try {
+            const { error } = await supabase.from('blocks').insert({
+                blocker_id: user.id,
+                blocked_id: targetUserId
+            });
+
+            if (error) throw error;
+            toast({
+                title: "User Blocked",
+                description: "You will no longer see their posts.",
+            });
+            navigate('/feed');
+        } catch (error: any) {
+            toast({
+                title: "Error",
+                description: error.message,
+                variant: "destructive"
+            });
+        }
+    }, [user, toast, navigate]);
+
     const handleDeletePost = async (postId: string) => {
         try {
             const { error } = await supabase.from('posts').delete().eq('id', postId);
@@ -228,6 +275,8 @@ const PostDetails = () => {
                         onSave={toggleSave}
                         onShare={handleShare}
                         onDelete={handleDeletePost}
+                        onReport={handleReport}
+                        onBlock={handleBlock}
                         index={0}
                     />
                 ) : (

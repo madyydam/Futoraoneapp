@@ -160,14 +160,15 @@ const Auth = () => {
         });
         navigate("/feed");
       }
-    } catch (error: any) {
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred";
       // Check for invalid login credentials
-      if (isLogin && error.message && (error.message.includes("Invalid login credentials") || error.message.includes("Invalid credentials"))) {
+      if (isLogin && errorMessage && (errorMessage.includes("Invalid login credentials") || errorMessage.includes("Invalid credentials"))) {
         setShowLoginErrorDialog(true);
       } else {
         toast({
           title: "Error",
-          description: error.message,
+          description: errorMessage,
           variant: "destructive",
         });
       }

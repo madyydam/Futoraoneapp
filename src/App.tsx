@@ -15,6 +15,7 @@ import ScrollToTop from "@/components/ScrollToTop";
 import { CartoonLoader } from "@/components/CartoonLoader";
 import { AchievementListener } from "@/components/AchievementListener";
 import { InstallPrompt } from "@/components/pwa/InstallPrompt";
+import { PWAUpdateHandler } from "@/components/pwa/PWAUpdateHandler";
 import { UserPresenceProvider } from "@/contexts/UserPresenceContext";
 import { GlobalErrorBoundary } from "@/components/GlobalErrorBoundary";
 import { SectionErrorBoundary } from "@/components/SectionErrorBoundary";
@@ -126,6 +127,7 @@ const App = () => {
         <TooltipProvider>
           <Toaster />
           <Sonner />
+          <PWAUpdateHandler />
           <InstallPrompt />
           <AchievementListener />
           <UserPresenceProvider>

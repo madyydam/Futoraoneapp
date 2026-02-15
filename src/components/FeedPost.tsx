@@ -8,6 +8,7 @@ import { PostHeader } from "@/components/feed/PostHeader";
 import { PostContent } from "@/components/feed/PostContent";
 import { PostMedia } from "@/components/feed/PostMedia";
 import { PostActions } from "@/components/feed/PostActions";
+import { ReportDialog } from "@/components/ReportDialog";
 
 // Lazy load CommentSection
 const CommentSection = lazy(() => import("@/components/CommentSection").then(module => ({ default: module.CommentSection })));
@@ -38,12 +39,15 @@ interface FeedPostProps {
   onSave: (postId: string, isSaved: boolean) => void;
   onShare: (post: Post) => void;
   onDelete: (postId: string) => void;
+  onReport: (postId: string, reason: string, details: string) => void;
+  onBlock: (userId: string) => void;
   index: number;
 }
 
-export const FeedPost = memo(({ post, currentUser, onLike, onSave, onShare, onDelete, index }: FeedPostProps) => {
+export const FeedPost = memo(({ post, currentUser, onLike, onSave, onShare, onDelete, onReport, onBlock, index }: FeedPostProps) => {
   const navigate = useNavigate();
   const [showComments, setShowComments] = useState(false);
+  const [showReportDialog, setShowReportDialog] = useState(false);
 
   // Memoize computed values
   const isLiked = useMemo(
@@ -122,6 +126,8 @@ export const FeedPost = memo(({ post, currentUser, onLike, onSave, onShare, onDe
               onProfileClick={handleProfileClick}
               onEdit={handleEdit}
               onDelete={handleDelete}
+              onReport={() => setShowReportDialog(true)}
+              onBlock={() => onBlock(post.user_id)}
             />
           </div>
 
@@ -154,6 +160,12 @@ export const FeedPost = memo(({ post, currentUser, onLike, onSave, onShare, onDe
             />
           </div>
 
+          <ReportDialog
+            open={showReportDialog}
+            onOpenChange={setShowReportDialog}
+            targetType="post"
+            onConfirm={(reason, details) => onReport(post.id, reason, details)}
+          />
           {/* Comments Section (Heavy, load only when needed) */}
           <AnimatePresence>
             {showComments && (

@@ -3,7 +3,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
-import { MoreVertical, Edit, Trash } from "lucide-react";
+import { MoreVertical, Edit, Trash, ShieldAlert, Ban } from "lucide-react";
 import { motion } from "framer-motion";
 import { calculateReadTime } from "@/utils/readTime";
 
@@ -23,6 +23,8 @@ interface PostHeaderProps {
     onProfileClick: (e: React.MouseEvent) => void;
     onEdit: () => void;
     onDelete: () => void;
+    onReport?: () => void;
+    onBlock?: () => void;
 }
 
 export const PostHeader = memo(({
@@ -33,7 +35,9 @@ export const PostHeader = memo(({
     index,
     onProfileClick,
     onEdit,
-    onDelete
+    onDelete,
+    onReport,
+    onBlock
 }: PostHeaderProps) => {
     return (
         <div className="flex items-center justify-between mb-4">
@@ -66,28 +70,41 @@ export const PostHeader = memo(({
                 </div>
             </motion.div>
 
-            {isOwner && (
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="opacity-0 group-hover:opacity-100 transition-opacity">
-                            <MoreVertical className="w-5 h-5" />
-                        </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={onEdit}>
-                            <Edit className="w-4 h-4 mr-2" />
-                            Edit Post
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                            onClick={onDelete}
-                            className="text-destructive"
-                        >
-                            <Trash className="w-4 h-4 mr-2" />
-                            Delete Post
-                        </DropdownMenuItem>
-                    </DropdownMenuContent>
-                </DropdownMenu>
-            )}
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="opacity-0 group-hover:opacity-100 transition-opacity">
+                        <MoreVertical className="w-5 h-5" />
+                    </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                    {isOwner ? (
+                        <>
+                            <DropdownMenuItem onClick={onEdit}>
+                                <Edit className="w-4 h-4 mr-2" />
+                                Edit Post
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                                onClick={onDelete}
+                                className="text-destructive"
+                            >
+                                <Trash className="w-4 h-4 mr-2" />
+                                Delete Post
+                            </DropdownMenuItem>
+                        </>
+                    ) : (
+                        <>
+                            <DropdownMenuItem onClick={onReport}>
+                                <ShieldAlert className="w-4 h-4 mr-2 text-amber-500" />
+                                Report Post
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={onBlock} className="text-destructive">
+                                <Ban className="w-4 h-4 mr-2" />
+                                Block User
+                            </DropdownMenuItem>
+                        </>
+                    )}
+                </DropdownMenuContent>
+            </DropdownMenu>
         </div>
     );
 });

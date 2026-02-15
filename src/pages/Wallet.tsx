@@ -45,7 +45,7 @@ interface ProfileData {
 
 // --- Memoized Sub-Components ---
 
-const QuickAction = React.memo(({ icon: Icon, label, color = "bg-zinc-800", onClick }: { icon: any, label: string, color?: string, onClick?: () => void }) => (
+const QuickAction = React.memo(({ icon: Icon, label, color = "bg-zinc-800", onClick }: { icon: React.ComponentType<{ className?: string }>, label: string, color?: string, onClick?: () => void }) => (
     <button onClick={onClick} className="flex flex-col items-center gap-2 group">
         <div className={`w-14 h-14 rounded-2xl ${color} flex items-center justify-center border border-white/10 group-hover:scale-105 transition-transform shadow-lg shadow-black/50`}>
             <Icon className="w-6 h-6 text-white" />

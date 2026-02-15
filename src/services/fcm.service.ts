@@ -3,8 +3,8 @@
  * Handles push notification registration and token management
  */
 
-import { initializeApp } from 'firebase/app';
-import { getMessaging, getToken, onMessage } from 'firebase/messaging';
+import { initializeApp, FirebaseApp } from 'firebase/app';
+import { getMessaging, getToken, onMessage, Messaging } from 'firebase/messaging';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -15,8 +15,8 @@ const getTrimmedEnv = (key: string) => {
 };
 
 // Lazy initialized Firebase app
-let firebaseApp: any = null;
-let messaging: any = null;
+let firebaseApp: FirebaseApp | null = null;
+let messaging: Messaging | null = null;
 
 const initFirebase = () => {
     if (firebaseApp) return { app: firebaseApp, messaging };
@@ -112,11 +112,12 @@ export const requestNotificationPermission = async (): Promise<string | null> =>
             return token;
         }
 
-    } catch (error: any) {
+    } catch (error) {
         console.error('Error getting FCM token:', error);
+        const errorMessage = error instanceof Error ? error.message : '';
 
         // If it's a 400 or API Key error, try clearing IndexedDB which often stores old project state
-        if (error?.message?.includes('API key not valid') || error?.message?.includes('400')) {
+        if (errorMessage.includes('API key not valid') || errorMessage.includes('400')) {
             console.warn('FCM: Attempting to clear stale IndexedDB...');
             try {
                 window.indexedDB.deleteDatabase('firebase-installations-database');

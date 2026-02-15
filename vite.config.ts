@@ -39,10 +39,50 @@ export default defineConfig(({ mode }) => {
           display: "standalone",
           orientation: "portrait",
           icons: [
-            { src: "app-icon.png", sizes: "192x192", type: "image/png", purpose: "any maskable" },
-            { src: "app-icon.png", sizes: "512x512", type: "image/png", purpose: "any maskable" },
+            { src: "app-icon.png", sizes: "192x192", type: "image/png", purpose: "any" },
+            { src: "app-icon.png", sizes: "512x512", type: "image/png", purpose: "any" },
+            { src: "favicon.png", sizes: "192x192", type: "image/png", purpose: "maskable" },
           ],
           categories: ["social", "productivity", "developer tools"],
+          screenshots: [
+            {
+              src: "futora-phoenix.png",
+              sizes: "1080x1920",
+              type: "image/png",
+              form_factor: "narrow",
+              label: "FutoraOne Mobile Feed"
+            },
+            {
+              src: "futora-phoenix.png",
+              sizes: "1920x1080",
+              type: "image/png",
+              form_factor: "wide",
+              label: "FutoraOne Desktop Experience"
+            }
+          ],
+          shortcuts: [
+            {
+              name: "Feed",
+              short_name: "Feed",
+              description: "View latest technical updates",
+              url: "/feed",
+              icons: [{ src: "favicon.png", sizes: "192x192" }]
+            },
+            {
+              name: "Create Post",
+              short_name: "Create",
+              description: "Share a new insight",
+              url: "/create-post",
+              icons: [{ src: "favicon.png", sizes: "192x192" }]
+            },
+            {
+              name: "AI Mentor",
+              short_name: "Mentor",
+              description: "Chat with the AI Mentor",
+              url: "/ai-mentor",
+              icons: [{ src: "favicon.png", sizes: "192x192" }]
+            }
+          ],
         },
         workbox: {
           globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
@@ -73,9 +113,18 @@ export default defineConfig(({ mode }) => {
                 expiration: { maxEntries: 60, maxAgeSeconds: 30 * 24 * 60 * 60 },
               },
             },
+            {
+              urlPattern: /^https:\/\/vunrtqpxoqwuvofkqvuz\.supabase\.co\/rest\/v1\/.*/i,
+              handler: "StaleWhileRevalidate",
+              options: {
+                cacheName: "supabase-api-cache",
+                expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 }, // 24 hours
+                cacheableResponse: { statuses: [0, 200] },
+              },
+            },
           ],
           navigateFallback: "index.html",
-          navigateFallbackDenylist: [/^\/api/],
+          navigateFallbackDenylist: [/^\/api/, /^\/functions/],
         },
         devOptions: {
           enabled: true,
@@ -89,12 +138,16 @@ export default defineConfig(({ mode }) => {
       target: "esnext",
       rollupOptions: {
         output: {
-          manualChunks: {
-            vendor: ["react", "react-dom", "react-router-dom"],
-            ui: ["@radix-ui/react-dialog", "@radix-ui/react-popover", "@radix-ui/react-tooltip", "framer-motion"],
-            utils: ["date-fns", "clsx", "tailwind-merge"],
-            supabase: ["@supabase/supabase-js"],
-            firebase: ["firebase/app", "firebase/auth", "firebase/messaging"],
+          manualChunks(id: string) {
+            if (id.includes('node_modules')) {
+              if (id.includes('@supabase')) return 'supabase';
+              if (id.includes('@tanstack')) return 'tanstack';
+              if (id.includes('framer-motion')) return 'motion';
+              if (id.includes('lucide-react')) return 'lucide';
+              if (id.includes('react')) return 'vendor';
+              if (id.includes('firebase')) return 'firebase';
+              return 'deps';
+            }
           },
         },
       },
