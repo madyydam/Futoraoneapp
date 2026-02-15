@@ -136,21 +136,6 @@ export default defineConfig(({ mode }) => {
     build: {
       minify: "esbuild",
       target: "esnext",
-      rollupOptions: {
-        output: {
-          manualChunks(id: string) {
-            if (id.includes('node_modules')) {
-              if (id.includes('@supabase')) return 'supabase';
-              if (id.includes('@tanstack')) return 'tanstack';
-              if (id.includes('framer-motion')) return 'motion';
-              if (id.includes('lucide-react')) return 'lucide';
-              if (id.includes('react')) return 'vendor';
-              if (id.includes('firebase')) return 'firebase';
-              return 'deps';
-            }
-          },
-        },
-      },
       chunkSizeWarningLimit: 1200,
     },
     resolve: {
