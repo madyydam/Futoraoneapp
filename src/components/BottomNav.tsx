@@ -13,17 +13,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
+import { useAuth } from "@/hooks/useAuth";
+
 export const BottomNav = React.memo(() => {
   const navigate = useNavigate();
   const location = useLocation();
-  const [userId, setUserId] = useState<string>();
+  const { userId } = useAuth();
   const unreadCount = useUnreadMessages(userId);
-
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      setUserId(user?.id);
-    });
-  }, []);
 
   const isActive = useCallback((path: string) => {
     if (path === "/explore" && location.pathname === "/tech-reels") return true;

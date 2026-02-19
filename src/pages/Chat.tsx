@@ -187,11 +187,21 @@ const Chat = () => {
 
   const markMessagesAsRead = async () => {
     if (!user || !conversationId) return;
+
+    // 1. Update last_read_at in participants table
     await supabase
       .from("conversation_participants")
       .update({ last_read_at: new Date().toISOString() })
       .eq("conversation_id", conversationId)
       .eq("user_id", user.id);
+
+    // 2. Mark individual messages as read
+    await supabase
+      .from("messages")
+      .update({ is_read: true, read_at: new Date().toISOString() })
+      .eq("conversation_id", conversationId)
+      .neq("sender_id", user.id)
+      .eq("is_read", false);
   };
 
   const sendMessage = async (e: React.FormEvent) => {

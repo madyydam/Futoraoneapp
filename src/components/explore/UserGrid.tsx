@@ -6,7 +6,6 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { FollowButton } from "@/components/FollowButton";
 import { StartChatButton } from "@/components/StartChatButton";
-import { OnlineIndicator } from "@/components/OnlineIndicator";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
 import type { UserProfile } from "./ExploreHeader";
 
@@ -72,7 +71,7 @@ export const UserGrid = memo(({ loading, people, handleUserClick, currentUser, o
                                                     {user.username[0]?.toUpperCase()}
                                                 </AvatarFallback>
                                             </Avatar>
-                                            <OnlineIndicator userId={user.id} />
+
                                         </div>
                                         <div
                                             className="flex-1 min-w-0 cursor-pointer"

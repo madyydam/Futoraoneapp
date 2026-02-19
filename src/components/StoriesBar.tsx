@@ -4,7 +4,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { OnlineIndicator } from "./OnlineIndicator";
+
 
 interface Story {
   id: string;
@@ -116,7 +116,7 @@ export const StoriesBar = ({ currentUserId }: StoriesBarProps) => {
                   <AvatarFallback>{story.profiles.username[0]?.toUpperCase()}</AvatarFallback>
                 </Avatar>
               </div>
-              <OnlineIndicator userId={story.user_id} />
+
             </div>
             <span className="text-xs text-foreground truncate max-w-[64px]">
               {story.profiles.username}

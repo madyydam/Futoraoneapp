@@ -38,15 +38,26 @@ export const ActiveUsersList = ({ currentUserId }: { currentUserId: string }) =>
     }, []);
 
     const fetchOnlineUsers = async () => {
-        const { data, error } = await supabase
+        const { data: presenceData, error } = await supabase
             .from("user_presence")
-            .select("user_id, profiles!inner(id, username, full_name, avatar_url)")
+            .select("user_id")
             .eq("is_online", true)
             .neq("user_id", currentUserId)
             .limit(20);
 
-        if (data) {
-            setOnlineUsers(data as any);
+        if (presenceData && presenceData.length > 0) {
+            const uids = presenceData.map(p => p.user_id);
+            const { data: profilesData } = await supabase
+                .from("profiles")
+                .select("id, username, full_name, avatar_url")
+                .in("id", uids);
+
+            setOnlineUsers(presenceData.map(p => ({
+                user_id: p.user_id,
+                profiles: profilesData?.find(prof => prof.id === p.user_id)
+            })) as any);
+        } else {
+            setOnlineUsers([]);
         }
     };
 

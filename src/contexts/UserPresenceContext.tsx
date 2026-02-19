@@ -37,60 +37,7 @@ export const UserPresenceProvider = ({ children }: { children: ReactNode }) => {
         const mainChannel = supabase.channel("global-presence");
 
         const setupSubscription = async () => {
-            // Only subscribe if user is logged in
-            if (!user) return;
-
-            // Subscribe to ALL changes in user_presence table
-            // This reduces the number of WebSocket connections to 1, instead of N per user card.
-            console.log("Initializing presence channel for user:", user.id);
-
-            mainChannel
-                .on(
-                    "postgres_changes",
-                    {
-                        event: "*",
-                        schema: "public",
-                        table: "user_presence",
-                    },
-                    (payload) => {
-                        if (!mounted) return;
-                        if (payload.new) {
-                            // Define shape for safe casting
-                            interface PresencePayload {
-                                user_id: string;
-                                is_online: boolean;
-                                last_seen: string;
-                            }
-                            const newData = payload.new as unknown as PresencePayload;
-                            const userId = newData.user_id;
-
-                            setOnlineUsers((prev) => {
-                                // Optimization: Only update if data actually changed
-                                const existing = prev[userId];
-                                if (existing && existing.is_online === newData.is_online && existing.last_seen === newData.last_seen) {
-                                    return prev;
-                                }
-                                return {
-                                    ...prev,
-                                    [userId]: {
-                                        is_online: newData.is_online,
-                                        last_seen: newData.last_seen,
-                                    },
-                                };
-                            });
-                        }
-                    }
-                )
-                .subscribe((status) => {
-                    if (!mounted) return;
-                    if (status === "SUBSCRIBED") {
-                        console.log("Connected to presence channel");
-                    } else if (status === "CHANNEL_ERROR") {
-                        console.error("Failed to connect to presence channel. Check Supabase RLS policies and API keys.");
-                    } else if (status === "TIMED_OUT") {
-                        console.error("Connection to presence channel timed out - retrying...");
-                    }
-                });
+            // Presence system disabled for now
         };
 
         setupSubscription();
@@ -128,15 +75,7 @@ export const UserPresenceProvider = ({ children }: { children: ReactNode }) => {
         };
 
         const setupHeartbeat = async () => {
-            // Initial online set
-            await updatePresence(true);
-
-            // Heartbeat every 30 seconds
-            if (mounted) {
-                interval = setInterval(() => {
-                    updatePresence(true);
-                }, 30000);
-            }
+            // Heartbeat disabled for now
         };
 
         setupHeartbeat();

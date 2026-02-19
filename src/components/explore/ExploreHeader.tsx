@@ -12,6 +12,7 @@ export interface UserProfile {
     full_name: string;
     avatar_url: string | null;
     is_verified?: boolean | null;
+    follower_count?: number;
 }
 
 export interface SearchResult {

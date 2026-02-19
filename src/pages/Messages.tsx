@@ -5,17 +5,21 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { BottomNav } from "@/components/BottomNav";
-import { MessageCircle, Search, Users, Heart } from "lucide-react";
+import {
+  MessageCircle, Search, Users, Heart, Pin, PinOff,
+  Trash2, ArrowLeft, MessageSquarePlus, Filter, Archive, Plus
+} from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { formatDistanceToNow } from "date-fns";
-import type { User } from "@supabase/supabase-js";
 import { Badge } from "@/components/ui/badge";
+import { useAuth } from "@/hooks/useAuth";
 import { CartoonLoader } from "@/components/CartoonLoader";
 import { CreateGroupDialog } from "@/components/chat/CreateGroupDialog";
 import { CreateCommunityDialog } from "@/components/chat/CreateCommunityDialog";
+import { AdvancedFilterModal, FilterOptions } from "@/components/chat/AdvancedFilterModal";
 import { GroupsList } from "@/components/chat/GroupsList";
 import { CommunitiesList } from "@/components/chat/CommunitiesList";
-import { OnlineIndicator } from "@/components/OnlineIndicator";
+
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ContextMenu,
@@ -24,8 +28,7 @@ import {
   ContextMenuTrigger,
   ContextMenuSeparator,
 } from "@/components/ui/context-menu";
-import { Pin, PinOff, Archive as ArchiveIcon, Trash2, ArrowLeft, MessageSquarePlus, Filter, Archive, Plus } from "lucide-react";
-import { ActiveUsersList } from "@/components/chat/ActiveUsersList";
+
 import { toast } from "sonner";
 
 interface ConversationWithDetails {
@@ -69,9 +72,9 @@ const ConversationItem = React.memo(({
     <ContextMenu>
       <ContextMenuTrigger>
         <Card
-          className={`border-0 shadow-sm hover:shadow-md transition-all cursor-pointer mb-2 
+          className={`border-0 shadow-sm hover:shadow-md transition-all cursor-pointer mb-2
             ${conv.is_tech_match ? 'bg-pink-50 dark:bg-pink-900/10 border-l-4 border-l-pink-500' : 'bg-card/50 hover:bg-card'}
-            ${conv.unreadCount > 0 ? 'bg-primary/5 ring-1 ring-primary/10' : ''} 
+            ${conv.unreadCount > 0 ? 'bg-primary/5 ring-1 ring-primary/10' : ''}
             ${conv.is_pinned && !conv.is_tech_match ? 'border-l-4 border-l-primary bg-primary/5' : ''}`}
           onClick={() => onClick(conv.id)}
         >
@@ -84,7 +87,6 @@ const ConversationItem = React.memo(({
                     {conv.otherUser.username[0]?.toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
-                <OnlineIndicator userId={conv.otherUser.id} className="w-3.5 h-3.5 border-[3px]" />
                 {conv.is_tech_match && (
                   <div className="absolute -bottom-1 -right-1 bg-pink-500 rounded-full p-1 border-2 border-white dark:border-slate-900">
                     <Heart className="w-2.5 h-2.5 fill-white text-white" />
@@ -139,7 +141,7 @@ const ConversationItem = React.memo(({
             </>
           ) : (
             <>
-              <ArchiveIcon className="mr-2 h-4 w-4" /> Archive Chat
+              <Archive className="mr-2 h-4 w-4" /> Archive Chat
             </>
           )}
         </ContextMenuItem>
@@ -156,41 +158,33 @@ ConversationItem.displayName = "ConversationItem";
 
 const Messages = () => {
   const navigate = useNavigate();
-  const [user, setUser] = useState<User | null>(null);
   const [conversations, setConversations] = useState<ConversationWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<'chats' | 'groups' | 'communities'>('chats');
   const [showUnreadOnly, setShowUnreadOnly] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [activeFilters, setActiveFilters] = useState<FilterOptions>({
+    sortBy: "active",
+    category: [],
+    verifiedOnly: false,
+    publicOnly: false
+  });
+
+  const { user, isLoading: authLoading } = useAuth();
 
   useEffect(() => {
-    const checkAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        navigate("/auth");
-      } else {
-        setUser(session.user);
-      }
-    };
-
-    checkAuth();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (!session) {
-        navigate("/auth");
-      } else {
-        setUser(session.user);
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, [navigate]);
+    if (!user && !authLoading) {
+      navigate("/auth");
+    }
+  }, [user, authLoading, navigate]);
 
 
   const fetchConversations = useCallback(async () => {
     if (!user) return;
     try {
+      // 1. Fetch conversations where user is a participant
       const { data: conversationsData, error } = await supabase
         .from('conversation_participants')
         .select(`
@@ -211,6 +205,7 @@ const Messages = () => {
 
       const convIds = conversationsData.map(cp => cp.conversation_id);
 
+      // 2. Fetch other participants
       const { data: participantsList } = await supabase
         .from('conversation_participants')
         .select('conversation_id, user_id')
@@ -231,6 +226,7 @@ const Messages = () => {
         }));
       }
 
+      // 3. Fetch last messages & unread counts
       const lastMessagesPromises = convIds.map(convId =>
         supabase
           .from('messages')
@@ -252,6 +248,7 @@ const Messages = () => {
       );
       const unreadCountsResults = await Promise.all(unreadCountsPromises);
 
+      // Combine data
       const userConversations = conversationsData.map((cp, idx) => {
         const participant = allParticipants?.find((p) => p.conversation_id === cp.conversation_id);
         const lastMsg = lastMessagesResults[idx]?.data;
@@ -259,7 +256,7 @@ const Messages = () => {
 
         return {
           id: cp.conversation_id,
-          updated_at: (cp.conversations as any).updated_at,
+          updated_at: (cp.conversations as any)?.updated_at,
           is_pinned: false,
           is_archived: false,
           otherUser: participant?.profiles,
@@ -269,7 +266,7 @@ const Messages = () => {
         };
       });
 
-      const sorted = userConversations
+      const sorted = (userConversations as any[])
         .filter(c => c.otherUser)
         .sort((a, b) => {
           if (a.is_pinned && !b.is_pinned) return -1;
@@ -283,6 +280,7 @@ const Messages = () => {
       setConversations(sorted as ConversationWithDetails[]);
     } catch (error) {
       console.error('Error fetching conversations:', error);
+      toast.error("Failed to sync messages");
     } finally {
       setLoading(false);
     }
@@ -348,71 +346,129 @@ const Messages = () => {
 
   return (
     <div className="min-h-screen bg-background pb-20 relative">
-      <div className="sticky top-0 z-30 bg-background/80 backdrop-blur-md border-b border-border/50">
-        <div className="p-3 sm:p-4 space-y-4 max-w-3xl mx-auto">
-          <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent flex items-center gap-2">
-              Messages (Sync Verified)
-            </h1>
-            <div className="flex gap-2">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="rounded-full"
-                onClick={() => fetchConversations()}
-                title="Refresh conversations"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16" />
-                </svg>
-              </Button>
-              <Button
-                variant={showArchived ? "secondary" : "ghost"}
-                size="icon"
-                className="rounded-full"
-                onClick={() => setShowArchived(!showArchived)}
-              >
-                <Archive className="w-5 h-5" />
-              </Button>
+      <AnimatePresence mode="wait">
+        {activeTab !== 'communities' ? (
+          <div className="sticky top-0 z-30 bg-background/80 backdrop-blur-md border-b">
+            <div className="p-4 space-y-4 max-w-3xl mx-auto">
+              <div className="flex items-center justify-between">
+                <h1 className="text-2xl font-black tracking-tighter bg-gradient-to-r from-primary to-blue-600 bg-clip-text text-transparent">
+                  {activeTab === 'chats' ? 'Messages' : 'Groups'}
+                </h1>
+                <div className="flex gap-2">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="rounded-full"
+                    onClick={() => fetchConversations()}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16" />
+                    </svg>
+                  </Button>
+                  <Button
+                    variant={showArchived ? "secondary" : "ghost"}
+                    size="icon"
+                    className="rounded-full"
+                    onClick={() => setShowArchived(!showArchived)}
+                  >
+                    <Archive className="w-5 h-5" />
+                  </Button>
+                </div>
+              </div>
+
+              <div className="flex p-1 bg-muted rounded-lg">
+                {(['chats', 'groups', 'communities'] as const).map((tab) => (
+                  <button
+                    key={tab}
+                    onClick={() => setActiveTab(tab)}
+                    className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-all ${activeTab === tab
+                      ? 'bg-background text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                  >
+                    {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                  </button>
+                ))}
+              </div>
+
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9 bg-muted/50 border-none"
+                />
+              </div>
             </div>
           </div>
+        ) : (
+          <motion.div
+            key="communities-header"
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="sticky top-0 z-30 bg-background/80 backdrop-blur-md border-b border-border/50"
+          >
+            <div className="p-4 space-y-4 max-w-3xl mx-auto">
+              {/* Branded Community Header */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-blue-600 flex items-center justify-center shadow-lg shadow-primary/20 p-2">
+                    <Users className="w-full h-full text-white" />
+                  </div>
+                  <h1 className="text-2xl font-black tracking-tighter">Communities</h1>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className={`h-10 w-10 rounded-xl bg-muted/30 transition-all ${(activeFilters.category.length > 0 || activeFilters.verifiedOnly || activeFilters.publicOnly)
+                      ? 'text-primary border border-primary/20 bg-primary/5'
+                      : 'text-muted-foreground hover:text-primary'
+                      }`}
+                    onClick={() => setIsFilterOpen(true)}
+                  >
+                    <Filter className="w-5 h-5" />
+                  </Button>
+                </div>
+              </div>
 
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              placeholder="Search messages and groups..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 bg-muted/50 border-0 focus-visible:ring-1 focus-visible:ring-primary/50"
-            />
-          </div>
+              {/* Tabs Integration */}
+              <div className="flex p-1 bg-muted rounded-lg w-full">
+                {(['chats', 'groups', 'communities'] as const).map((tab) => (
+                  <button
+                    key={tab}
+                    onClick={() => setActiveTab(tab)}
+                    className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-all ${activeTab === tab
+                      ? 'bg-background text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                  >
+                    {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                  </button>
+                ))}
+              </div>
 
-          <div className="flex p-1 bg-muted/30 rounded-full items-center justify-between gap-1">
-            <button
-              onClick={() => setActiveTab('chats')}
-              className={`flex-1 py-2 px-4 text-sm font-medium transition-all rounded-full ${activeTab === 'chats' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-            >
-              Chats
-            </button>
-            <button
-              onClick={() => setActiveTab('groups')}
-              className={`flex-1 py-2 px-4 text-sm font-medium transition-all rounded-full ${activeTab === 'groups' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-            >
-              Groups
-            </button>
-            <button
-              onClick={() => setActiveTab('communities')}
-              className={`flex-1 py-2 px-4 text-sm font-medium transition-all rounded-full ${activeTab === 'communities' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-            >
-              Communities
-            </button>
-          </div>
-        </div>
-      </div>
+              {/* Premium Search Bar */}
+              <div className="relative group">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/30 group-focus-within:text-primary transition-colors" />
+                <Input
+                  placeholder="Discover tech hubs..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10 h-12 bg-muted/40 border-border/20 rounded-2xl focus-visible:ring-4 focus-visible:ring-primary/10 transition-all font-bold placeholder:font-medium placeholder:text-muted-foreground/20 text-sm"
+                />
+                <div className="absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-20 hidden sm:block">
+                  <kbd className="px-1.5 py-0.5 rounded border border-border text-[10px] font-black uppercase">⌘ K</kbd>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <div className="max-w-3xl mx-auto p-3 sm:p-4">
-        <ActiveUsersList currentUserId={user?.id} />
-
         {loading ? (
           <CartoonLoader />
         ) : activeTab === 'chats' ? (
@@ -442,64 +498,62 @@ const Messages = () => {
             )}
           </div>
         ) : activeTab === 'groups' ? (
-          <div className="mt-4">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="font-semibold px-1">Suggested Groups</h2>
-            </div>
-            <GroupsList currentUserId={user?.id || ''} />
+          <div className="mt-2">
+            <GroupsList currentUserId={user?.id || ''} searchQuery={searchQuery} />
           </div>
         ) : (
           <div className="mt-4">
-            <CommunitiesList currentUserId={user?.id || ''} />
+            {/* Active Users List - Removed for now */}
+
+            {/* Conversation List */}
+            <CommunitiesList
+              currentUserId={user?.id || ''}
+              filters={activeFilters}
+              searchQuery={searchQuery}
+            />
           </div>
         )}
       </div>
 
+      <AdvancedFilterModal
+        isOpen={isFilterOpen}
+        onClose={() => setIsFilterOpen(false)}
+        filters={activeFilters}
+        onApply={(newFilters) => setActiveFilters(newFilters)}
+      />
+
       <BottomNav />
 
-      {/* Floating Action Button for Groups & Communities */}
-      <AnimatePresence mode="wait">
-        {activeTab === 'groups' && (
-          <motion.div
-            key="groups-fab"
-            initial={{ opacity: 0, scale: 0.5, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.5, y: 20 }}
-            className="fixed bottom-24 right-6 z-50"
-          >
-            <CreateGroupDialog
-              trigger={
-                <Button
-                  size="icon"
-                  className="h-14 w-14 rounded-full shadow-lg bg-primary hover:bg-primary/90 text-white"
-                >
-                  <Plus className="h-6 w-6" />
-                </Button>
-              }
-            />
-          </motion.div>
-        )}
-        {activeTab === 'communities' && (
-          <motion.div
-            key="communities-fab"
-            initial={{ opacity: 0, scale: 0.5, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.5, y: 20 }}
-            className="fixed bottom-24 right-6 z-50"
-          >
-            <CreateCommunityDialog
-              trigger={
-                <Button
-                  size="icon"
-                  className="h-14 w-14 rounded-full shadow-lg bg-primary hover:bg-primary/90 text-white"
-                >
-                  <Plus className="h-6 w-6" />
-                </Button>
-              }
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Floating Action Button (FAB) */}
+      <div className="fixed bottom-24 right-6 z-40">
+        {activeTab === 'groups' ? (
+          <CreateGroupDialog
+            trigger={
+              <motion.button
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.9 }}
+                className="w-14 h-14 rounded-full bg-primary text-white shadow-xl flex items-center justify-center hover:bg-primary/90 transition-colors"
+              >
+                <Plus className="w-7 h-7" />
+              </motion.button>
+            }
+          />
+        ) : activeTab === 'communities' ? (
+          <CreateCommunityDialog
+            trigger={
+              <motion.button
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.9 }}
+                className="w-14 h-14 rounded-full bg-primary text-white shadow-xl flex items-center justify-center hover:bg-primary/90 transition-colors"
+              >
+                <Plus className="w-7 h-7" />
+              </motion.button>
+            }
+          />
+        ) : null}
+      </div>
+
+
     </div>
   );
 };

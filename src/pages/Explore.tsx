@@ -12,33 +12,28 @@ import { CategoryGrid } from "@/components/explore/CategoryGrid";
 import { TrendingSection } from "@/components/explore/TrendingSection";
 import { TRENDING_TOPICS, TRENDING_PROJECTS } from "@/components/explore/exploreConstants";
 import type { User } from "@supabase/supabase-js";
+import { useAuth } from "@/hooks/useAuth";
 
 const Explore = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [people, setPeople] = useState<UserProfile[]>([]);
-  const [loadingPeople, setLoadingPeople] = useState(true);
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
-  const [searchLoading, setSearchLoading] = useState(false);
   const [showResults, setShowResults] = useState(false);
+  const [loadingPeople, setLoadingPeople] = useState(true);
+  const [searchLoading, setSearchLoading] = useState(false);
+
+  const { user: currentUser, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  // Move callbacks before useEffect to satisfy linter and modify dependency arrays
-  const fetchCurrentUser = useCallback(async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    setCurrentUser(user);
-  }, []);
-
   const fetchPeople = useCallback(async () => {
+    if (authLoading) return;
     setLoadingPeople(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-
       const { data, error } = await supabase
         .from("profiles")
         .select("id, username, full_name, avatar_url, is_verified")
-        .neq("id", user?.id || "")
+        .neq("id", currentUser?.id || "")
         .order("created_at", { ascending: false })
         .limit(4);
 
@@ -66,7 +61,7 @@ const Explore = () => {
     } finally {
       setLoadingPeople(false);
     }
-  }, []);
+  }, [currentUser, authLoading]);
 
   const performSearch = useCallback(async (query: string) => {
     if (!query.trim()) return;
@@ -135,7 +130,6 @@ const Explore = () => {
   }, [debouncedSearchQuery, performSearch]);
 
   useEffect(() => {
-    fetchCurrentUser();
     fetchPeople();
 
     console.log("Setting up real-time profile sync for Explore...");
@@ -193,7 +187,7 @@ const Explore = () => {
       console.log("Cleaning up Explore real-time profile sync...");
       supabase.removeChannel(channel);
     };
-  }, [fetchCurrentUser, fetchPeople]);
+  }, [fetchPeople]);
 
   const handleCategoryClick = useCallback((categoryName: string) => {
     toast({

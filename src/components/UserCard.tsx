@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { motion } from "framer-motion";
-import { OnlineIndicator } from "@/components/OnlineIndicator";
+
 import { FollowButton } from "@/components/FollowButton";
 import { StartChatButton } from "@/components/StartChatButton";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
@@ -53,7 +53,7 @@ export const UserCard = memo(({ user, currentUser, index }: UserCardProps) => {
                                     {user.username[0]?.toUpperCase()}
                                 </AvatarFallback>
                             </Avatar>
-                            <OnlineIndicator userId={user.id} />
+
                         </div>
 
                         <div className="flex-1 min-w-0">

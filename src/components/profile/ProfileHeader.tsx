@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { MapPin, Users, Shield, Github, Linkedin, Instagram, Globe, MoreVertical, Star } from "lucide-react";
 import { FollowButton } from "@/components/FollowButton";
 import { StartChatButton } from "@/components/StartChatButton";
-import { OnlineIndicator } from "@/components/OnlineIndicator";
+
 import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { CreateReviewDialog } from "@/components/CreateReviewDialog";
 import {
@@ -120,7 +120,7 @@ export const ProfileHeader = memo(({
                                 </AvatarFallback>
                             </Avatar>
                         </div>
-                        <OnlineIndicator userId={userId} className="w-5 h-5 absolute bottom-0 right-0 border-4 border-background rounded-full" />
+
                     </div>
                     <div className="flex flex-wrap gap-2 justify-end">
                         <FollowButton

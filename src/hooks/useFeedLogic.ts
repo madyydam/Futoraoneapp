@@ -4,6 +4,7 @@ import { useToast } from "@/hooks/use-toast";
 import type { User } from "@supabase/supabase-js";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "./useAuth";
 
 export interface Post {
     id: string;
@@ -44,19 +45,14 @@ export const useFeedLogic = () => {
     const queryClient = useQueryClient();
     const [unreadCount, setUnreadCount] = useState(0);
 
-    // Auth State
-    const { data: user } = useQuery({
-        queryKey: ["auth_user"],
-        queryFn: async () => {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) {
-                navigate("/auth");
-                return null;
-            }
-            return user;
-        },
-        staleTime: 1000 * 60 * 30, // 30 minutes
-    });
+    const { user, isLoading: authLoading } = useAuth();
+
+    // Redir if no user (handled in a separate effect for stability)
+    useEffect(() => {
+        if (!user && !authLoading) {
+            // navigate("/auth"); // Keep it for now or rely on middleware/App.tsx
+        }
+    }, [user, authLoading]);
 
     // Profile State
     const { data: userProfile } = useQuery({
@@ -74,6 +70,21 @@ export const useFeedLogic = () => {
         enabled: !!user,
     });
 
+    // Fetch blocked users to filter them out (Cached)
+    const { data: blockedIds = [] } = useQuery({
+        queryKey: ["blocked_users", user?.id],
+        queryFn: async () => {
+            if (!user) return [];
+            const { data: blocks } = await supabase
+                .from('blocks')
+                .select('blocked_id')
+                .eq('blocker_id', user.id);
+            return blocks?.map(b => b.blocked_id) || [];
+        },
+        enabled: !!user,
+        staleTime: 1000 * 30, // 30 seconds is enough for feed consistency
+    });
+
     // Infinite Query for Posts
     const {
         data,
@@ -83,20 +94,10 @@ export const useFeedLogic = () => {
         isFetchingNextPage,
         refetch
     } = useInfiniteQuery({
-        queryKey: ["posts_feed"],
+        queryKey: ["posts_feed", blockedIds],
         queryFn: async ({ pageParam = 0 }) => {
             const from = (pageParam as number);
             const to = from + PAGE_SIZE - 1;
-
-            // Fetch blocked users to filter them out
-            let blockedIds: string[] = [];
-            if (user) {
-                const { data: blocks } = await supabase
-                    .from('blocks')
-                    .select('blocked_id')
-                    .eq('blocker_id', user.id);
-                blockedIds = blocks?.map(b => b.blocked_id) || [];
-            }
 
             let query = supabase
                 .from("posts")
@@ -309,7 +310,7 @@ export const useFeedLogic = () => {
 
     const reportPost = useCallback(async (postId: string, reason: string, details: string) => {
         if (!user) return;
-        const { error } = await (supabase.from("reports") as any).insert({
+        const { error } = await (supabase.from("reports" as any) as any).insert({
             reporter_id: user.id,
             target_id: postId,
             target_type: 'post',
