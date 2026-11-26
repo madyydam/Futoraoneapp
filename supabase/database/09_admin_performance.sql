@@ -323,3 +323,16 @@ GRANT EXECUTE ON FUNCTION public.check_rate_limit(TEXT, INT, INTERVAL) TO servic
 
 -- Allow authenticated users to call ensure_my_wallet (self-heal their own wallet row)
 GRANT EXECUTE ON FUNCTION public.ensure_my_wallet() TO authenticated;
+
+-- Lock down legacy exec_sql helper if present on live DB (never expose to anon/authenticated)
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'public' AND p.proname = 'exec_sql'
+  ) THEN
+    REVOKE ALL ON FUNCTION public.exec_sql(TEXT) FROM PUBLIC, anon, authenticated;
+    GRANT EXECUTE ON FUNCTION public.exec_sql(TEXT) TO service_role;
+  END IF;
+END $$;

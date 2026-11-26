@@ -159,9 +159,13 @@ const Auth = () => {
     setLoading(true);
 
     try {
+      const normalizedEmail = email.trim().toLowerCase();
+      const normalizedUsername = username.trim();
+      const normalizedFullName = fullName.trim();
+
       if (isLogin) {
         const { data, error } = await supabase.auth.signInWithPassword({
-          email,
+          email: normalizedEmail,
           password,
           options: { captchaToken: captchaToken || undefined }
         });
@@ -177,13 +181,13 @@ const Auth = () => {
         navigate("/feed");
       } else {
         const { data, error } = await supabase.auth.signUp({
-          email,
+          email: normalizedEmail,
           password,
           options: {
             captchaToken: captchaToken || undefined,
             data: {
-              full_name: fullName,
-              username: username,
+              full_name: normalizedFullName,
+              username: normalizedUsername,
               avatar_url: selectedAvatar,
             },
             emailRedirectTo: `${window.location.origin}/feed`,

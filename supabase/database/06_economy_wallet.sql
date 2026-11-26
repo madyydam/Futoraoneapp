@@ -223,7 +223,9 @@ CREATE TRIGGER on_review_created
 -- ─────────────────────────────────────────────────────────────────────────────
 
 DROP TRIGGER IF EXISTS on_auth_user_created_wallet ON auth.users;
+DROP TRIGGER IF EXISTS on_auth_user_created_native_wallet ON auth.users;
 DROP FUNCTION IF EXISTS public.handle_new_user_wallet();
+DROP FUNCTION IF EXISTS public.handle_new_user_native_wallet();
 
 -- Backfill wallets for existing users present in both auth.users and public.profiles (safe to re-run)
 WITH inserted_wallets AS (

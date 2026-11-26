@@ -377,6 +377,12 @@ CREATE TRIGGER trg_sync_profile_admin_flag
   FOR EACH ROW EXECUTE FUNCTION public.sync_profile_admin_flag();
 
 -- Collision-safe signup trigger supporting email & Google OAuth + 1,000-coin native wallet
+-- Drop any legacy triggers on auth.users first to avoid cascade failures
+DROP TRIGGER IF EXISTS on_auth_user_created_wallet ON auth.users;
+DROP TRIGGER IF EXISTS on_auth_user_created_native_wallet ON auth.users;
+DROP FUNCTION IF EXISTS public.handle_new_user_wallet();
+DROP FUNCTION IF EXISTS public.handle_new_user_native_wallet();
+
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -388,9 +394,11 @@ DECLARE
   candidate_username TEXT;
   new_wallet_id UUID;
   resolved_avatar TEXT;
+  resolved_full_name TEXT;
 BEGIN
+  -- 1. Extract sanitized username
   base_username := regexp_replace(
-    lower(COALESCE(NEW.raw_user_meta_data->>'username', split_part(NEW.email, '@', 1), 'user')),
+    lower(COALESCE(NEW.raw_user_meta_data->>'username', split_part(COALESCE(NEW.email, 'user'), '@', 1), 'user')),
     '[^a-z0-9_]', '_', 'g'
   );
   IF length(base_username) < 2 THEN
@@ -398,9 +406,10 @@ BEGIN
   END IF;
 
   candidate_username := base_username;
-  IF EXISTS (SELECT 1 FROM public.profiles WHERE username = candidate_username AND id <> NEW.id) THEN
-    candidate_username := base_username || '_' || substr(replace(NEW.id::text, '-', ''), 1, 6);
-  END IF;
+  -- WHILE loop guarantees NO unique violation on username
+  WHILE EXISTS (SELECT 1 FROM public.profiles WHERE username = candidate_username AND id <> NEW.id) LOOP
+    candidate_username := base_username || '_' || substr(replace(gen_random_uuid()::text, '-', ''), 1, 6);
+  END LOOP;
 
   resolved_avatar := COALESCE(
     NULLIF(NEW.raw_user_meta_data->>'avatar_url', ''),
@@ -408,29 +417,52 @@ BEGIN
     'https://api.dicebear.com/7.x/avataaars/svg?seed=' || NEW.id::text
   );
 
-  INSERT INTO public.profiles (id, email, username, full_name, avatar_url)
-  VALUES (
-    NEW.id,
-    NEW.email,
-    candidate_username,
-    COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.raw_user_meta_data->>'name', candidate_username),
-    resolved_avatar
-  )
-  ON CONFLICT (id) DO UPDATE SET
-    email = EXCLUDED.email,
-    full_name = COALESCE(NULLIF(public.profiles.full_name, ''), EXCLUDED.full_name),
-    avatar_url = COALESCE(NULLIF(public.profiles.avatar_url, ''), EXCLUDED.avatar_url);
+  resolved_full_name := COALESCE(
+    NULLIF(NEW.raw_user_meta_data->>'full_name', ''),
+    NULLIF(NEW.raw_user_meta_data->>'name', ''),
+    candidate_username
+  );
 
-  INSERT INTO public.native_wallets (user_id, balance, currency)
-  VALUES (NEW.id, 1000.00, 'COINS')
-  ON CONFLICT (user_id) DO NOTHING
-  RETURNING id INTO new_wallet_id;
+  -- 2. Insert into profiles with robust exception isolation
+  BEGIN
+    INSERT INTO public.profiles (id, email, username, full_name, avatar_url)
+    VALUES (
+      NEW.id,
+      NEW.email,
+      candidate_username,
+      resolved_full_name,
+      resolved_avatar
+    )
+    ON CONFLICT (id) DO UPDATE SET
+      email = COALESCE(EXCLUDED.email, public.profiles.email),
+      full_name = COALESCE(NULLIF(public.profiles.full_name, ''), EXCLUDED.full_name),
+      avatar_url = COALESCE(NULLIF(public.profiles.avatar_url, ''), EXCLUDED.avatar_url);
+  EXCEPTION WHEN OTHERS THEN
+    RAISE WARNING 'handle_new_user: full profile insert failed (%), attempting minimal fallback', SQLERRM;
+    BEGIN
+      INSERT INTO public.profiles (id, username, full_name)
+      VALUES (NEW.id, candidate_username, resolved_full_name)
+      ON CONFLICT (id) DO NOTHING;
+    EXCEPTION WHEN OTHERS THEN
+      RAISE WARNING 'handle_new_user: minimal profile fallback also failed: %', SQLERRM;
+    END;
+  END;
 
-  IF new_wallet_id IS NOT NULL THEN
-    INSERT INTO public.native_transactions (wallet_id, type, amount, description, status, idempotency_key)
-    VALUES (new_wallet_id, 'cashback', 1000.00, 'Welcome Bonus 🎁', 'completed', 'signup_bonus_' || NEW.id::text)
-    ON CONFLICT DO NOTHING;
-  END IF;
+  -- 3. Wallet & Welcome Bonus creation (isolated: must NEVER block signup)
+  BEGIN
+    INSERT INTO public.native_wallets (user_id, balance, currency)
+    VALUES (NEW.id, 1000.00, 'COINS')
+    ON CONFLICT (user_id) DO NOTHING
+    RETURNING id INTO new_wallet_id;
+
+    IF new_wallet_id IS NOT NULL THEN
+      INSERT INTO public.native_transactions (wallet_id, type, amount, description, status, idempotency_key)
+      VALUES (new_wallet_id, 'cashback', 1000.00, 'Welcome Bonus 🎁', 'completed', 'signup_bonus_' || NEW.id::text)
+      ON CONFLICT DO NOTHING;
+    END IF;
+  EXCEPTION WHEN OTHERS THEN
+    RAISE WARNING 'handle_new_user: wallet creation deferred (%): ensure_my_wallet will self-heal', SQLERRM;
+  END;
 
   RETURN NEW;
 END;
