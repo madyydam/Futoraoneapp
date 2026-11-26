@@ -28,8 +28,8 @@ export const PWAUpdateHandler = () => {
     useEffect(() => {
         if (needUpdate) {
             toast({
-                title: "FutoraOne Update Available",
-                description: "A new version of FutoraOne is available. Refresh to update?",
+                title: "One Update Available",
+                description: "A new version of One is available. Refresh to update?",
                 action: (
                     <Button
                         variant="default"

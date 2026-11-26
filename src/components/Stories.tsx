@@ -215,8 +215,8 @@ export const Stories = memo(() => {
 
     const handleInvite = useCallback(async () => {
         const shareData = {
-            title: 'Join FutoraOne!',
-            text: 'Connect with developers, share projects, and earn rewards on FutoraOne.',
+            title: 'Join One!',
+            text: 'Connect with developers, share projects, and earn rewards on One.',
             url: 'https://futora1.vercel.app',
         };
 

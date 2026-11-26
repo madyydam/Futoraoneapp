@@ -2923,16 +2923,36 @@ CREATE POLICY "Users view own roles or admin" ON public.user_roles
 -- SEED DATA
 -- ─────────────────────────────────────────────────────────────────────────────
 
--- Seed default achievements only on a fresh DB (safe no-op if any rows already exist)
+-- Seed default achievements only on a fresh DB (safe no-op if any rows already exist or schema differs)
 DO $$
+DECLARE
+  v_id_type TEXT;
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM public.achievements LIMIT 1) THEN
-    INSERT INTO public.achievements (name, description, icon, condition_type, condition_value)
-    VALUES
-      ('First Post',        'Created your first post',   'pencil', 'posts_count',    1),
-      ('Social Butterfly',  'Received 50 likes',          'heart',  'likes_received', 50),
-      ('Bug Hunter',        'Reported a bug',             'bug',    NULL,             0),
-      ('Code Wizard',       'Posted 5 code snippets',     'code',   'code_posts',     5);
+    SELECT data_type INTO v_id_type
+    FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'achievements' AND column_name = 'id';
+
+    BEGIN
+      IF v_id_type = 'uuid' THEN
+        INSERT INTO public.achievements (id, name, description, icon, condition_type, condition_value)
+        VALUES
+          (gen_random_uuid(), 'First Post',        'Created your first post',   'pencil', 'posts_count',    1),
+          (gen_random_uuid(), 'Social Butterfly',  'Received 50 likes',          'heart',  'likes_received', 50),
+          (gen_random_uuid(), 'Bug Hunter',        'Reported a bug',             'bug',    NULL,             0),
+          (gen_random_uuid(), 'Code Wizard',       'Posted 5 code snippets',     'code',   'code_posts',     5);
+      ELSE
+        INSERT INTO public.achievements (id, name, description, icon, condition_type, condition_value)
+        VALUES
+          ('first-post',       'First Post',        'Created your first post',   'pencil', 'posts_count',    1),
+          ('social-butterfly', 'Social Butterfly',  'Received 50 likes',          'heart',  'likes_received', 50),
+          ('bug-hunter',       'Bug Hunter',        'Reported a bug',             'bug',    NULL,             0),
+          ('code-wizard',      'Code Wizard',       'Posted 5 code snippets',     'code',   'code_posts',     5)
+        ON CONFLICT (id) DO NOTHING;
+      END IF;
+    EXCEPTION WHEN OTHERS THEN
+      RAISE NOTICE 'Achievements seed skipped: %', SQLERRM;
+    END;
   END IF;
 END $$;
 

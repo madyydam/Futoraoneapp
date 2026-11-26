@@ -22,7 +22,7 @@ const messaging = firebase.messaging();
 messaging.onBackgroundMessage((payload) => {
     console.log('[firebase-messaging-sw.js] Received background message ', payload);
 
-    const notificationTitle = payload.notification.title || 'FutoraOne';
+    const notificationTitle = payload.notification.title || 'One';
     const notificationOptions = {
         body: payload.notification.body,
         icon: '/app-icon.png',

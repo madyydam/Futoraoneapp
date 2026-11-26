@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Logo } from "@/components/Logo";
 import { motion, AnimatePresence } from "framer-motion";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { User, Mail, Lock, Loader2, Camera } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -210,7 +210,7 @@ const Auth = () => {
 
           toast({
             title: "Account created!",
-            description: "Welcome to FutoraOne Tech Community!",
+            description: "Welcome to One Tech Community!",
           });
           navigate("/feed");
         } else {
@@ -239,68 +239,96 @@ const Auth = () => {
   }, [isLogin, email, password, fullName, username, profilePhoto, selectedAvatar, navigate, toast, uploadProfilePhoto, captchaToken]);
 
   return (
-    <div className="min-h-screen bg-[#f0f0f5] relative flex items-center justify-center p-4 overflow-hidden">
+    <div className="min-h-screen bg-gradient-to-b from-[#f8faff] via-[#f4f7ff] to-[#eef2ff] relative flex items-center justify-center p-4 overflow-hidden">
+      {/* Lightweight Brand Ambient Tint */}
+      <div className="absolute inset-0 pointer-events-none z-0">
+        <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(ellipse_at_top,_rgba(37,99,235,0.09),transparent_65%)]" />
+        <div
+          className="absolute inset-0 opacity-[0.3]"
+          style={{
+            backgroundImage:
+              "linear-gradient(rgba(37, 99, 235, 0.045) 1px, transparent 1px), linear-gradient(90deg, rgba(37, 99, 235, 0.045) 1px, transparent 1px)",
+            backgroundSize: "40px 40px",
+          }}
+        />
+      </div>
 
       <motion.div
-        initial={{ opacity: 0, y: 16, scale: 0.97 }}
+        initial={{ opacity: 0, y: 14, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ duration: 0.4, type: "spring", bounce: 0.25 }}
-        className="w-full max-w-sm relative z-10"
+        transition={{ duration: 0.35, ease: "easeOut" }}
+        className="w-full max-w-[400px] relative z-10"
       >
-        <div className="bg-white rounded-[2rem] shadow-[0_1px_2px_rgba(0,0,0,0.05),_0_8px_32px_rgba(0,0,0,0.08)] overflow-hidden">
+        <div className="bg-white/95 backdrop-blur-sm border border-slate-200/80 rounded-[2rem] shadow-[0_20px_50px_-12px_rgba(37,99,235,0.14),0_6px_20px_-4px_rgba(15,23,42,0.07),inset_0_1px_0_#ffffff] overflow-hidden">
 
           {/* Header */}
-          <div className="px-7 pt-7 pb-0 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-[9px] bg-black flex items-center justify-center">
-                <Logo className="w-4 h-4" />
+          <div className="px-6 pt-6 pb-2 flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-blue-50/90 border border-blue-100 flex items-center justify-center shadow-[0_2px_6px_-1px_rgba(37,99,235,0.16),inset_0_1px_0_#ffffff]">
+                <Logo className="w-6 h-6" />
               </div>
-              <span className="text-[11px] font-black tracking-[0.18em] text-black/40 uppercase">FutoraOne</span>
+              <span className="text-xs font-extrabold tracking-[0.22em] text-slate-700 uppercase">One</span>
             </div>
 
-            <div className="flex bg-[#f2f2f7] p-[3px] rounded-[10px] gap-[2px]">
+            <div className="flex bg-slate-100/90 p-1 rounded-full border border-slate-200/80 shadow-[inset_0_1px_3px_rgba(15,23,42,0.07)] gap-0.5">
               <button
+                type="button"
                 onClick={() => { setIsLogin(false); navigate("?mode=signup", { replace: true }); }}
                 className={cn(
-                  "px-4 py-[5px] text-[12px] font-semibold rounded-[8px] transition-all duration-200",
-                  !isLogin ? "bg-white text-black shadow-[0_1px_4px_rgba(0,0,0,0.12)]" : "text-[#8e8e93] hover:text-black"
+                  "px-4 py-1.5 text-[11px] font-bold rounded-full outline-none focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 transition-all duration-200",
+                  !isLogin
+                    ? "bg-gradient-to-r from-primary to-blue-600 text-white shadow-[0_3px_10px_-2px_rgba(37,99,235,0.45),inset_0_1px_0_rgba(255,255,255,0.3)]"
+                    : "text-slate-500 hover:text-slate-800"
                 )}
               >
-                Signup
+                SIGNUP
               </button>
               <button
+                type="button"
                 onClick={() => { setIsLogin(true); navigate("?mode=login", { replace: true }); }}
                 className={cn(
-                  "px-4 py-[5px] text-[12px] font-semibold rounded-[8px] transition-all duration-200",
-                  isLogin ? "bg-white text-black shadow-[0_1px_4px_rgba(0,0,0,0.12)]" : "text-[#8e8e93] hover:text-black"
+                  "px-4 py-1.5 text-[11px] font-bold rounded-full outline-none focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 transition-all duration-200",
+                  isLogin
+                    ? "bg-gradient-to-r from-primary to-blue-600 text-white shadow-[0_3px_10px_-2px_rgba(37,99,235,0.45),inset_0_1px_0_rgba(255,255,255,0.3)]"
+                    : "text-slate-500 hover:text-slate-800"
                 )}
               >
-                Login
+                LOGIN
               </button>
             </div>
           </div>
 
-          <div className="px-7 pt-6 pb-7">
+          <div className="px-6 pt-4 pb-6">
             {/* Headline */}
-            <div className="text-center mb-6">
-              <h2 className="text-[26px] font-extrabold tracking-tight text-black leading-[1.18] mb-0">
+            <div className="text-center mb-5">
+              <h2 className="text-[26px] sm:text-[28px] font-extrabold tracking-tight text-slate-900 leading-[1.16]">
                 {isLogin ? (
-                  <>Welcome <span className="text-[#1a56f5]">Back</span></>
+                  <>
+                    Welcome{" "}
+                    <span className="bg-clip-text text-transparent bg-gradient-to-r from-primary via-blue-600 to-purple-600">
+                      Back
+                    </span>
+                  </>
                 ) : (
-                  <>The Future of <span className="text-[#1a56f5]">Networking</span></>
+                  <>
+                    The Future of{" "}
+                    <span className="bg-clip-text text-transparent bg-gradient-to-r from-primary via-blue-600 to-purple-600">
+                      Networking
+                    </span>
+                  </>
                 )}
               </h2>
             </div>
 
-            {/* Google */}
+            {/* 3D Tactile Google Button */}
             <GoogleSignInButton
               label="Continue with Google"
               redirectPath="/auth"
               disabled={loading}
-              className="w-full h-[50px] rounded-[14px] border-[1.5px] border-[#e5e5ea] bg-white shadow-[0_1px_3px_rgba(0,0,0,0.06)] text-black font-semibold text-[14px] mb-5 hover:bg-[#fafafa] transition-colors"
+              className="w-full h-[48px] rounded-2xl border border-slate-200/90 bg-white shadow-[0_5px_14px_-3px_rgba(15,23,42,0.08),0_2px_0_0_#e2e8f0,inset_0_1px_0_#ffffff] text-slate-800 font-semibold text-sm mb-4 hover:bg-slate-50 hover:-translate-y-0.5 active:translate-y-[1px] transition-all duration-150"
             />
 
-            <form onSubmit={handleSubmit} className="space-y-[10px]">
+            <form onSubmit={handleSubmit} className="space-y-3">
               <AnimatePresence mode="wait">
                 {!isLogin && (
                   <motion.div
@@ -308,48 +336,48 @@ const Auth = () => {
                     initial={{ opacity: 0, scale: 0.98 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.98 }}
-                    transition={{ duration: 0.2 }}
-                    className="space-y-[10px]"
+                    transition={{ duration: 0.18 }}
+                    className="space-y-3"
                   >
-                    {/* Photo + Name/Username row */}
+                    {/* Compact Photo + Name/Username Row */}
                     <div className="flex gap-3 items-center">
                       <label htmlFor="photo-upload" className="cursor-pointer group flex-shrink-0">
-                        <div className="w-[68px] h-[68px] rounded-[18px] bg-[#f2f2f7] border-[1.5px] border-dashed border-[#d1d1d6] flex flex-col items-center justify-center gap-1 group-hover:bg-[#e9e9ef] transition-colors relative overflow-hidden">
+                        <div className="w-[74px] h-[94px] rounded-2xl bg-blue-50/70 border-2 border-dashed border-primary/30 shadow-[inset_0_1px_3px_rgba(37,99,235,0.06)] flex flex-col items-center justify-center gap-1 group-hover:bg-blue-50 group-hover:border-primary/50 transition-colors relative overflow-hidden">
                           {photoPreview ? (
                             <img src={photoPreview} alt="Preview" className="w-full h-full object-cover" />
                           ) : (
                             <>
-                              <User className="w-5 h-5 text-[#b0b0b8]" />
-                              <span className="text-[9px] font-bold text-[#b0b0b8] uppercase tracking-wider">Photo</span>
+                              <User className="w-5 h-5 text-primary/60" />
+                              <span className="text-[9px] font-bold text-primary/70 uppercase tracking-wider">Photo</span>
                             </>
                           )}
-                          <div className="absolute inset-0 flex items-center justify-center bg-black/30 text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="absolute inset-0 flex items-center justify-center bg-slate-900/35 text-white opacity-0 group-hover:opacity-100 transition-opacity">
                             <Camera className="w-4 h-4" />
                           </div>
                         </div>
                       </label>
                       <input id="photo-upload" type="file" accept="image/*" onChange={handlePhotoChange} className="hidden" />
 
-                      <div className="flex-1 space-y-[10px]">
+                      <div className="flex-1 space-y-2.5">
                         <div className="relative">
-                          <User className="absolute left-3 top-1/2 -translate-y-1/2 w-[14px] h-[14px] text-[#c7c7cc]" />
+                          <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                           <Input
                             id="fullName"
                             placeholder="Full Name"
                             value={fullName}
                             onChange={(e) => setFullName(e.target.value)}
-                            className="pl-[36px] h-[46px] rounded-[12px] border-[1.5px] border-[#e5e5ea] bg-[#fafafa] text-black placeholder:text-[#b0b0b8] text-[14px] focus:border-[#1a56f5] focus:bg-white focus:ring-2 focus:ring-[#1a56f5]/10 transition-all"
+                            className="pl-10 h-11 rounded-xl border border-slate-200 bg-slate-50/80 text-slate-900 placeholder:text-slate-400 text-sm shadow-[inset_0_1px_2px_rgba(15,23,42,0.04)] focus:border-primary focus:bg-white focus:ring-2 focus:ring-primary/15 transition-all"
                             required
                           />
                         </div>
                         <div className="relative">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#c7c7cc] text-[13px] font-mono leading-none">@</span>
+                          <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-mono leading-none">@</span>
                           <Input
                             id="username"
                             placeholder="username"
                             value={username}
                             onChange={(e) => setUsername(e.target.value)}
-                            className="pl-[30px] h-[46px] rounded-[12px] border-[1.5px] border-[#e5e5ea] bg-[#fafafa] text-black placeholder:text-[#b0b0b8] text-[14px] focus:border-[#1a56f5] focus:bg-white focus:ring-2 focus:ring-[#1a56f5]/10 transition-all"
+                            className="pl-9 h-11 rounded-xl border border-slate-200 bg-slate-50/80 text-slate-900 placeholder:text-slate-400 text-sm shadow-[inset_0_1px_2px_rgba(15,23,42,0.04)] focus:border-primary focus:bg-white focus:ring-2 focus:ring-primary/15 transition-all"
                             required
                           />
                         </div>
@@ -361,28 +389,31 @@ const Auth = () => {
 
               {/* Email */}
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-[14px] h-[14px] text-[#c7c7cc]" />
+                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <Input
                   id="email"
                   type="email"
                   placeholder="Email address"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="pl-[36px] h-[46px] rounded-[12px] border-[1.5px] border-[#e5e5ea] bg-[#fafafa] text-black placeholder:text-[#b0b0b8] text-[14px] focus:border-[#1a56f5] focus:bg-white focus:ring-2 focus:ring-[#1a56f5]/10 transition-all"
+                  className="pl-10 h-11 rounded-xl border border-slate-200 bg-slate-50/80 text-slate-900 placeholder:text-slate-400 text-sm shadow-[inset_0_1px_2px_rgba(15,23,42,0.04)] focus:border-primary focus:bg-white focus:ring-2 focus:ring-primary/15 transition-all"
                   required
                 />
               </div>
 
               {/* Password */}
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-[14px] h-[14px] text-[#c7c7cc]" />
+                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <Input
                   id="password"
                   type="password"
                   placeholder="Password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="pl-[36px] h-[46px] rounded-[12px] border-[1.5px] border-[#e5e5ea] bg-[#fafafa] text-black placeholder:text-[#b0b0b8] text-[14px] focus:border-[#1a56f5] focus:bg-white focus:ring-2 focus:ring-[#1a56f5]/10 transition-all"
+                  className={cn(
+                    "pl-10 h-11 rounded-xl border border-slate-200 bg-slate-50/80 text-slate-900 placeholder:text-slate-400 text-sm shadow-[inset_0_1px_2px_rgba(15,23,42,0.04)] focus:border-primary focus:bg-white focus:ring-2 focus:ring-primary/15 transition-all",
+                    isLogin && "pr-16"
+                  )}
                   required
                   minLength={6}
                 />
@@ -390,7 +421,7 @@ const Auth = () => {
                   <button
                     type="button"
                     onClick={() => { setResetEmail(email); setShowResetDialog(true); }}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-[#1a56f5] font-semibold hover:underline"
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs text-primary font-semibold hover:underline"
                   >
                     Forgot?
                   </button>
@@ -399,7 +430,7 @@ const Auth = () => {
 
               {/* CAPTCHA Widget */}
               {import.meta.env.VITE_CAPTCHA_SITE_KEY && (
-                <div className="flex justify-center scale-90 origin-center py-1">
+                <div className="flex justify-center scale-90 origin-center py-0.5">
                   <Turnstile
                     siteKey={import.meta.env.VITE_CAPTCHA_SITE_KEY}
                     onSuccess={(token) => setCaptchaToken(token)}
@@ -410,10 +441,11 @@ const Auth = () => {
                 </div>
               )}
 
+              {/* 3D Tactile Primary CTA */}
               <Button
                 type="submit"
                 disabled={loading}
-                className="w-full h-[52px] rounded-[14px] bg-black hover:bg-[#1a1a1a] text-white text-[15px] font-semibold tracking-normal shadow-[0_2px_8px_rgba(0,0,0,0.14)] hover:shadow-[0_4px_16px_rgba(0,0,0,0.18)] transition-all active:scale-[.98] mt-1 normal-case"
+                className="w-full h-12 rounded-2xl bg-gradient-to-r from-primary via-blue-600 to-purple-600 hover:from-primary/95 hover:to-purple-600/95 text-white text-[15px] font-bold tracking-wide shadow-[0_10px_22px_-5px_rgba(37,99,235,0.45),0_3px_0_0_rgba(29,78,216,0.65),inset_0_1px_1px_rgba(255,255,255,0.3)] hover:shadow-[0_14px_26px_-5px_rgba(37,99,235,0.5),0_3px_0_0_rgba(29,78,216,0.65)] hover:-translate-y-0.5 active:translate-y-[2px] active:shadow-[0_4px_10px_-3px_rgba(37,99,235,0.4)] transition-all duration-150 mt-1"
               >
                 {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : isLogin ? "Sign In" : "Create My Account"}
               </Button>
@@ -421,25 +453,25 @@ const Auth = () => {
           </div>
 
           {/* Footer */}
-          <div className="px-7 py-4 bg-[#fafafa] border-t border-[#f0f0f0]">
-            <p className="text-[11px] text-[#aeaeb2] text-center leading-relaxed">
-              By joining FutoraOne, you agree to our{" "}
-              <a href="/terms" className="text-[#1a56f5] font-medium hover:underline">Terms of Service</a>
+          <div className="px-6 py-4 bg-slate-50/80 border-t border-slate-100">
+            <p className="text-[11px] text-slate-500 text-center leading-relaxed">
+              By joining One, you agree to our{" "}
+              <Link to="/terms" className="text-primary font-semibold hover:underline">Terms of Service</Link>
               {" "}and{" "}
-              <a href="/privacy" className="text-[#1a56f5] font-medium hover:underline">Privacy Policy</a>.
+              <Link to="/privacy" className="text-primary font-semibold hover:underline">Privacy Policy</Link>.
             </p>
           </div>
         </div>
       </motion.div>
 
       <Dialog open={showLoginErrorDialog} onOpenChange={setShowLoginErrorDialog}>
-        <DialogContent className="sm:max-w-md bg-card/95 backdrop-blur-xl border-white/10">
+        <DialogContent className="sm:max-w-md bg-white border-slate-200 text-slate-900 shadow-2xl">
           <DialogHeader>
-            <div className="mx-auto w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center mb-4">
+            <div className="mx-auto w-12 h-12 rounded-full bg-red-50 flex items-center justify-center mb-4">
               <Lock className="w-6 h-6 text-red-500" />
             </div>
-            <DialogTitle className="text-center text-xl font-bold">Authentication Failed</DialogTitle>
-            <DialogDescription className="text-center text-base mt-2">
+            <DialogTitle className="text-center text-xl font-bold text-slate-900">Authentication Failed</DialogTitle>
+            <DialogDescription className="text-center text-base mt-2 text-slate-600">
               We couldn't find an account with those credentials. Would you like to create one instead?
             </DialogDescription>
           </DialogHeader>
@@ -460,10 +492,10 @@ const Auth = () => {
       </Dialog>
 
       <Dialog open={showResetDialog} onOpenChange={setShowResetDialog}>
-        <DialogContent className="sm:max-w-md bg-card/95 backdrop-blur-xl border-white/10">
+        <DialogContent className="sm:max-w-md bg-white border-slate-200 text-slate-900 shadow-2xl">
           <DialogHeader>
-            <DialogTitle className="text-xl font-bold">Reset Password</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="text-xl font-bold text-slate-900">Reset Password</DialogTitle>
+            <DialogDescription className="text-slate-600">
               Enter your account email and we&apos;ll send a secure password recovery link.
             </DialogDescription>
           </DialogHeader>

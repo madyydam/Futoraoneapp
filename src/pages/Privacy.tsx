@@ -91,7 +91,7 @@ const Privacy = () => {
         <section>
           <h2 className="text-xl font-bold mb-3">7. Children's Privacy</h2>
           <p className="text-muted-foreground leading-relaxed">
-            FutoraOne is not intended for users under 13 years of age. We do not knowingly collect
+            One is not intended for users under 13 years of age. We do not knowingly collect
             information from children under 13.
           </p>
         </section>

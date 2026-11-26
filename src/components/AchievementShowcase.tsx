@@ -188,12 +188,12 @@ export const AchievementShowcase = memo(({ userId }: { userId?: string }) => {
     const handleShare = useCallback(async () => {
         const unlockedCount = achievements.filter(a => a.unlocked_at).length;
         const totalXp = achievements.reduce((acc, curr) => acc + (curr.unlocked_at ? curr.xp_reward : 0), 0);
-        const shareText = `I've unlocked ${unlockedCount} achievements and earned ${totalXp} XP on FutoraOne! 🚀`;
+        const shareText = `I've unlocked ${unlockedCount} achievements and earned ${totalXp} XP on One! 🚀`;
 
         if (navigator.share) {
             try {
                 await navigator.share({
-                    title: 'My FutoraOne Achievements',
+                    title: 'My One Achievements',
                     text: shareText,
                     url: window.location.href,
                 });
@@ -284,7 +284,7 @@ export const AchievementShowcase = memo(({ userId }: { userId?: string }) => {
                             variant="outline"
                             size="icon"
                             className="h-8 w-8 border-blue-400/20 hover:bg-blue-400/10 text-blue-400"
-                            onClick={() => window.open(`https://twitter.com/intent/tweet?text=I've just unlocked new achievements on FutoraOne! 🚀 Check out my dev profile!&url=${encodeURIComponent(window.location.href)}`, '_blank', 'noopener,noreferrer')}
+                            onClick={() => window.open(`https://twitter.com/intent/tweet?text=I've just unlocked new achievements on One! 🚀 Check out my dev profile!&url=${encodeURIComponent(window.location.href)}`, '_blank', 'noopener,noreferrer')}
                         >
                             <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"></path></svg>
                         </Button>

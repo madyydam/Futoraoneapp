@@ -25,7 +25,7 @@ const Terms = () => {
         <section>
           <h2 className="text-xl font-bold mb-3">1. Acceptance of Terms</h2>
           <p className="text-muted-foreground leading-relaxed">
-            By accessing and using FutoraOne Tech Community, you accept and agree to be bound by the
+            By accessing and using One Tech Community, you accept and agree to be bound by the
             terms and provision of this agreement.
           </p>
         </section>
@@ -41,7 +41,7 @@ const Terms = () => {
         <section>
           <h2 className="text-xl font-bold mb-3">3. User Content</h2>
           <p className="text-muted-foreground leading-relaxed">
-            You retain ownership of all content you post on FutoraOne. However, by posting content, you
+            You retain ownership of all content you post on One. However, by posting content, you
             grant us a worldwide, non-exclusive license to use, reproduce, and display your content on
             the platform.
           </p>

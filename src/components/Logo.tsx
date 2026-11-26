@@ -5,8 +5,8 @@ export const Logo = ({ className = "" }: { className?: string }) => {
   return (
     <img
       src={logo}
-      alt="FutoraOne Logo"
-      className={cn("object-contain mix-blend-screen contrast-125", className)}
+      alt="One Logo"
+      className={cn("object-contain mix-blend-multiply dark:mix-blend-screen contrast-110", className)}
       decoding="async"
     />
   );

@@ -187,7 +187,7 @@ export const TourController = () => {
                         <div className="flex items-center justify-between mb-3">
                             <div className="flex items-center gap-2">
                                 <div className="w-12 h-12 rounded-full bg-primary/5 flex items-center justify-center border border-primary/20 overflow-hidden shadow-inner">
-                                    <img src="/logo.png" alt="FutoraOne" className="w-[85%] h-[85%] object-contain scale-110" />
+                                    <img src="/logo.png" alt="One" className="w-[85%] h-[85%] object-contain scale-110 mix-blend-multiply dark:mix-blend-screen" />
                                 </div>
                                 <h4 className="font-bold text-lg">{activeStep.title}</h4>
                             </div>
@@ -369,7 +369,7 @@ const CelebrationPopup = () => {
                             WELCOME TO
                         </h1>
                         <h2 className="text-5xl font-black mb-6 italic tracking-tighter bg-gradient-to-r from-primary via-blue-600 to-purple-600 bg-clip-text text-transparent">
-                            FUTORAONE
+                            ONE
                         </h2>
                     </motion.div>
 

@@ -7,7 +7,7 @@ export const FeedSkeleton = () => {
         <div className="min-h-screen bg-gradient-to-br from-muted/30 to-background">
             <header className="sticky top-0 z-50 bg-card border-b border-black/20 dark:border-border shadow-sm">
                 <div className="max-w-2xl mx-auto px-4 py-4 flex items-center justify-between">
-                    <h1 className="text-2xl font-bold gradient-text">FutoraOne</h1>
+                    <h1 className="text-2xl font-bold gradient-text">One</h1>
                     <div className="flex items-center gap-4">
                         <Button size="icon" variant="ghost" className="relative w-12 h-12 mr-2 bg-primary/5 rounded-full" disabled>
                             <Zap className="w-8 h-8 text-primary/50" />

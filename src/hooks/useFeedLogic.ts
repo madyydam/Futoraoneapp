@@ -128,7 +128,7 @@ export const useFeedLogic = () => {
                     posts: [
                         {
                             id: 'demo-1',
-                            content: 'Welcome to FutoraOne! This is a demo post to get you started. Share your thoughts with the world! 🚀',
+                            content: 'Welcome to One! This is a demo post to get you started. Share your thoughts with the world! 🚀',
                             image_url: 'https://images.unsplash.com/photo-1614850523296-d8c1af93d400?w=800&auto=format&fit=crop',
                             video_url: null,
                             user_id: 'system',

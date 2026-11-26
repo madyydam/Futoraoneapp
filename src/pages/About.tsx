@@ -41,7 +41,7 @@ const About = () => {
           >
             <ArrowLeft size={24} />
           </Button>
-          <h1 className="text-2xl font-bold text-foreground">About FutoraOne</h1>
+          <h1 className="text-2xl font-bold text-foreground">About One</h1>
         </div>
       </div>
 
@@ -51,7 +51,7 @@ const About = () => {
           <div className="w-24 h-24 mx-auto bg-primary rounded-full flex items-center justify-center tech-glow">
             <Code size={48} className="text-primary-foreground" />
           </div>
-          <h2 className="text-3xl font-bold text-foreground">FutoraOne Tech Community</h2>
+          <h2 className="text-3xl font-bold text-foreground">One Tech Community</h2>
           <p className="text-muted-foreground text-lg">
             Where tech enthusiasts share ideas, projects, and innovations
           </p>
@@ -62,7 +62,7 @@ const About = () => {
           <CardContent className="p-6">
             <h3 className="text-xl font-bold text-foreground mb-3">Our Mission</h3>
             <p className="text-muted-foreground leading-relaxed">
-              FutoraOne is built for developers, engineers, and tech enthusiasts who want to share their
+              One is built for developers, engineers, and tech enthusiasts who want to share their
               work, learn from others, and build amazing things together. We provide a platform where
               innovation meets collaboration, and where every project can find its audience.
             </p>

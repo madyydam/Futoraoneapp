@@ -31,11 +31,11 @@ export default defineConfig(({ mode }) => {
         registerType: "autoUpdate",
         includeAssets: ["favicon.png", "robots.txt", "app-icon.png"],
         manifest: {
-          name: "FutoraOne",
-          short_name: "FutoraOne",
+          name: "One",
+          short_name: "One",
           description: "The Future of Social Networking for Developers",
-          theme_color: "#0f172a",
-          background_color: "#0f172a",
+          theme_color: "#ffffff",
+          background_color: "#ffffff",
           display: "standalone",
           orientation: "portrait",
           icons: [
@@ -50,14 +50,14 @@ export default defineConfig(({ mode }) => {
               sizes: "1080x1920",
               type: "image/png",
               form_factor: "narrow",
-              label: "FutoraOne Mobile Feed"
+              label: "One Mobile Feed"
             },
             {
               src: "futora-phoenix.png",
               sizes: "1920x1080",
               type: "image/png",
               form_factor: "wide",
-              label: "FutoraOne Desktop Experience"
+              label: "One Desktop Experience"
             }
           ],
           shortcuts: [

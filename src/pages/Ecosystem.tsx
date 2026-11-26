@@ -358,7 +358,7 @@ const Ecosystem = () => {
                         <ShieldCheck className="w-12 h-12 text-primary mx-auto mb-6 opacity-80" />
                         <h3 className="text-2xl font-black mb-3 text-white">Unified Futora ID</h3>
                         <p className="text-muted-foreground max-w-lg mx-auto text-sm">
-                            Your FutoraOne account works across the entire ecosystem. Zero friction. Total control.
+                            Your One account works across the entire ecosystem. Zero friction. Total control.
                         </p>
                     </div>
                     <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-primary/20 rounded-full blur-[100px] pointer-events-none" />

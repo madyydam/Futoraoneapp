@@ -37,7 +37,7 @@ const SettingsPage = () => {
             });
 
             // Set defaults if missing
-            if (!configMap["site_name"]) configMap["site_name"] = "FutoraOne";
+            if (!configMap["site_name"]) configMap["site_name"] = "One";
             if (!configMap["support_email"]) configMap["support_email"] = "support@futoraone.com";
             if (configMap["public_registration"] === undefined) configMap["public_registration"] = true;
             if (configMap["maintenance_mode"] === undefined) configMap["maintenance_mode"] = false;
@@ -143,7 +143,7 @@ const SettingsPage = () => {
                                             <Input
                                                 value={config.site_name || ''}
                                                 onChange={(e) => updateConfig('site_name', e.target.value)}
-                                                placeholder="e.g. FutoraOne"
+                                                placeholder="e.g. One"
                                                 className="h-12 bg-slate-50 border-slate-200 rounded-xl focus:ring-primary/20 font-medium"
                                             />
                                         </div>

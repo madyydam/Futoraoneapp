@@ -49,7 +49,7 @@ export const QRCodeDialog = ({ open, onOpenChange, username, userId }: QRCodeDia
             try {
                 await navigator.share({
                     title: `${username}'s Profile`,
-                    text: `Check out my FutoraOne profile!`,
+                    text: `Check out my One profile!`,
                     url: profileUrl,
                 });
             } catch (error) {

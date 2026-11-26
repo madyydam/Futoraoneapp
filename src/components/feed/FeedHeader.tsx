@@ -22,7 +22,7 @@ export const FeedHeader = memo(({ unreadCount = 0 }: FeedHeaderProps) => {
         <header className="sticky top-0 z-50 bg-card border-b border-black/20 dark:border-border shadow-sm">
             <div className="max-w-2xl mx-auto px-4 py-4 flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                    <h1 className="text-2xl font-bold gradient-text">FutoraOne</h1>
+                    <h1 className="text-2xl font-bold gradient-text">One</h1>
                     <div className="opacity-70 mt-1">
                         <HelpButton currentPageId="feed" />
                     </div>

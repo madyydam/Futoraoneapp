@@ -95,7 +95,7 @@ const FeedbackPage = () => {
             setSubmitted(true);
             toast({
                 title: "Feedback Submitted!",
-                description: "Thank you for helping us improve FutoraOne.",
+                description: "Thank you for helping us improve One.",
             });
         } catch (error: any) {
             console.error("Error submitting feedback:", error);
@@ -124,7 +124,7 @@ const FeedbackPage = () => {
                     </div>
                     <h1 className="text-3xl font-bold text-foreground">Feedback Received!</h1>
                     <p className="text-muted-foreground text-lg max-w-md mx-auto">
-                        Thanks! Your feedback has been submitted. Our team will review it shortly to make FutoraOne even better.
+                        Thanks! Your feedback has been submitted. Our team will review it shortly to make One even better.
                     </p>
                     <Button
                         onClick={() => navigate("/profile")}
@@ -164,7 +164,7 @@ const FeedbackPage = () => {
                                 <span className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm">1</span>
                                 <h2 className="font-bold text-lg text-foreground">Rate your overall experience*</h2>
                             </div>
-                            <p className="text-sm text-muted-foreground">Rate your overall experience with FutoraOne</p>
+                            <p className="text-sm text-muted-foreground">Rate your overall experience with One</p>
 
                             <div className="flex justify-between items-center px-2 py-4">
                                 {[1, 2, 3, 4, 5].map((star) => (

@@ -8,7 +8,7 @@ export const sendPushNotification = async (userId: string, message: string) => {
     try {
         await sendFCMPush({
             userId,
-            title: "FutoraOne",
+            title: "One",
             body: message
         });
     } catch (error) {

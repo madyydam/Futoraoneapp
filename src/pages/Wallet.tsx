@@ -387,7 +387,7 @@ export default function Wallet() {
                 <div className="relative z-10 flex flex-col justify-between h-full">
                   <div className="flex justify-between items-start">
                     <div>
-                      <h3 className="text-white font-black italic tracking-tighter text-lg">FutoraOne</h3>
+                      <h3 className="text-white font-black italic tracking-tighter text-lg">One</h3>
                       <p className="text-white/60 text-[10px] font-bold uppercase tracking-widest">In-App Wallet</p>
                     </div>
                     <span className="px-2 py-1 bg-white/20 rounded-md text-[10px] font-bold text-white backdrop-blur-md">

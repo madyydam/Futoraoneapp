@@ -104,7 +104,7 @@ export const InstallPrompt = () => {
                                         <div className="absolute -top-1 -right-1 h-3 w-3 bg-primary rounded-full animate-ping"></div>
                                     </div>
                                     <div>
-                                        <h3 className="font-bold text-lg text-foreground tracking-tight">FutoraOne App</h3>
+                                        <h3 className="font-bold text-lg text-foreground tracking-tight">One App</h3>
                                         <p className="text-sm text-muted-foreground font-medium">
                                             {isIOS ? "Install for the premium experience" : "Experience the future of tech social"}
                                         </p>

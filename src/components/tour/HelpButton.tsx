@@ -53,7 +53,7 @@ export const HelpButton = ({ currentPageId }: HelpButtonProps) => {
                 <DropdownMenuItem className="py-3 mt-1 rounded-xl cursor-pointer opacity-70 hover:opacity-100 transition-opacity">
                     <div className="flex flex-col gap-0.5">
                         <span className="font-semibold text-sm">Pro Tips & Shortcuts</span>
-                        <p className="text-[10px] text-muted-foreground">Master FutoraOne like a pro</p>
+                        <p className="text-[10px] text-muted-foreground">Master One like a pro</p>
                     </div>
                 </DropdownMenuItem>
             </DropdownMenuContent>

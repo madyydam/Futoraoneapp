@@ -191,7 +191,7 @@ const Settings = () => {
                                     <CardHeader>
                                         <CardTitle className="flex items-center gap-2">
                                             <Download className="w-5 h-5 text-primary" />
-                                            Install FutoraOne
+                                            Install One
                                         </CardTitle>
                                         <CardDescription>
                                             Get the premium experience with our Laptop & Mobile App.

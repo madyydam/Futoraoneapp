@@ -28,7 +28,7 @@ export const WaitlistTicket: React.FC<WaitlistTicketProps> = React.memo(({ ticke
                     {/* Header */}
                     <div className="flex justify-between items-start">
                         <div className="space-y-1">
-                            <h2 className="text-xs font-bold tracking-[0.2em] text-yellow-500 uppercase">FutoraOne</h2>
+                            <h2 className="text-xs font-bold tracking-[0.2em] text-yellow-500 uppercase">One</h2>
                             <h1 className="text-2xl font-black italic bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">GOLDEN TICKET</h1>
                         </div>
                         <Ticket className="w-8 h-8 text-yellow-500" />

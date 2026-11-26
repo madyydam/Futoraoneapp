@@ -138,7 +138,7 @@ export const AppLifecycleManager = ({ children }: { children: React.ReactNode })
         </div>
         <h1 className="text-2xl font-black mb-2">Scheduled Maintenance</h1>
         <p className="text-muted-foreground max-w-md text-sm">
-          FutoraOne is currently undergoing maintenance to improve performance and security. We&apos;ll be back shortly.
+          One is currently undergoing maintenance to improve performance and security. We&apos;ll be back shortly.
         </p>
       </div>
     );
