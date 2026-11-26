@@ -48,6 +48,12 @@ CREATE TABLE IF NOT EXISTS public.posts (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+ALTER TABLE public.posts
+  ADD COLUMN IF NOT EXISTS is_project_update BOOLEAN DEFAULT FALSE,
+  ADD COLUMN IF NOT EXISTS project_id UUID REFERENCES public.projects(id) ON DELETE CASCADE,
+  ADD COLUMN IF NOT EXISTS category TEXT,
+  ADD COLUMN IF NOT EXISTS tags TEXT[] DEFAULT '{}';
+
 CREATE INDEX IF NOT EXISTS idx_posts_created_at ON public.posts(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_posts_user_id ON public.posts(user_id);
 CREATE INDEX IF NOT EXISTS idx_posts_tags ON public.posts USING GIN (tags);
@@ -279,6 +285,7 @@ CREATE TRIGGER trigger_extract_hashtags
   BEFORE INSERT OR UPDATE OF content ON public.posts
   FOR EACH ROW EXECUTE FUNCTION public.extract_hashtags();
 
+DROP FUNCTION IF EXISTS public.delete_expired_stories();
 CREATE OR REPLACE FUNCTION public.delete_expired_stories()
 RETURNS VOID
 LANGUAGE plpgsql
@@ -290,6 +297,7 @@ BEGIN
 END;
 $$;
 
+DROP FUNCTION IF EXISTS public.get_waitlist_position(UUID);
 CREATE OR REPLACE FUNCTION public.get_waitlist_position(user_uuid UUID)
 RETURNS INTEGER
 LANGUAGE plpgsql
@@ -307,6 +315,7 @@ BEGIN
 END;
 $$;
 
+DROP FUNCTION IF EXISTS public.check_rate_limit(TEXT, INT, INTERVAL);
 CREATE OR REPLACE FUNCTION public.check_rate_limit(limit_key TEXT, limit_count INT, window_interval INTERVAL)
 RETURNS BOOLEAN
 LANGUAGE plpgsql

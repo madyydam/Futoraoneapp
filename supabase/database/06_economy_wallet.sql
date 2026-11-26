@@ -225,6 +225,7 @@ SELECT id, 1000.00 FROM auth.users ON CONFLICT (user_id) DO NOTHING;
 -- ─────────────────────────────────────────────────────────────────────────────
 
 -- Launch reward popup function
+DROP FUNCTION IF EXISTS public.claim_launch_reward_popup();
 CREATE OR REPLACE FUNCTION public.claim_launch_reward_popup()
 RETURNS BOOLEAN
 LANGUAGE plpgsql
@@ -242,6 +243,8 @@ END;
 $$;
 
 -- Atomic feature unlock (Tech Match = 1000 coins) with row-lock-first TOCTOU fix
+DROP FUNCTION IF EXISTS public.unlock_feature(TEXT);
+DROP FUNCTION IF EXISTS public.unlock_feature(TEXT, TEXT);
 CREATE OR REPLACE FUNCTION public.unlock_feature(
   p_feature_name TEXT,
   p_idempotency_key TEXT DEFAULT NULL
@@ -339,6 +342,8 @@ END;
 $$;
 
 -- Server-authoritative game reward RPC with rate limiting (prevents client tampering)
+DROP FUNCTION IF EXISTS public.process_game_win(TEXT);
+DROP FUNCTION IF EXISTS public.process_game_win(TEXT, TEXT);
 CREATE OR REPLACE FUNCTION public.process_game_win(
   p_game_key TEXT DEFAULT 'arcade',
   p_idempotency_key TEXT DEFAULT NULL
@@ -434,6 +439,7 @@ END;
 $$;
 
 -- In-app P2P coin transfer RPC (deadlock-safe ordered row locking)
+DROP FUNCTION IF EXISTS public.transfer_wallet_coins(TEXT, DECIMAL, TEXT, TEXT);
 CREATE OR REPLACE FUNCTION public.transfer_wallet_coins(
   p_recipient_username TEXT,
   p_amount DECIMAL(12,2),

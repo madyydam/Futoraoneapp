@@ -33,6 +33,11 @@ CREATE TABLE IF NOT EXISTS public.conversation_participants (
   UNIQUE(conversation_id, user_id)
 );
 
+-- Backfill missing columns on existing tables (safe to re-run)
+ALTER TABLE public.conversation_participants ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.conversation_participants ADD COLUMN IF NOT EXISTS is_archived BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.conversation_participants ADD COLUMN IF NOT EXISTS last_read_at TIMESTAMPTZ DEFAULT NOW();
+
 CREATE TABLE IF NOT EXISTS public.messages (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   conversation_id UUID REFERENCES public.conversations(id) ON DELETE CASCADE,

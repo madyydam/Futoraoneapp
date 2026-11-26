@@ -69,6 +69,7 @@ CREATE INDEX IF NOT EXISTS idx_follows_following_id ON public.follows(following_
 -- ─────────────────────────────────────────────────────────────────────────────
 
 -- Atomic verification review RPC for admins
+DROP FUNCTION IF EXISTS public.review_verification_request(UUID, TEXT, TEXT);
 CREATE OR REPLACE FUNCTION public.review_verification_request(
   p_request_id UUID,
   p_action TEXT,
@@ -124,6 +125,7 @@ END;
 $$;
 
 -- Admin audit log helper RPC
+DROP FUNCTION IF EXISTS public.log_admin_action(TEXT, TEXT, TEXT, JSONB);
 CREATE OR REPLACE FUNCTION public.log_admin_action(
   p_action TEXT,
   p_target_type TEXT DEFAULT NULL,
@@ -146,6 +148,7 @@ END;
 $$;
 
 -- Admin-only paginated directory RPC (replaces direct client .select('*') on profiles)
+DROP FUNCTION IF EXISTS public.get_admin_users_page(INTEGER, INTEGER);
 CREATE OR REPLACE FUNCTION public.get_admin_users_page(
   p_offset INTEGER DEFAULT 0,
   p_limit INTEGER DEFAULT 50
@@ -197,6 +200,7 @@ END;
 $$;
 
 -- Admin-only wallet user directory RPC (safe email access for admins)
+DROP FUNCTION IF EXISTS public.get_admin_wallet_users();
 CREATE OR REPLACE FUNCTION public.get_admin_wallet_users()
 RETURNS TABLE (
   id UUID,

@@ -54,6 +54,7 @@ CREATE TABLE IF NOT EXISTS public.user_roles (
 -- ─────────────────────────────────────────────────────────────────────────────
 
 -- Level calculation (sqrt-based curve)
+DROP FUNCTION IF EXISTS public.calculate_level(INTEGER);
 CREATE OR REPLACE FUNCTION public.calculate_level(xp INTEGER)
 RETURNS INTEGER
 LANGUAGE plpgsql
@@ -67,6 +68,7 @@ END;
 $$;
 
 -- Give XP and recalculate level (internal-only: execute revoked from clients)
+DROP FUNCTION IF EXISTS public.give_xp(UUID, INTEGER);
 CREATE OR REPLACE FUNCTION public.give_xp(user_id UUID, amount INTEGER)
 RETURNS VOID
 LANGUAGE plpgsql
@@ -89,6 +91,7 @@ END;
 $$;
 
 -- Streak updater (internal-only)
+DROP FUNCTION IF EXISTS public.update_user_streak(UUID);
 CREATE OR REPLACE FUNCTION public.update_user_streak(target_user_id UUID)
 RETURNS VOID
 LANGUAGE plpgsql
@@ -119,6 +122,7 @@ END;
 $$;
 
 -- Check and unlock achievements (internal-only)
+DROP FUNCTION IF EXISTS public.check_achievements(UUID, TEXT);
 CREATE OR REPLACE FUNCTION public.check_achievements(target_user_id UUID, condition_type_to_check TEXT)
 RETURNS VOID
 LANGUAGE plpgsql
