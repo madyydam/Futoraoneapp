@@ -11,46 +11,67 @@ export const CATEGORIES = [
     { name: "Data Science", icon: Database, color: "bg-teal-500" },
 ];
 
-export const TRENDING_TOPICS = [
-    { tag: "ChatGPT-5", posts: "2.4K" },
-    { tag: "ReactJS", posts: "1.8K" },
-    { tag: "Python", posts: "3.2K" },
-    { tag: "DevOps", posts: "1.5K" },
-    { tag: "MachineLearning", posts: "2.9K" },
-    { tag: "Rust", posts: "1.2K" },
-    { tag: "Web3", posts: "2.1K" },
-    { tag: "DataScience", posts: "1.9K" },
+// Trending topics are fetched live from DB in TrendingSection component
+// This is used only as a fallback for search
+export const TRENDING_TOPICS_FALLBACK = [
+    { tag: "Robotics", posts: "112" },
+    { tag: "Blockchain", posts: "112" },
+    { tag: "Cloud", posts: "104" },
+    { tag: "Cybersecurity", posts: "99" },
+    { tag: "AI & ML", posts: "65" },
+    { tag: "Web3", posts: "63" },
+    { tag: "DataScience", posts: "62" },
+    { tag: "Mobile Dev", posts: "61" },
 ];
 
+// Keep for search compatibility
+export const TRENDING_TOPICS = TRENDING_TOPICS_FALLBACK;
+
+// Real open-source GitHub projects with live demo websites
 export const TRENDING_PROJECTS = [
     {
-        title: "AI Image Generator",
-        author: "Saanvi Iyer",
-        likes: 342,
-        tech: ["Python", "TensorFlow", "React"],
+        title: "Excalidraw",
+        author: "excalidraw",
+        description: "Virtual whiteboard for sketching hand-drawn like diagrams. Supports real-time collaboration and end-to-end encryption.",
+        stars: "75k+",
+        tech: ["TypeScript", "React", "Canvas"],
+        githubUrl: "https://github.com/excalidraw/excalidraw",
+        liveUrl: "https://excalidraw.com",
     },
     {
-        title: "Blockchain Voting System",
-        author: "Arjun Kapoor",
-        likes: 289,
-        tech: ["Solidity", "Web3", "Node.js"],
+        title: "Hoppscotch",
+        author: "hoppscotch",
+        description: "Open source API development ecosystem. A lightweight, fast alternative to Postman for REST, GraphQL & WebSocket testing.",
+        stars: "61k+",
+        tech: ["Vue.js", "TypeScript", "GraphQL"],
+        githubUrl: "https://github.com/hoppscotch/hoppscotch",
+        liveUrl: "https://hoppscotch.io",
     },
     {
-        title: "Real-time Chat App",
-        author: "Diya Malhotra",
-        likes: 456,
-        tech: ["WebSocket", "React", "Express"],
+        title: "Cal.com",
+        author: "calcom",
+        description: "Open-source scheduling infrastructure. The event-charging calendar for everyone — a Calendly alternative.",
+        stars: "30k+",
+        tech: ["Next.js", "TypeScript", "Prisma"],
+        githubUrl: "https://github.com/calcom/cal.com",
+        liveUrl: "https://cal.com",
     },
     {
-        title: "Smart Home Dashboard",
-        author: "Vihaan Nair",
-        likes: 234,
-        tech: ["IoT", "Vue.js", "MQTT"],
+        title: "Formbricks",
+        author: "formbricks",
+        description: "Privacy-first open source survey & experience management platform. Trigger targeted micro-surveys in-app.",
+        stars: "10k+",
+        tech: ["Next.js", "TypeScript", "Prisma"],
+        githubUrl: "https://github.com/formbricks/formbricks",
+        liveUrl: "https://formbricks.com",
     },
     {
-        title: "DeFi Exchange",
-        author: "Ishaan Gupta",
-        likes: 567,
-        tech: ["Solidity", "React", "Ethers.js"],
+        title: "Documenso",
+        author: "documenso",
+        description: "The open-source DocuSign alternative. Secure, self-hostable document signing built for digital workflows.",
+        stars: "9k+",
+        tech: ["Next.js", "TypeScript", "tRPC"],
+        githubUrl: "https://github.com/documenso/documenso",
+        liveUrl: "https://documenso.com",
     },
 ];
