@@ -35,12 +35,12 @@ export const useBroadcastPopup = () => {
             return;
         }
         try {
-            // Get user's signup date
+            // Get user's signup date safely
             const { data: profile } = await supabase
                 .from('profiles')
                 .select('created_at')
                 .eq('id', userId)
-                .single();
+                .maybeSingle();
 
             if (!profile) return;
 

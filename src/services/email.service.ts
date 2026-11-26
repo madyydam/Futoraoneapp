@@ -32,6 +32,10 @@ export async function triggerAuthEmail(
 ): Promise<void> {
   if (!userId) return;
 
+  // Only invoke if edge email service is explicitly enabled, avoiding phantom CORS/404 errors
+  const isEnabled = import.meta.env.VITE_ENABLE_EMAIL_SERVICE === 'true';
+  if (!isEnabled) return;
+
   const sessionKey = `${SESSION_KEY_PREFIX}${userId}`;
   try {
     if (sessionStorage.getItem(sessionKey)) {

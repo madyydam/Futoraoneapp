@@ -177,7 +177,7 @@ const Profile = () => {
             .from("profiles")
             .select("id, username, full_name, avatar_url, bio, location, github_url, linkedin_url, portfolio_url, tech_skills, verification_category, is_verified, theme_color, vibe_mood, xp, level, badges, is_admin, trust_score, is_banned")
             .eq("id", user.id)
-            .single(),
+            .maybeSingle(),
           supabase
             .from("projects")
             .select(`*, project_likes(id)`)

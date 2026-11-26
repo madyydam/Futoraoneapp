@@ -155,7 +155,7 @@ const UpcomingFeatures = memo(() => {
                 .from('profiles')
                 .select('username, avatar_url')
                 .eq('id', session.user.id)
-                .single();
+                .maybeSingle();
 
             // Persist waitlist entry in Postgres (avoid spoofable client-side position)
             const { data: existingEntry, error: lookupError } = await supabase

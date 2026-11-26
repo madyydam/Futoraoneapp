@@ -151,7 +151,7 @@ export default function Wallet() {
         .from("profiles")
         .select("id, username, full_name, avatar_url, bio, location, trust_score, banner_url, theme_color")
         .eq("id", userId)
-        .single();
+        .maybeSingle();
       if (error) throw error;
       return data as ProfileData;
     },

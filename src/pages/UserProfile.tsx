@@ -213,7 +213,7 @@ const UserProfile = () => {
                 .from("profiles")
                 .select("id, username, full_name, avatar_url, bio, location, github_url, linkedin_url, portfolio_url, tech_skills, verification_category, is_verified, theme_color, vibe_mood, badges")
                 .eq("id", userId)
-                .single();
+                .maybeSingle();
 
             if (updatedProfile) {
                 setProfile(prev => prev ? { ...prev, ...updatedProfile } : null);
@@ -256,7 +256,7 @@ const UserProfile = () => {
                 .from("profiles")
                 .select("id, username, full_name, avatar_url, bio, location, github_url, linkedin_url, portfolio_url, tech_skills, verification_category, is_verified, theme_color, vibe_mood, badges")
                 .eq("id", userId)
-                .single();
+                .maybeSingle();
 
             if (updatedProfile) {
                 setProfile(prev => prev ? { ...prev, ...updatedProfile } : null);
@@ -322,7 +322,7 @@ const UserProfile = () => {
             .from("profiles")
             .select("id, username, full_name, avatar_url, bio, location, github_url, linkedin_url, portfolio_url, tech_skills, verification_category, is_verified, theme_color, vibe_mood, badges")
             .eq("id", userId)
-            .single();
+            .maybeSingle();
 
         if (profileError || !profileData) {
             toast({

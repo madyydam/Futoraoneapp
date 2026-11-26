@@ -160,7 +160,7 @@ export const Stories = memo(() => {
         .from("profiles")
         .select("id, username, full_name, avatar_url, is_verified")
         .eq("id", user.id)
-        .single();
+        .maybeSingle();
       setCurrentUser(profile);
     }
   }, []);

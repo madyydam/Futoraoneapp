@@ -86,7 +86,7 @@ export const FollowButton = ({ userId, currentUserId, onFollowChange }: FollowBu
                     .from('profiles')
                     .select('full_name, username')
                     .eq('id', currentUserId)
-                    .single();
+                    .maybeSingle();
 
                 const actorName = currentUserProfile?.full_name || currentUserProfile?.username || "Someone";
                 sendPushNotification(userId, `${actorName} started following you`).catch(() => {});

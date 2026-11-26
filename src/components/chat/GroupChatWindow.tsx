@@ -280,7 +280,7 @@ export function GroupChatWindow({ groupId, currentUserId }: { groupId: string; c
                 const incoming = payload.new as any;
                 const { data: profile } = await supabase
                     .from('profiles').select('full_name, avatar_url')
-                    .eq('id', incoming.sender_id).single();
+                    .eq('id', incoming.sender_id).maybeSingle();
 
                 setMessages(prev => prev.some(m => m.id === incoming.id) ? prev : [...prev, {
                     ...incoming,

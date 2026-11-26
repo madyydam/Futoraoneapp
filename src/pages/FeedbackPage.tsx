@@ -35,7 +35,7 @@ const FeedbackPage = () => {
                 .from("profiles")
                 .select("full_name, username")
                 .eq("id", user.id)
-                .single();
+                .maybeSingle();
             setProfile(profile);
         };
         checkUser();

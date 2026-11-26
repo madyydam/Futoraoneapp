@@ -63,7 +63,7 @@ export const useFeedLogic = () => {
                 .from("profiles")
                 .select("id, username, full_name, avatar_url, bio, is_verified, xp, level, badges")
                 .eq("id", user.id)
-                .single();
+                .maybeSingle();
             if (error) throw error;
             return data;
         },

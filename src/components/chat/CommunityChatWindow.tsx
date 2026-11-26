@@ -214,7 +214,7 @@ export function CommunityChatWindow({
             }, async (payload) => {
                 const msg = payload.new as any;
                 const { data: profile } = await supabase
-                    .from("profiles").select("id, full_name, username, avatar_url").eq("id", msg.sender_id).single();
+                    .from("profiles").select("id, full_name, username, avatar_url").eq("id", msg.sender_id).maybeSingle();
                 setMessages(prev =>
                     prev.some(m => m.id === msg.id)
                         ? prev

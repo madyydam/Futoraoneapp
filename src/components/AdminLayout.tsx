@@ -49,7 +49,7 @@ export const AdminLayout = ({ children }: AdminLayoutProps) => {
                     .from('profiles')
                     .select('id, username, full_name, avatar_url, bio, is_admin')
                     .eq('id', user.id)
-                    .single();
+                    .maybeSingle();
                 setAdminProfile(data);
             }
         };
