@@ -73,9 +73,12 @@ const AllPeople = () => {
                     followers:follows!following_id(count),
                     following:follows!follower_id(count)
                 `)
-                .neq("id", user?.id || "")
                 .order("created_at", { ascending: false })
                 .range(start, end);
+
+            if (user?.id) {
+                supabaseQuery = supabaseQuery.neq("id", user.id);
+            }
 
             const cleanQuery = sanitizePostgrestSearch(query);
             if (cleanQuery) {

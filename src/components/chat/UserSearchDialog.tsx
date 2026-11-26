@@ -33,12 +33,17 @@ export function UserSearchDialog({ open, onOpenChange, currentUserId }: UserSear
         if (!cleanQuery) return;
 
         setSearching(true);
-        const { data, error } = await supabase
+        let supabaseQuery = supabase
             .from("profiles")
             .select("id, username, full_name, avatar_url")
             .or(`username.ilike.%${cleanQuery}%,full_name.ilike.%${cleanQuery}%`)
-            .neq("id", currentUserId)
             .limit(10);
+
+        if (currentUserId) {
+            supabaseQuery = supabaseQuery.neq("id", currentUserId);
+        }
+
+        const { data, error } = await supabaseQuery;
 
         if (!error && data) {
             setResults(data);

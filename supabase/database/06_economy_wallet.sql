@@ -189,8 +189,8 @@ CREATE TABLE IF NOT EXISTS public.tech_matches (
 
 CREATE TABLE IF NOT EXISTS public.reviews (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  reviewer_id UUID REFERENCES auth.users(id) NOT NULL,
-  reviewee_id UUID REFERENCES auth.users(id) NOT NULL,
+  reviewer_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  reviewee_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
   rating INTEGER CHECK (rating >= 1 AND rating <= 5) NOT NULL,
   comment TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),

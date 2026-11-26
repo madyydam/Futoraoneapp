@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -13,7 +13,7 @@ export interface RoomCategory {
 
 export const useRoomCategories = (conversationId: string | undefined) => {
     const queryClient = useQueryClient();
-    const queryKey = ["room_categories", conversationId];
+    const queryKey = useMemo(() => ["room_categories", conversationId], [conversationId]);
 
     const { data: categories = [], isLoading: loading } = useQuery({
         queryKey,

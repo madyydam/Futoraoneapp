@@ -413,6 +413,83 @@ GRANT EXECUTE ON FUNCTION public.get_admin_users_page(INTEGER, INTEGER, TEXT, TE
 GRANT EXECUTE ON FUNCTION public.get_admin_user_role_stats() TO authenticated;
 GRANT EXECUTE ON FUNCTION public.admin_set_user_bot_status(UUID, BOOLEAN) TO authenticated;
 
+-- Complete User Deletion RPC (Super Admin only)
+CREATE OR REPLACE FUNCTION public.admin_delete_user_completely(target_user_id UUID)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, auth, storage
+AS $$
+DECLARE
+  is_admin_user BOOLEAN;
+BEGIN
+  is_admin_user := (CURRENT_USER IN ('postgres', 'service_role'))
+    OR (current_setting('role', true) = 'service_role')
+    OR public.has_role(auth.uid(), 'admin');
+
+  IF NOT is_admin_user THEN
+    RAISE EXCEPTION 'Forbidden: only administrators can delete users completely.';
+  END IF;
+
+  IF target_user_id = auth.uid() THEN
+    RAISE EXCEPTION 'Cannot delete your own administrator account.';
+  END IF;
+
+  DELETE FROM public.notifications WHERE user_id = target_user_id OR actor_id = target_user_id;
+  DELETE FROM public.conversation_participants WHERE user_id = target_user_id;
+  DELETE FROM public.typing_indicators WHERE user_id = target_user_id;
+  DELETE FROM public.user_push_tokens WHERE user_id = target_user_id;
+  DELETE FROM public.user_roles WHERE user_id = target_user_id;
+
+  IF to_regclass('public.reviews') IS NOT NULL THEN
+    DELETE FROM public.reviews WHERE reviewer_id = target_user_id OR reviewee_id = target_user_id;
+  END IF;
+
+  IF to_regclass('public.reports') IS NOT NULL THEN
+    DELETE FROM public.reports WHERE target_type = 'user' AND target_id = target_user_id;
+  END IF;
+
+  IF to_regclass('public.native_transactions') IS NOT NULL AND to_regclass('public.native_wallets') IS NOT NULL THEN
+    DELETE FROM public.native_transactions WHERE wallet_id IN (SELECT id FROM public.native_wallets WHERE user_id = target_user_id);
+    DELETE FROM public.native_wallets WHERE user_id = target_user_id;
+  END IF;
+
+  IF to_regclass('public.coin_transactions') IS NOT NULL THEN
+    DELETE FROM public.coin_transactions WHERE user_id = target_user_id;
+  END IF;
+
+  IF to_regclass('public.user_wallet') IS NOT NULL THEN
+    DELETE FROM public.user_wallet WHERE id = target_user_id;
+  END IF;
+
+  BEGIN
+    DELETE FROM storage.objects WHERE owner = target_user_id;
+  EXCEPTION WHEN OTHERS THEN
+    NULL;
+  END;
+
+  DELETE FROM public.profiles WHERE id = target_user_id;
+  DELETE FROM auth.users WHERE id = target_user_id;
+
+  BEGIN
+    INSERT INTO public.admin_logs (admin_id, action, target_type, target_id, details)
+    VALUES (
+      auth.uid(),
+      'DELETE_USER_COMPLETELY',
+      'user',
+      target_user_id,
+      jsonb_build_object('timestamp', NOW(), 'deleted_by', auth.uid())
+    );
+  EXCEPTION WHEN OTHERS THEN
+    NULL;
+  END;
+
+  RETURN TRUE;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.admin_delete_user_completely(UUID) TO authenticated, service_role;
+
 -- Prevent clients from directly invoking internal XP, streak, achievement, trigger, or rate-limit RPCs
 REVOKE ALL ON FUNCTION public.give_xp(UUID, INTEGER) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.update_user_streak(UUID) FROM PUBLIC, anon, authenticated;

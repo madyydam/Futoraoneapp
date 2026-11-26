@@ -1332,16 +1332,34 @@ AS $$
 DECLARE
   receiver_id UUID;
   sender_name TEXT;
+  profile_exists BOOLEAN;
 BEGIN
   IF NEW.conversation_id IS NULL THEN RETURN NEW; END IF;
-  SELECT user_id INTO receiver_id FROM public.conversation_participants
-  WHERE conversation_id = NEW.conversation_id AND user_id != NEW.sender_id LIMIT 1;
+
+  SELECT user_id INTO receiver_id 
+  FROM public.conversation_participants
+  WHERE conversation_id = NEW.conversation_id AND user_id != NEW.sender_id 
+  LIMIT 1;
+
+  IF receiver_id IS NULL THEN RETURN NEW; END IF;
+
+  SELECT EXISTS(SELECT 1 FROM public.profiles WHERE id = NEW.sender_id) INTO profile_exists;
   SELECT COALESCE(full_name, username) INTO sender_name FROM public.profiles WHERE id = NEW.sender_id;
-  IF receiver_id IS NOT NULL THEN
+
+  BEGIN
     INSERT INTO public.notifications (user_id, type, title, message, actor_id, data)
-    VALUES (receiver_id, 'message', 'New message from ' || COALESCE(sender_name, 'Member'), LEFT(NEW.content, 160), NEW.sender_id,
-            jsonb_build_object('conversation_id', NEW.conversation_id));
-  END IF;
+    VALUES (
+      receiver_id,
+      'message',
+      'New message from ' || COALESCE(sender_name, 'Member'),
+      LEFT(NEW.content, 160),
+      CASE WHEN profile_exists THEN NEW.sender_id ELSE NULL END,
+      jsonb_build_object('conversation_id', NEW.conversation_id)
+    );
+  EXCEPTION WHEN OTHERS THEN
+    RAISE WARNING 'notify_on_new_message: notification deferred or failed: %', SQLERRM;
+  END;
+
   RETURN NEW;
 END;
 $$;
@@ -2266,8 +2284,8 @@ CREATE TABLE IF NOT EXISTS public.tech_matches (
 
 CREATE TABLE IF NOT EXISTS public.reviews (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  reviewer_id UUID REFERENCES auth.users(id) NOT NULL,
-  reviewee_id UUID REFERENCES auth.users(id) NOT NULL,
+  reviewer_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  reviewee_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
   rating INTEGER CHECK (rating >= 1 AND rating <= 5) NOT NULL,
   comment TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -3636,6 +3654,83 @@ GRANT UPDATE (email, fcm_token, last_digest_at, is_bot) ON public.profiles TO se
 GRANT EXECUTE ON FUNCTION public.get_admin_users_page(INTEGER, INTEGER, TEXT, TEXT) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_admin_user_role_stats() TO authenticated;
 GRANT EXECUTE ON FUNCTION public.admin_set_user_bot_status(UUID, BOOLEAN) TO authenticated;
+
+-- Complete User Deletion RPC (Super Admin only)
+CREATE OR REPLACE FUNCTION public.admin_delete_user_completely(target_user_id UUID)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, auth, storage
+AS $$
+DECLARE
+  is_admin_user BOOLEAN;
+BEGIN
+  is_admin_user := (CURRENT_USER IN ('postgres', 'service_role'))
+    OR (current_setting('role', true) = 'service_role')
+    OR public.has_role(auth.uid(), 'admin');
+
+  IF NOT is_admin_user THEN
+    RAISE EXCEPTION 'Forbidden: only administrators can delete users completely.';
+  END IF;
+
+  IF target_user_id = auth.uid() THEN
+    RAISE EXCEPTION 'Cannot delete your own administrator account.';
+  END IF;
+
+  DELETE FROM public.notifications WHERE user_id = target_user_id OR actor_id = target_user_id;
+  DELETE FROM public.conversation_participants WHERE user_id = target_user_id;
+  DELETE FROM public.typing_indicators WHERE user_id = target_user_id;
+  DELETE FROM public.user_push_tokens WHERE user_id = target_user_id;
+  DELETE FROM public.user_roles WHERE user_id = target_user_id;
+
+  IF to_regclass('public.reviews') IS NOT NULL THEN
+    DELETE FROM public.reviews WHERE reviewer_id = target_user_id OR reviewee_id = target_user_id;
+  END IF;
+
+  IF to_regclass('public.reports') IS NOT NULL THEN
+    DELETE FROM public.reports WHERE target_type = 'user' AND target_id = target_user_id;
+  END IF;
+
+  IF to_regclass('public.native_transactions') IS NOT NULL AND to_regclass('public.native_wallets') IS NOT NULL THEN
+    DELETE FROM public.native_transactions WHERE wallet_id IN (SELECT id FROM public.native_wallets WHERE user_id = target_user_id);
+    DELETE FROM public.native_wallets WHERE user_id = target_user_id;
+  END IF;
+
+  IF to_regclass('public.coin_transactions') IS NOT NULL THEN
+    DELETE FROM public.coin_transactions WHERE user_id = target_user_id;
+  END IF;
+
+  IF to_regclass('public.user_wallet') IS NOT NULL THEN
+    DELETE FROM public.user_wallet WHERE id = target_user_id;
+  END IF;
+
+  BEGIN
+    DELETE FROM storage.objects WHERE owner = target_user_id;
+  EXCEPTION WHEN OTHERS THEN
+    NULL;
+  END;
+
+  DELETE FROM public.profiles WHERE id = target_user_id;
+  DELETE FROM auth.users WHERE id = target_user_id;
+
+  BEGIN
+    INSERT INTO public.admin_logs (admin_id, action, target_type, target_id, details)
+    VALUES (
+      auth.uid(),
+      'DELETE_USER_COMPLETELY',
+      'user',
+      target_user_id,
+      jsonb_build_object('timestamp', NOW(), 'deleted_by', auth.uid())
+    );
+  EXCEPTION WHEN OTHERS THEN
+    NULL;
+  END;
+
+  RETURN TRUE;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.admin_delete_user_completely(UUID) TO authenticated, service_role;
 
 -- Prevent clients from directly invoking internal XP, streak, achievement, trigger, or rate-limit RPCs
 REVOKE ALL ON FUNCTION public.give_xp(UUID, INTEGER) FROM PUBLIC, anon, authenticated;

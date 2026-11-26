@@ -31,30 +31,35 @@ const Explore = () => {
     if (authLoading) return;
     setLoadingPeople(true);
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from("profiles")
-        .select("id, username, full_name, avatar_url, is_verified")
-        .neq("id", currentUser?.id || "")
+        .select(`
+          id, 
+          username, 
+          full_name, 
+          avatar_url, 
+          is_verified,
+          followers:follows!following_id(count)
+        `)
         .order("created_at", { ascending: false })
         .limit(4);
 
+      if (currentUser?.id) {
+        query = query.neq("id", currentUser.id);
+      }
+
+      const { data, error } = await query;
+
       if (error) throw error;
 
-      // Optimize: Parallel fetch is good, keeping it.
-      const usersWithCounts = await Promise.all(
-        (data || []).map(async (profile) => {
-          const { count } = await supabase
-            .from("follows")
-            .select("*", { count: "exact", head: true })
-            .eq("following_id", profile.id);
-
-          return {
-            ...profile,
-            is_verified: profile.is_verified,
-            follower_count: count || 0,
-          };
-        })
-      );
+      const usersWithCounts = (data || []).map((profile: any) => ({
+        id: profile.id,
+        username: profile.username,
+        full_name: profile.full_name,
+        avatar_url: profile.avatar_url,
+        is_verified: profile.is_verified,
+        follower_count: profile.followers?.[0]?.count || 0,
+      }));
 
       setPeople(usersWithCounts);
     } catch (error) {
@@ -62,7 +67,7 @@ const Explore = () => {
     } finally {
       setLoadingPeople(false);
     }
-  }, [currentUser, authLoading]);
+  }, [currentUser?.id, authLoading]);
 
   const performSearch = useCallback(async (query: string) => {
     const cleanQuery = sanitizePostgrestSearch(query);

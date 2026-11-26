@@ -39,7 +39,12 @@ export const useTypingIndicator = (conversationId: string, userId: string | unde
 
         return () => {
             if (channelRef.current) supabase.removeChannel(channelRef.current);
-            // specific cleanup if needed
+            Object.values(typingTimeoutRef.current).forEach((t) => clearTimeout(t));
+            typingTimeoutRef.current = {};
+            if (myTypingTimeoutRef.current) {
+                clearTimeout(myTypingTimeoutRef.current);
+                myTypingTimeoutRef.current = null;
+            }
         };
     }, [conversationId, userId]);
 

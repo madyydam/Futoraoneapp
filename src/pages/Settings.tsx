@@ -411,6 +411,16 @@ const Settings = () => {
             </div>
 
             <BottomNav />
+
+            {user && (
+                <StoryArchiveModal
+                    open={storyArchiveOpen}
+                    onOpenChange={setStoryArchiveOpen}
+                    userId={user.id}
+                    username={profile?.username || "user"}
+                    avatarUrl={profile?.avatar_url || null}
+                />
+            )}
         </div>
     );
 };

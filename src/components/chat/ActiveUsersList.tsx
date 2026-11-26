@@ -38,12 +38,17 @@ export const ActiveUsersList = ({ currentUserId }: { currentUserId: string }) =>
     }, []);
 
     const fetchOnlineUsers = async () => {
-        const { data: presenceData, error } = await supabase
+        let presenceQuery = supabase
             .from("user_presence")
             .select("user_id")
             .eq("is_online", true)
-            .neq("user_id", currentUserId)
             .limit(20);
+
+        if (currentUserId) {
+            presenceQuery = presenceQuery.neq("user_id", currentUserId);
+        }
+
+        const { data: presenceData, error } = await presenceQuery;
 
         if (presenceData && presenceData.length > 0) {
             const uids = presenceData.map(p => p.user_id);

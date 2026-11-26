@@ -316,8 +316,7 @@ const Profile = () => {
                     onClick={() => navigate("/settings")}
                   >
                     <Settings size={16} />
-                  </Button>
-                </div>
+                  </Button>                </div>
               </div>
 
               <div className="flex items-center gap-2">

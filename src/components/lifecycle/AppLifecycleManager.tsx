@@ -89,22 +89,22 @@ export const AppLifecycleManager = ({ children }: { children: React.ReactNode })
     document.addEventListener("visibilitychange", onVisibilityChange);
     window.addEventListener("online", onOnline);
 
-    let appStateHandle: { remove: () => Promise<void> } | null = null;
-    let backButtonHandle: { remove: () => Promise<void> } | null = null;
-    let networkHandle: { remove: () => Promise<void> } | null = null;
+    let isMounted = true;
+    const handles: Array<{ remove: () => Promise<void> }> = [];
 
     if (Capacitor.isNativePlatform()) {
-      CapApp.addListener("appStateChange", ({ isActive }) => {
+      void CapApp.addListener("appStateChange", ({ isActive }) => {
         if (isActive) {
           handleResumeOrReconnect();
         } else {
           supabase.auth.stopAutoRefresh();
         }
       }).then((h) => {
-        appStateHandle = h;
+        if (isMounted) handles.push(h);
+        else void h.remove();
       });
 
-      CapApp.addListener("backButton", ({ canGoBack }) => {
+      void CapApp.addListener("backButton", ({ canGoBack }) => {
         const rootRoutes = new Set(["/", "/feed", "/auth"]);
         if (!canGoBack || rootRoutes.has(window.location.pathname)) {
           CapApp.minimizeApp();
@@ -112,24 +112,25 @@ export const AppLifecycleManager = ({ children }: { children: React.ReactNode })
           navigate(-1);
         }
       }).then((h) => {
-        backButtonHandle = h;
+        if (isMounted) handles.push(h);
+        else void h.remove();
       });
 
-      Network.addListener("networkStatusChange", (status) => {
+      void Network.addListener("networkStatusChange", (status) => {
         if (status.connected) {
           handleResumeOrReconnect();
         }
       }).then((h) => {
-        networkHandle = h;
+        if (isMounted) handles.push(h);
+        else void h.remove();
       });
     }
 
     return () => {
+      isMounted = false;
       document.removeEventListener("visibilitychange", onVisibilityChange);
       window.removeEventListener("online", onOnline);
-      appStateHandle?.remove();
-      backButtonHandle?.remove();
-      networkHandle?.remove();
+      handles.forEach((h) => void h.remove());
     };
   }, [navigate, queryClient, refreshSession]);
 

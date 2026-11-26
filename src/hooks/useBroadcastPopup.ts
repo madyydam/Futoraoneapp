@@ -44,31 +44,32 @@ export const useBroadcastPopup = () => {
 
             if (!profile) return;
 
-            const { data: seenPopups } = await supabase
-                .from('user_popup_status')
-                .select('popup_id')
-                .eq('user_id', userId);
-
-            const seenIds = seenPopups?.map(s => s.popup_id) || [];
-
-            let query = supabase
+            // Fetch top active broadcast messages posted after user registration
+            const { data: activeMessages, error: msgError } = await supabase
                 .from('broadcast_messages')
                 .select('*')
                 .eq('is_active', true)
                 .gt('created_at', profile.created_at)
                 .order('created_at', { ascending: false })
-                .limit(1);
+                .limit(10);
 
-            if (seenIds.length > 0) {
-                query = query.not('id', 'in', `(${seenIds.join(',')})`);
-            }
+            if (msgError) throw msgError;
+            if (!activeMessages || activeMessages.length === 0) return;
 
-            const { data: messages, error } = await query;
+            const activeIds = activeMessages.map(m => m.id);
 
-            if (error) throw error;
+            // Fetch seen status strictly for these active messages
+            const { data: seenPopups } = await supabase
+                .from('user_popup_status')
+                .select('popup_id')
+                .eq('user_id', userId)
+                .in('popup_id', activeIds);
 
-            if (messages && messages.length > 0) {
-                const latestPopup = messages[0];
+            const seenSet = new Set((seenPopups || []).map(s => s.popup_id));
+            const unseenMessages = activeMessages.filter(m => !seenSet.has(m.id));
+
+            if (unseenMessages.length > 0) {
+                const latestPopup = unseenMessages[0];
 
                 // Check audience targeting
                 const isTargeted =
