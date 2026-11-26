@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { BottomNav } from "@/components/BottomNav";
 import {
   MessageCircle, Search, Users, Heart, Pin, PinOff,
@@ -158,8 +160,7 @@ ConversationItem.displayName = "ConversationItem";
 
 const Messages = () => {
   const navigate = useNavigate();
-  const [conversations, setConversations] = useState<ConversationWithDetails[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<'chats' | 'groups' | 'communities'>('chats');
   const [showUnreadOnly, setShowUnreadOnly] = useState(false);
@@ -180,14 +181,14 @@ const Messages = () => {
     }
   }, [user, authLoading, navigate]);
 
-
-  const fetchConversations = useCallback(async () => {
-    if (!user) return;
-    try {
+  const { data: conversations = [], isLoading: queryLoading, refetch: refetchConversations } = useQuery<ConversationWithDetails[]>({
+    queryKey: ["my_conversations_summary", user?.id],
+    queryFn: async () => {
+      if (!user) return [];
       const { data, error } = await (supabase.rpc as any)('get_my_conversations_summary');
       if (error) throw error;
 
-      const userConversations: ConversationWithDetails[] = (data || []).map((row: any) => ({
+      return (data || []).map((row: any) => ({
         id: row.conversation_id,
         updated_at: row.updated_at,
         is_pinned: Boolean(row.is_pinned),
@@ -204,57 +205,49 @@ const Messages = () => {
         unreadCount: Number(row.unread_count || 0),
         is_tech_match: false,
       }));
-
-      setConversations(userConversations);
-    } catch (error) {
-      console.error('Error fetching conversations:', error);
-      toast.error("Failed to sync messages");
-    } finally {
-      setLoading(false);
-    }
-  }, [user]);
-
-  useEffect(() => {
-    if (user) fetchConversations();
-  }, [user, fetchConversations]);
+    },
+    enabled: !!user,
+    staleTime: 1000 * 60 * 3, // 3 minutes fresh
+    gcTime: 1000 * 60 * 60, // 1 hour cached
+  });
 
   useEffect(() => {
     if (!user) return;
 
-    const handleReconnect = () => fetchConversations();
+    const handleReconnect = () => refetchConversations();
     window.addEventListener('futora:reconnected', handleReconnect);
 
     const channel = supabase
       .channel(`chat_updates_${user.id}`)
       .on('postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'messages' },
-        () => fetchConversations())
+        () => refetchConversations())
       .on('postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'conversations' },
-        () => fetchConversations())
+        () => refetchConversations())
       .on('postgres_changes',
         { event: '*', schema: 'public', table: 'conversation_participants', filter: `user_id=eq.${user.id}` },
-        () => fetchConversations())
+        () => refetchConversations())
       .subscribe();
 
     return () => {
       window.removeEventListener('futora:reconnected', handleReconnect);
       supabase.removeChannel(channel);
     };
-  }, [user, fetchConversations]);
+  }, [user, refetchConversations]);
 
   const handlePin = useCallback(async (id: string, current: boolean) => {
     if (!user) return;
     const nextPinned = !current;
-    setConversations(prev => prev.map(c =>
-      c.id === id ? { ...c, is_pinned: nextPinned } : c
-    ).sort((a, b) => {
-      if (a.is_pinned && !b.is_pinned) return -1;
-      if (!a.is_pinned && b.is_pinned) return 1;
-      const dateA = new Date(a.lastMessage?.created_at || a.updated_at).getTime();
-      const dateB = new Date(b.lastMessage?.created_at || b.updated_at).getTime();
-      return dateB - dateA;
-    }));
+    queryClient.setQueryData<ConversationWithDetails[]>(["my_conversations_summary", user.id], (old = []) =>
+      old.map(c => c.id === id ? { ...c, is_pinned: nextPinned } : c).sort((a, b) => {
+        if (a.is_pinned && !b.is_pinned) return -1;
+        if (!a.is_pinned && b.is_pinned) return 1;
+        const dateA = new Date(a.lastMessage?.created_at || a.updated_at).getTime();
+        const dateB = new Date(b.lastMessage?.created_at || b.updated_at).getTime();
+        return dateB - dateA;
+      })
+    );
 
     const { error } = await supabase
       .from('conversation_participants')
@@ -264,19 +257,19 @@ const Messages = () => {
 
     if (error) {
       toast.error("Failed to update pin status");
-      fetchConversations();
+      refetchConversations();
       return;
     }
 
     toast.success(current ? "Chat unpinned" : "Chat pinned");
-  }, [user, fetchConversations]);
+  }, [user, queryClient, refetchConversations]);
 
   const handleArchive = useCallback(async (id: string, current: boolean) => {
     if (!user) return;
     const nextArchived = !current;
-    setConversations(prev => prev.map(c =>
-      c.id === id ? { ...c, is_archived: nextArchived } : c
-    ));
+    queryClient.setQueryData<ConversationWithDetails[]>(["my_conversations_summary", user.id], (old = []) =>
+      old.map(c => c.id === id ? { ...c, is_archived: nextArchived } : c)
+    );
 
     const { error } = await supabase
       .from('conversation_participants')
@@ -286,12 +279,12 @@ const Messages = () => {
 
     if (error) {
       toast.error("Failed to update archive status");
-      fetchConversations();
+      refetchConversations();
       return;
     }
 
     toast.success(current ? "Chat unarchived" : "Chat archived");
-  }, [user, fetchConversations]);
+  }, [user, queryClient, refetchConversations]);
 
 
   const filteredConversations = React.useMemo(() => conversations.filter(conv => {
@@ -429,8 +422,18 @@ const Messages = () => {
       </AnimatePresence>
 
       <div className="max-w-3xl mx-auto p-3 sm:p-4">
-        {loading ? (
-          <CartoonLoader />
+        {queryLoading && conversations.length === 0 ? (
+          <div className="space-y-3 mt-4" aria-busy="true">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="flex items-center gap-3 p-3.5 rounded-2xl bg-card/40 border border-border/30">
+                <Skeleton className="h-12 w-12 rounded-full" />
+                <div className="space-y-2 flex-1">
+                  <Skeleton className="h-4 w-32 rounded" />
+                  <Skeleton className="h-3 w-48 rounded" />
+                </div>
+              </div>
+            ))}
+          </div>
         ) : activeTab === 'chats' ? (
           <div className="space-y-2 mt-4">
             {filteredConversations.length === 0 ? (

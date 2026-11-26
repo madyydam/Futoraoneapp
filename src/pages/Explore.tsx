@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { BottomNav } from "@/components/BottomNav";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -17,20 +18,18 @@ import { logger } from "@/lib/logger";
 
 const Explore = () => {
   const [searchQuery, setSearchQuery] = useState("");
-  const [people, setPeople] = useState<UserProfile[]>([]);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [showResults, setShowResults] = useState(false);
-  const [loadingPeople, setLoadingPeople] = useState(true);
   const [searchLoading, setSearchLoading] = useState(false);
 
   const { user: currentUser, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
-  const fetchPeople = useCallback(async () => {
-    if (authLoading) return;
-    setLoadingPeople(true);
-    try {
+  const { data: people = [], isLoading: loadingPeople, refetch: refetchPeople } = useQuery<UserProfile[]>({
+    queryKey: ["explore_trending_people", currentUser?.id],
+    queryFn: async () => {
       let query = supabase
         .from("profiles")
         .select(`
@@ -49,10 +48,9 @@ const Explore = () => {
       }
 
       const { data, error } = await query;
-
       if (error) throw error;
 
-      const usersWithCounts = (data || []).map((profile: any) => ({
+      return (data || []).map((profile: any) => ({
         id: profile.id,
         username: profile.username,
         full_name: profile.full_name,
@@ -60,14 +58,11 @@ const Explore = () => {
         is_verified: profile.is_verified,
         follower_count: profile.followers?.[0]?.count || 0,
       }));
-
-      setPeople(usersWithCounts);
-    } catch (error) {
-      logger.error("Error fetching people:", error);
-    } finally {
-      setLoadingPeople(false);
-    }
-  }, [currentUser?.id, authLoading]);
+    },
+    enabled: !authLoading,
+    staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 60,
+  });
 
   const performSearch = useCallback(async (query: string) => {
     const cleanQuery = sanitizePostgrestSearch(query);
@@ -137,8 +132,6 @@ const Explore = () => {
   }, [debouncedSearchQuery, performSearch]);
 
   useEffect(() => {
-    fetchPeople();
-
     const channel = supabase
       .channel('explore-profile-sync')
       .on(
@@ -150,25 +143,24 @@ const Explore = () => {
         },
         (payload) => {
           logger.debug("Real-time profile update received in Explore");
-          // Use unknown then intersection for cleaner casting
           const updatedProfile = payload.new as unknown as (UserProfile & { [key: string]: unknown });
 
           if (!updatedProfile || !updatedProfile.id) return;
 
-          // Helper to update specific profile in a list
-          // Update people list
-          setPeople(currentPeople => currentPeople.map(p => {
-            if (p.id === updatedProfile.id) {
-              return {
-                ...p,
-                username: updatedProfile.username || p.username,
-                full_name: updatedProfile.full_name || p.full_name,
-                avatar_url: updatedProfile.avatar_url || p.avatar_url,
-                is_verified: updatedProfile.is_verified !== undefined ? updatedProfile.is_verified : p.is_verified
-              };
-            }
-            return p;
-          }));
+          queryClient.setQueryData<UserProfile[]>(["explore_trending_people", currentUser?.id], (currentPeople = []) =>
+            currentPeople.map(p => {
+              if (p.id === updatedProfile.id) {
+                return {
+                  ...p,
+                  username: updatedProfile.username || p.username,
+                  full_name: updatedProfile.full_name || p.full_name,
+                  avatar_url: updatedProfile.avatar_url || p.avatar_url,
+                  is_verified: updatedProfile.is_verified !== undefined ? updatedProfile.is_verified : p.is_verified,
+                };
+              }
+              return p;
+            })
+          );
 
           // Update search results
           setSearchResults(currentResults => currentResults.map(p => {
@@ -192,7 +184,7 @@ const Explore = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [fetchPeople]);
+  }, [currentUser?.id, queryClient]);
 
   const handleCategoryClick = useCallback((categoryName: string) => {
     toast({

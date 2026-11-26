@@ -41,14 +41,13 @@ export const ActiveUsersList = ({ currentUserId }: { currentUserId: string }) =>
         let presenceQuery = supabase
             .from("user_presence")
             .select("user_id")
-            .eq("is_online", true)
-            .limit(20);
+            .eq("is_online", true);
 
         if (currentUserId) {
             presenceQuery = presenceQuery.neq("user_id", currentUserId);
         }
 
-        const { data: presenceData, error } = await presenceQuery;
+        const { data: presenceData, error } = await presenceQuery.limit(20);
 
         if (presenceData && presenceData.length > 0) {
             const uids = presenceData.map(p => p.user_id);

@@ -224,14 +224,7 @@ const UsersPage = () => {
                 target_user_id: selectedUser.id,
             });
 
-            if (error) {
-                // Fallback to profile deletion if RPC fails
-                const { error: profileError } = await supabase
-                    .from("profiles")
-                    .delete()
-                    .eq("id", selectedUser.id);
-                if (profileError) throw profileError;
-            }
+            if (error) throw error;
 
             toast({
                 title: "User Deleted Completely",
@@ -239,11 +232,12 @@ const UsersPage = () => {
             });
             setIsDeleteDialogOpen(false);
             setUsers(users.filter(u => u.id !== selectedUser.id));
+            setTotalCount(prev => Math.max(0, prev - 1));
         } catch (error) {
             console.error("Error deleting user:", error);
             toast({
                 title: "Error",
-                description: "Failed to delete user completely",
+                description: error instanceof Error ? error.message : "Failed to delete user completely",
                 variant: "destructive",
             });
         }

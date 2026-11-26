@@ -379,10 +379,12 @@ describe("Auth, RBAC, and Economy invariants", () => {
   });
 
   it("sanitizes PostgREST filter characters in UserSearchDialog queries", async () => {
+    const neqSpy = vi.fn().mockReturnValue({
+      limit: async () => ({ data: [], error: null }),
+    });
     const orSpy = vi.fn().mockReturnValue({
-      neq: () => ({
-        limit: async () => ({ data: [], error: null }),
-      }),
+      neq: neqSpy,
+      limit: async () => ({ data: [], error: null }),
     });
     mockFrom.mockImplementation((table: string) => {
       if (table === "profiles") {
@@ -414,6 +416,47 @@ describe("Auth, RBAC, and Economy invariants", () => {
       expect(orSpy).toHaveBeenCalledWith(
         "username.ilike.%alice id.eq.1 admin%,full_name.ilike.%alice id.eq.1 admin%"
       );
+      expect(neqSpy).toHaveBeenCalledWith("id", "user-1");
+    });
+  });
+
+  it("does not attach invalid neq filter when currentUserId is undefined in UserSearchDialog", async () => {
+    const neqSpy = vi.fn();
+    const limitSpy = vi.fn().mockResolvedValue({ data: [], error: null });
+    const orSpy = vi.fn().mockReturnValue({
+      neq: neqSpy,
+      limit: limitSpy,
+    });
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "profiles") {
+        return {
+          select: () => ({
+            or: orSpy,
+          }),
+        };
+      }
+      return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }) };
+    });
+
+    const { queryClient } = createQueryWrapper();
+    render(
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <MemoryRouter>
+            <UserSearchDialog open={true} onOpenChange={vi.fn()} currentUserId={undefined} />
+          </MemoryRouter>
+        </AuthProvider>
+      </QueryClientProvider>
+    );
+
+    const input = screen.getByPlaceholderText("Search people...");
+    fireEvent.change(input, { target: { value: "bob" } });
+    fireEvent.submit(input.closest("form")!);
+
+    await waitFor(() => {
+      expect(orSpy).toHaveBeenCalledWith("username.ilike.%bob%,full_name.ilike.%bob%");
+      expect(neqSpy).not.toHaveBeenCalled();
+      expect(limitSpy).toHaveBeenCalledWith(10);
     });
   });
 

@@ -36,14 +36,13 @@ export function UserSearchDialog({ open, onOpenChange, currentUserId }: UserSear
         let supabaseQuery = supabase
             .from("profiles")
             .select("id, username, full_name, avatar_url")
-            .or(`username.ilike.%${cleanQuery}%,full_name.ilike.%${cleanQuery}%`)
-            .limit(10);
+            .or(`username.ilike.%${cleanQuery}%,full_name.ilike.%${cleanQuery}%`);
 
         if (currentUserId) {
             supabaseQuery = supabaseQuery.neq("id", currentUserId);
         }
 
-        const { data, error } = await supabaseQuery;
+        const { data, error } = await supabaseQuery.limit(10);
 
         if (!error && data) {
             setResults(data);

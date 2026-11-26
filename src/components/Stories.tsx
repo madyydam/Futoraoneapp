@@ -339,7 +339,9 @@ export const Stories = memo(() => {
     if (navigator.share) {
       try {
         await navigator.share(shareData);
-      } catch {}
+      } catch {
+        // User cancelled share dialog or permission denied
+      }
     } else if (navigator.clipboard) {
       await navigator.clipboard.writeText(shareData.url);
       toast({

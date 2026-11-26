@@ -13,6 +13,7 @@ import { OfflineIndicator } from "@/components/pwa/OfflineIndicator";
 import { ThemeProvider } from "@/components/theme-provider";
 import ScrollToTop from "@/components/ScrollToTop";
 import { CartoonLoader } from "@/components/CartoonLoader";
+import { AppScreenSkeleton } from "@/components/skeletons/AppScreenSkeleton";
 import { AchievementListener } from "@/components/AchievementListener";
 import { InstallPrompt } from "@/components/pwa/InstallPrompt";
 import { PWAUpdateHandler } from "@/components/pwa/PWAUpdateHandler";
@@ -107,9 +108,25 @@ const queryClient = new QueryClient({
       staleTime: 1000 * 60 * 5, // 5 minutes (keep data fresh but avoid instant refetches)
       retry: 1,
       refetchOnWindowFocus: false,
+      placeholderData: (previousData: any) => previousData,
     },
   },
 });
+
+// Preload primary navigation tabs on idle to ensure 0ms chunk delays
+if (typeof window !== "undefined") {
+  const preloadTabs = () => {
+    void import("./pages/Feed");
+    void import("./pages/Explore");
+    void import("./pages/Messages");
+    void import("./pages/Profile");
+  };
+  if ("requestIdleCallback" in window) {
+    (window as any).requestIdleCallback(preloadTabs, { timeout: 2000 });
+  } else {
+    setTimeout(preloadTabs, 1000);
+  }
+}
 
 const persister = createSyncStoragePersister({
   storage: window.localStorage,
@@ -147,7 +164,7 @@ const App = () => {
                     <ScrollToTop />
                     <BroadcastPopup />
                     <GlobalTourSystem />
-                    <Suspense fallback={<CartoonLoader />}>
+                    <Suspense fallback={<AppScreenSkeleton />}>
                       <Routes>
                     <Route path="/" element={<Welcome />} />
                     <Route path="/auth" element={<Auth />} />

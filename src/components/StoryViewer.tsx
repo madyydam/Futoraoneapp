@@ -131,7 +131,11 @@ export const StoryViewer = ({
       setCurrentIndex((prev) => prev + 1);
       setProgress(0);
     } else {
-      onNextUser ? onNextUser() : onClose();
+      if (onNextUser) {
+        onNextUser();
+      } else {
+        onClose();
+      }
     }
   }, [currentIndex, stories.length, onNextUser, onClose]);
 
@@ -140,7 +144,11 @@ export const StoryViewer = ({
       setCurrentIndex((prev) => prev - 1);
       setProgress(0);
     } else {
-      onPrevUser ? onPrevUser() : onClose();
+      if (onPrevUser) {
+        onPrevUser();
+      } else {
+        onClose();
+      }
     }
   }, [currentIndex, onPrevUser, onClose]);
 
