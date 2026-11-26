@@ -219,23 +219,23 @@ const UsersPage = () => {
     const handleDeleteUser = async () => {
         if (!selectedUser) return;
         try {
-            // Note: This only deletes the profile. Auth deletion requires edge function.
-            const { error } = await supabase
-                .from("profiles")
-                .delete()
-                .eq("id", selectedUser.id);
-
-            if (error) throw error;
-
-            await (supabase.rpc as any)("log_admin_action", {
-                p_action: "DELETE_USER_PROFILE",
-                p_target_type: "profile",
-                p_target_id: selectedUser.id,
+            // Completely delete user from both public.profiles and auth.users
+            const { error } = await (supabase.rpc as any)("admin_delete_user_completely", {
+                target_user_id: selectedUser.id,
             });
 
+            if (error) {
+                // Fallback to profile deletion if RPC fails
+                const { error: profileError } = await supabase
+                    .from("profiles")
+                    .delete()
+                    .eq("id", selectedUser.id);
+                if (profileError) throw profileError;
+            }
+
             toast({
-                title: "User Deleted",
-                description: "User profile has been deleted from the database.",
+                title: "User Deleted Completely",
+                description: "User profile and authentication have been permanently wiped.",
             });
             setIsDeleteDialogOpen(false);
             setUsers(users.filter(u => u.id !== selectedUser.id));
@@ -243,7 +243,7 @@ const UsersPage = () => {
             console.error("Error deleting user:", error);
             toast({
                 title: "Error",
-                description: "Failed to delete user profile",
+                description: "Failed to delete user completely",
                 variant: "destructive",
             });
         }
@@ -791,13 +791,13 @@ const UsersPage = () => {
                                 Are you absolutely sure?
                             </AlertDialogTitle>
                             <AlertDialogDescription>
-                                This action will delete the profile of <span className="font-bold text-foreground">@{selectedUser?.username}</span> and all associated private data. This action cannot be undone.
+                                This action will completely delete <span className="font-bold text-foreground">@{selectedUser?.username}</span> from both the database and authentication system. The user will be entirely wiped and could register afresh if needed.
                             </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                             <AlertDialogCancel>Cancel</AlertDialogCancel>
                             <AlertDialogAction onClick={handleDeleteUser} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                                Delete Profile
+                                Delete Account Completely
                             </AlertDialogAction>
                         </AlertDialogFooter>
                     </AlertDialogContent>

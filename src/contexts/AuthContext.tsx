@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { clearUserSessionStorage, withRetry } from "@/lib/security";
 import { clearAuthEmailSessionFlag, triggerAuthEmail } from "@/services/email.service";
+import { BannedScreen } from "@/components/BannedScreen";
 import { toast } from "sonner";
 
 interface AuthContextValue {
@@ -12,6 +13,7 @@ interface AuthContextValue {
   isLoading: boolean;
   isAuthenticated: boolean;
   userId: string | undefined;
+  isBanned: boolean;
   signOut: () => Promise<void>;
   refreshSession: () => Promise<void>;
 }
@@ -23,6 +25,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isBanned, setIsBanned] = useState(false);
   const previousUserIdRef = useRef<string | null>(null);
 
   const performLocalCleanup = useCallback(async () => {
@@ -49,14 +52,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
 
       if ((data as { is_banned?: boolean } | null)?.is_banned) {
-        toast.error("Your account has been suspended by moderation.");
-        await supabase.auth.signOut();
-        await performLocalCleanup();
+        setIsBanned(true);
+      } else {
+        setIsBanned(false);
       }
     } catch {
       // Offline or transient failure: do not lock out legitimate users
     }
-  }, [performLocalCleanup]);
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -72,6 +75,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         // If user switched or signed out, purge cached user data immediately
         if (event === "SIGNED_OUT" || (prevUid && nextUid && prevUid !== nextUid)) {
           clearAuthEmailSessionFlag(prevUid);
+          setIsBanned(false);
           await performLocalCleanup();
         }
 
@@ -122,6 +126,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
       await supabase.auth.signOut();
     } finally {
+      setIsBanned(false);
       clearAuthEmailSessionFlag(uid);
       previousUserIdRef.current = null;
       setSession(null);
@@ -140,6 +145,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       if (secondsRemaining < 120) {
         const refreshed = await supabase.auth.refreshSession();
         if (refreshed.error && /refresh token/i.test(refreshed.error.message || "")) {
+          setIsBanned(false);
           await supabase.auth.signOut();
           setSession(null);
           setUser(null);
@@ -165,11 +171,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     isLoading,
     isAuthenticated: !!user,
     userId: user?.id,
+    isBanned,
     signOut,
     refreshSession,
-  }), [user, session, isLoading, signOut, refreshSession]);
+  }), [user, session, isLoading, isBanned, signOut, refreshSession]);
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      {isBanned ? <BannedScreen email={user?.email} onSignOut={signOut} /> : children}
+    </AuthContext.Provider>
+  );
 };
 
 export function useAuthContext(): AuthContextValue {
