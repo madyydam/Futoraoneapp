@@ -386,10 +386,27 @@ ON CONFLICT (user_id) DO UPDATE SET fcm_token = EXCLUDED.fcm_token;
 
 UPDATE public.profiles SET fcm_token = NULL WHERE fcm_token IS NOT NULL;
 
--- Revoke direct client reads/writes to PII/internal columns on public.profiles
-REVOKE SELECT (email, fcm_token, last_digest_at, is_bot) ON public.profiles FROM anon, authenticated;
-REVOKE UPDATE (email, fcm_token, last_digest_at, is_bot) ON public.profiles FROM anon, authenticated;
-GRANT SELECT (email, fcm_token, last_digest_at, is_bot) ON public.profiles TO service_role;
+-- Revoke table-level SELECT & grant ONLY safe non-PII, non-bot columns to authenticated
+REVOKE SELECT ON public.profiles FROM PUBLIC, anon, authenticated;
+REVOKE UPDATE (email, fcm_token, last_digest_at, is_bot) ON public.profiles FROM PUBLIC, anon, authenticated;
+
+DO $$
+DECLARE
+  safe_cols TEXT;
+BEGIN
+  SELECT string_agg(quote_ident(column_name), ', ' ORDER BY ordinal_position)
+  INTO safe_cols
+  FROM information_schema.columns
+  WHERE table_schema = 'public'
+    AND table_name = 'profiles'
+    AND column_name NOT IN ('email', 'fcm_token', 'last_digest_at', 'is_bot', 'one_signal_player_id');
+
+  IF safe_cols IS NOT NULL THEN
+    EXECUTE format('GRANT SELECT (%s) ON public.profiles TO authenticated', safe_cols);
+  END IF;
+END $$;
+
+GRANT SELECT ON public.profiles TO service_role;
 GRANT UPDATE (email, fcm_token, last_digest_at, is_bot) ON public.profiles TO service_role;
 
 GRANT EXECUTE ON FUNCTION public.get_admin_users_page(INTEGER, INTEGER, TEXT, TEXT) TO authenticated;

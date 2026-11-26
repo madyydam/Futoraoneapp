@@ -46,20 +46,15 @@ export async function triggerAuthEmail(
       body: { action: mode },
     });
     if (error) {
-      try {
-        sessionStorage.removeItem(sessionKey);
-      } catch {
-        // ignore
+      // Keep session flag on FunctionsFetchError / 404 so browser doesn't spam preflight errors repeatedly
+      if (import.meta.env.DEV) {
+        console.warn('Email trigger skipped:', error.message);
       }
-      console.warn('Email trigger skipped/failed:', error.message);
     }
   } catch (err) {
-    try {
-      sessionStorage.removeItem(sessionKey);
-    } catch {
-      // ignore
+    if (import.meta.env.DEV) {
+      console.warn('Email trigger error:', err);
     }
-    console.warn('Email trigger error:', err);
   }
 }
 

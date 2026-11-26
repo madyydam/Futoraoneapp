@@ -343,7 +343,7 @@ function buildBots(count = 200) {
     const intro = BIO_INTROS[i % BIO_INTROS.length];
     const avatarStyle = i % 3 === 0 ? "avataaars" : "personas";
     const avatarUrl = `https://api.dicebear.com/7.x/${avatarStyle}/svg?seed=${encodeURIComponent(username)}&backgroundColor=b6e3f4,c0aede,d1d4f9`;
-    const bannerUrl = VERIFIED_TECH_IMAGES[i % VERIFIED_TECH_IMAGES.length];
+    const bannerUrl = null;
 
     const xp = randInt(420, 9600);
     const level = Math.max(1, Math.floor(xp / 500) + 1);
@@ -353,7 +353,10 @@ function buildBots(count = 200) {
     const isVerified = i % 7 === 0; // ~14% verified realistically
     const daysAgo = randInt(0, 6);
     const lastActive = new Date(Date.now() - daysAgo * 86400000 - randInt(0, 43200) * 1000).toISOString();
-    const createdAt = new Date(Date.now() - randInt(15, 180) * 86400000).toISOString();
+    // Stagger bot profile created_at before 2025-12-20 so real users always appear first in People/Explore
+    const baseProfileMs = Date.parse("2025-05-01T08:00:00Z");
+    const spanProfileMs = Date.parse("2025-12-20T18:00:00Z") - baseProfileMs;
+    const createdAt = new Date(baseProfileMs + Math.floor((i / Math.max(1, count - 1)) * spanProfileMs)).toISOString();
 
     const id = deterministicUuid(`one-bot-v1:${username}`);
     const email = `bot.${username}@internal.one.app`;
@@ -566,10 +569,10 @@ async function main() {
         title: `${tpl.title}${suffix}`,
         description: tpl.desc,
         tech_stack: tpl.tech,
-        image_url: VERIFIED_TECH_IMAGES[i % VERIFIED_TECH_IMAGES.length],
+        image_url: null,
         github_url: `https://github.com/${owner.username}/${slug}`,
         live_url: `https://${slug}.vercel.app`,
-        created_at: new Date(Date.now() - randInt(1, 25) * 86400000).toISOString(),
+        created_at: new Date(Date.parse("2025-06-01T08:00:00Z") + Math.floor((i / 45) * (Date.parse("2025-12-22T18:00:00Z") - Date.parse("2025-06-01T08:00:00Z")))).toISOString(),
       });
     }
     await batchInsert("projects", projectRows, 100, true);
@@ -618,17 +621,17 @@ async function main() {
         content = `${prefix}${content}`;
       }
 
-      const includeImage = i % 3 === 0; // ~33% lightweight CDN images (~176 image posts)
       const isProjectPost = i < 45 && i % 2 === 0;
       const postId = deterministicUuid(`one-bot-post-v1:${i}`);
-      const ageHours = randInt(1, 28 * 24);
-      const createdAt = new Date(Date.now() - ageHours * 3600 * 1000 - randInt(0, 3599) * 1000).toISOString();
+      const basePostMs = Date.parse("2025-06-01T08:00:00Z");
+      const spanPostMs = Date.parse("2025-12-22T18:00:00Z") - basePostMs;
+      const createdAt = new Date(basePostMs + Math.floor((i / Math.max(1, TOTAL_POSTS - 1)) * spanPostMs)).toISOString();
 
       postRows.push({
         id: postId,
         user_id: author.id,
         content,
-        image_url: includeImage ? VERIFIED_TECH_IMAGES[i % VERIFIED_TECH_IMAGES.length] : null,
+        image_url: null,
         video_url: null,
         category,
         is_project_update: isProjectPost,

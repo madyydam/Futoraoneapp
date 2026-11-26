@@ -6,6 +6,8 @@ const DEFAULT_ALLOWED_ORIGINS = [
   'http://localhost',
   'https://localhost',
   'capacitor://localhost',
+  'https://www.one.heyocco.com',
+  'https://one.heyocco.com',
   'https://futoraone.vercel.app',
   'https://futora1.vercel.app',
 ];

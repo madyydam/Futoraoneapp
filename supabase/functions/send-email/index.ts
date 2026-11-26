@@ -55,7 +55,7 @@ serve(async (req) => {
   try {
     const body = (await req.json().catch(() => ({}))) as EmailRequestBody;
     const action: EmailAction = body.action ?? 'auth_event';
-    const appUrl = (Deno.env.get('APP_URL') ?? 'https://futora1.vercel.app').trim();
+    const appUrl = (Deno.env.get('APP_URL') ?? 'https://www.one.heyocco.com').trim();
 
     if (action === 'digest') {
       const cronSecret = (Deno.env.get('CRON_SECRET') ?? '').trim();
