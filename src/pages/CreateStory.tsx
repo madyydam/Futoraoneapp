@@ -9,6 +9,8 @@ import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Upload, Image as ImageIcon, Sparkles, Palette } from "lucide-react";
 import { BottomNav } from "@/components/BottomNav";
 import { motion, AnimatePresence } from "framer-motion";
+import { StoryUploadProgress } from "@/components/stories/StoryUploadProgress";
+import imageCompression from "browser-image-compression";
 
 // Move filters outside component to avoid recreation on every render
 const FILTERS = [
@@ -23,6 +25,8 @@ const CreateStory = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadStage, setUploadStage] = useState("Preparing story...");
   const [caption, setCaption] = useState("");
   const [mediaFile, setMediaFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -63,31 +67,69 @@ const CreateStory = () => {
     }
 
     setUploading(true);
+    setUploadProgress(10);
+    setUploadStage("Preparing media...");
     let uploadedPath: string | null = null;
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
+      let fileToUpload: File = mediaFile;
+
+      // Image compression with progress simulation
+      if (mediaFile.type.startsWith("image/")) {
+        setUploadStage("Optimizing image quality...");
+        setUploadProgress(25);
+        try {
+          const compressed = await imageCompression(mediaFile, {
+            maxSizeMB: 1.5,
+            maxWidthOrHeight: 1920,
+            useWebWorker: true,
+            onProgress: (p) => {
+              setUploadProgress(20 + Math.round(p * 0.2));
+            },
+          });
+          fileToUpload = compressed;
+        } catch (compressionErr) {
+          console.warn("Compression skipped, uploading original:", compressionErr);
+        }
+      }
+
+      setUploadStage("Uploading to cloud...");
+      setUploadProgress(45);
+
       // Upload media to storage
-      const fileExt = mediaFile.name.split(".").pop() || "bin";
+      const fileExt = fileToUpload.name.split(".").pop() || "jpg";
       const fileName = `${user.id}/${crypto.randomUUID()}.${fileExt}`;
+
+      // Simulate progress ticks during upload
+      const progressTimer = setInterval(() => {
+        setUploadProgress((prev) => (prev < 85 ? prev + 5 : prev));
+      }, 150);
 
       const { error: uploadError } = await supabase.storage
         .from("stories")
-        .upload(fileName, mediaFile);
+        .upload(fileName, fileToUpload, {
+          cacheControl: "3600",
+          upsert: false,
+        });
+
+      clearInterval(progressTimer);
 
       if (uploadError) throw uploadError;
       uploadedPath = fileName;
+
+      setUploadProgress(90);
+      setUploadStage("Publishing story...");
 
       const { data: { publicUrl } } = supabase.storage
         .from("stories")
         .getPublicUrl(fileName);
 
-      const expiresAt = new Date();
-      expiresAt.setHours(expiresAt.getHours() + 24);
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // Strict 24 hours
 
-      // Create story
+      // Create story row
       const { error: storyError } = await supabase.from("stories").insert({
         user_id: user.id,
         media_url: publicUrl,
@@ -98,9 +140,15 @@ const CreateStory = () => {
 
       if (storyError) throw storyError;
 
+      setUploadProgress(100);
+      setUploadStage("Story published!");
+
+      // Brief delay to display 100%
+      await new Promise((resolve) => setTimeout(resolve, 400));
+
       toast({
-        title: "Story created!",
-        description: "Your story will expire in 24 hours",
+        title: "Story published! ✨",
+        description: "Your story is live for 24 hours for your followers.",
       });
 
       navigate("/feed");
@@ -110,12 +158,13 @@ const CreateStory = () => {
       }
       console.error("Error creating story:", error);
       toast({
-        title: "Error",
-        description: error.message,
+        title: "Upload Failed",
+        description: error.message || "Failed to publish story.",
         variant: "destructive",
       });
     } finally {
       setUploading(false);
+      setUploadProgress(0);
     }
   }, [mediaFile, caption, toast, navigate]);
 
@@ -133,6 +182,9 @@ const CreateStory = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-muted/30 to-background pb-20">
+      {uploading && (
+        <StoryUploadProgress progress={uploadProgress} stage={uploadStage} />
+      )}
       <motion.div
         className="sticky top-0 z-10 bg-card/95 backdrop-blur-lg border-b border-border shadow-sm"
         initial={{ y: -20, opacity: 0 }}

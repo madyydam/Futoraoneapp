@@ -1,226 +1,793 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, ChevronLeft, ChevronRight, Heart, Send } from "lucide-react";
+import {
+  X,
+  ChevronLeft,
+  ChevronRight,
+  Heart,
+  Send,
+  Trash2,
+  Archive,
+  Eye,
+  MoreVertical,
+  Download,
+  Share2,
+  Loader2,
+  Users,
+} from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+import { formatDistanceToNow } from "date-fns";
 
 export interface Story {
+  id: string;
+  url: string;
+  type: "image" | "video";
+  caption?: string | null;
+  duration?: number;
+  user: {
     id: string;
-    url: string;
-    type: "image" | "video";
-    duration?: number; // in seconds
-    user: {
-        id: string;
-        username: string;
-        avatar_url: string;
-    };
-    createdAt: string;
+    username: string;
+    avatar_url: string | null;
+  };
+  createdAt: string;
 }
 
 interface StoryViewerProps {
-    stories: Story[];
-    initialStoryIndex?: number;
-    onClose: () => void;
-    onNextUser?: () => void;
-    onPrevUser?: () => void;
+  stories: Story[];
+  initialStoryIndex?: number;
+  onClose: () => void;
+  onNextUser?: () => void;
+  onPrevUser?: () => void;
+  onStoryDeleted?: (storyId: string) => void;
 }
 
+interface StoryViewerUser {
+  id: string;
+  username: string;
+  avatar_url: string | null;
+  full_name: string | null;
+  viewed_at: string;
+}
+
+const QUICK_REACTIONS = ["🔥", "❤️", "😂", "👏", "😮", "😍"];
+
 export const StoryViewer = ({
-    stories,
-    initialStoryIndex = 0,
-    onClose,
-    onNextUser,
-    onPrevUser
+  stories: initialStories,
+  initialStoryIndex = 0,
+  onClose,
+  onNextUser,
+  onPrevUser,
+  onStoryDeleted,
 }: StoryViewerProps) => {
-    const [currentIndex, setCurrentIndex] = useState(initialStoryIndex);
-    const [progress, setProgress] = useState(0);
-    const [isPaused, setIsPaused] = useState(false);
-    const [inputValue, setInputValue] = useState("");
+  const [stories, setStories] = useState<Story[]>(initialStories);
+  const [currentIndex, setCurrentIndex] = useState(initialStoryIndex);
+  const [progress, setProgress] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
+  const [inputValue, setInputValue] = useState("");
+  const [sendingMessage, setSendingMessage] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
-    const currentStory = stories[currentIndex];
-    const DURATION = currentStory.duration ? currentStory.duration * 1000 : 5000; // Default 5s
-    const UPDATE_INTERVAL = 50;
+  // Floating reactions state
+  const [floatingEmojis, setFloatingEmojis] = useState<{ id: number; emoji: string; x: number }[]>([]);
 
-    const handleNext = useCallback(() => {
-        if (currentIndex < stories.length - 1) {
-            setCurrentIndex(prev => prev + 1);
-            setProgress(0);
-        } else {
-            onNextUser?.();
+  // Owner Viewers Sheet & Action Dialogs
+  const [viewersOpen, setViewersOpen] = useState(false);
+  const [viewers, setViewers] = useState<StoryViewerUser[]>([]);
+  const [loadingViewers, setLoadingViewers] = useState(false);
+  const [viewerCount, setViewerCount] = useState(0);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const { toast } = useToast();
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  const currentStory = stories[currentIndex];
+  const isOwner = Boolean(currentUserId && currentStory && currentStory.user.id === currentUserId);
+  const DURATION = currentStory?.duration ? currentStory.duration * 1000 : 5000;
+  const UPDATE_INTERVAL = 50;
+
+  // Sync internal stories if prop updates
+  useEffect(() => {
+    setStories(initialStories);
+  }, [initialStories]);
+
+  // Fetch current user
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) setCurrentUserId(user.id);
+    });
+  }, []);
+
+  const handleNext = useCallback(() => {
+    if (currentIndex < stories.length - 1) {
+      setCurrentIndex((prev) => prev + 1);
+      setProgress(0);
+    } else {
+      onNextUser ? onNextUser() : onClose();
+    }
+  }, [currentIndex, stories.length, onNextUser, onClose]);
+
+  const handlePrev = useCallback(() => {
+    if (currentIndex > 0) {
+      setCurrentIndex((prev) => prev - 1);
+      setProgress(0);
+    } else {
+      onPrevUser ? onPrevUser() : onClose();
+    }
+  }, [currentIndex, onPrevUser, onClose]);
+
+  // Timer loop for progress bar
+  useEffect(() => {
+    if (isPaused || viewersOpen || deleteDialogOpen || !currentStory) return;
+
+    const interval = setInterval(() => {
+      setProgress((prev) => {
+        if (prev >= 100) {
+          handleNext();
+          return 0;
         }
-    }, [currentIndex, stories.length, onNextUser]);
+        return prev + 100 / (DURATION / UPDATE_INTERVAL);
+      });
+    }, UPDATE_INTERVAL);
 
-    const handlePrev = useCallback(() => {
-        if (currentIndex > 0) {
-            setCurrentIndex(prev => prev - 1);
-            setProgress(0);
-        } else {
-            onPrevUser?.();
-        }
-    }, [currentIndex, onPrevUser]);
+    return () => clearInterval(interval);
+  }, [currentIndex, isPaused, viewersOpen, deleteDialogOpen, DURATION, handleNext, currentStory]);
 
-    useEffect(() => {
-        if (isPaused) return;
+  // Reset progress and handle video on story switch
+  useEffect(() => {
+    setProgress(0);
+    if (videoRef.current) {
+      videoRef.current.currentTime = 0;
+      videoRef.current.play().catch(() => {});
+    }
+  }, [currentIndex]);
 
-        const interval = setInterval(() => {
-            setProgress(prev => {
-                if (prev >= 100) {
-                    handleNext();
-                    return 0;
-                }
-                return prev + (100 / (DURATION / UPDATE_INTERVAL));
-            });
-        }, UPDATE_INTERVAL);
+  // Track view in DB when viewer looks at a story
+  useEffect(() => {
+    if (!currentStory || !currentUserId || isOwner) return;
 
-        return () => clearInterval(interval);
-    }, [currentIndex, isPaused, DURATION, handleNext]);
+    const recordView = async () => {
+      try {
+        await supabase.from("story_views").insert({
+          story_id: currentStory.id,
+          viewer_id: currentUserId,
+        });
+      } catch {
+        // Unique constraint violation is expected if already viewed
+      }
+    };
+    recordView();
+  }, [currentStory, currentUserId, isOwner]);
 
-    // Reset progress when story changes
-    useEffect(() => {
-        setProgress(0);
-    }, [currentIndex]);
+  // Fetch viewers count for owner
+  useEffect(() => {
+    if (!currentStory || !isOwner) return;
 
-    const handleTap = (e: React.MouseEvent<HTMLDivElement>) => {
-        // Don't trigger if clicking controls
-        if ((e.target as HTMLElement).closest('button, input')) return;
-
-        const width = e.currentTarget.offsetWidth;
-        const x = e.clientX;
-
-        if (x < width * 0.3) {
-            handlePrev();
-        } else {
-            handleNext();
-        }
+    const fetchViewerCount = async () => {
+      const { count } = await supabase
+        .from("story_views")
+        .select("*", { count: "exact", head: true })
+        .eq("story_id", currentStory.id);
+      setViewerCount(count || 0);
     };
 
-    return (
-        <AnimatePresence>
+    fetchViewerCount();
+  }, [currentStory, isOwner]);
+
+  // Fetch viewers list when sheet opens
+  const handleOpenViewers = async () => {
+    if (!currentStory) return;
+    setIsPaused(true);
+    setViewersOpen(true);
+    setLoadingViewers(true);
+
+    try {
+      const { data, error } = await supabase
+        .from("story_views")
+        .select(`
+          viewed_at,
+          profiles:viewer_id (
+            id,
+            username,
+            avatar_url,
+            full_name
+          )
+        `)
+        .eq("story_id", currentStory.id)
+        .order("viewed_at", { ascending: false });
+
+      if (error) throw error;
+
+      const formatted: StoryViewerUser[] = (data || []).map((v: any) => ({
+        id: v.profiles?.id || "",
+        username: v.profiles?.username || "user",
+        avatar_url: v.profiles?.avatar_url || null,
+        full_name: v.profiles?.full_name || null,
+        viewed_at: v.viewed_at,
+      }));
+
+      setViewers(formatted);
+      setViewerCount(formatted.length);
+    } catch (err) {
+      console.error("Error fetching story viewers:", err);
+    } finally {
+      setLoadingViewers(false);
+    }
+  };
+
+  // Delete story
+  const handleDeleteStory = async () => {
+    if (!currentStory) return;
+    setDeleting(true);
+
+    try {
+      const storyId = currentStory.id;
+      const { error } = await supabase.from("stories").delete().eq("id", storyId);
+      if (error) throw error;
+
+      toast({
+        title: "Story deleted",
+        description: "Your story has been permanently removed.",
+      });
+
+      onStoryDeleted?.(storyId);
+
+      const remaining = stories.filter((s) => s.id !== storyId);
+      if (remaining.length === 0) {
+        onClose();
+      } else {
+        setStories(remaining);
+        setCurrentIndex((prev) => (prev >= remaining.length ? remaining.length - 1 : prev));
+        setProgress(0);
+      }
+    } catch (err: any) {
+      toast({
+        title: "Failed to delete story",
+        description: err.message,
+        variant: "destructive",
+      });
+    } finally {
+      setDeleting(false);
+      setDeleteDialogOpen(false);
+      setIsPaused(false);
+    }
+  };
+
+  // Archive story (sets expires_at = NOW() so it moves to private archive)
+  const handleArchiveStory = async () => {
+    if (!currentStory) return;
+
+    try {
+      const storyId = currentStory.id;
+      const { error } = await supabase
+        .from("stories")
+        .update({ expires_at: new Date().toISOString() })
+        .eq("id", storyId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Story Archived 📦",
+        description: "Moved to your private Story Archive.",
+      });
+
+      onStoryDeleted?.(storyId);
+
+      const remaining = stories.filter((s) => s.id !== storyId);
+      if (remaining.length === 0) {
+        onClose();
+      } else {
+        setStories(remaining);
+        setCurrentIndex((prev) => (prev >= remaining.length ? remaining.length - 1 : prev));
+        setProgress(0);
+      }
+    } catch (err: any) {
+      toast({
+        title: "Archive Failed",
+        description: err.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Download story media
+  const handleDownload = async () => {
+    if (!currentStory) return;
+    try {
+      const response = await fetch(currentStory.url);
+      const blob = await response.blob();
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = `story_${currentStory.user.username}_${Date.now()}.${currentStory.type === "video" ? "mp4" : "jpg"}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      toast({ title: "Media downloaded" });
+    } catch {
+      toast({ title: "Could not download media", variant: "destructive" });
+    }
+  };
+
+  // Copy story link
+  const handleShare = async () => {
+    if (!currentStory) return;
+    const shareUrl = `${window.location.origin}/story/${currentStory.user.id}`;
+    if (navigator.clipboard) {
+      await navigator.clipboard.writeText(shareUrl);
+      toast({ title: "Link copied to clipboard!" });
+    }
+  };
+
+  // Send Direct Message reply to story author
+  const handleSendReply = async (messageText?: string) => {
+    const text = (messageText || inputValue).trim();
+    if (!text || !currentUserId || !currentStory) return;
+
+    setSendingMessage(true);
+    try {
+      // 1. Get or create conversation with the story author
+      const { data: convId, error: convError } = await (supabase.rpc as any)(
+        "get_or_create_conversation",
+        { other_user_id: currentStory.user.id }
+      );
+      if (convError || !convId) throw convError || new Error("Conversation unavailable");
+
+      // 2. Insert message into messages table
+      const formattedMessage = `Replied to your story: "${text}"`;
+      const { error: msgError } = await supabase.from("messages").insert({
+        conversation_id: convId,
+        sender_id: currentUserId,
+        content: formattedMessage,
+      });
+      if (msgError) throw msgError;
+
+      setInputValue("");
+      toast({
+        title: "Reply sent! 💬",
+        description: `Sent to @${currentStory.user.username}`,
+      });
+    } catch (err: any) {
+      toast({
+        title: "Could not send reply",
+        description: err.message || "Failed to send message.",
+        variant: "destructive",
+      });
+    } finally {
+      setSendingMessage(false);
+    }
+  };
+
+  // Trigger floating reaction animation and notify author
+  const handleQuickReaction = (emoji: string) => {
+    const newEmoji = {
+      id: Date.now() + Math.random(),
+      emoji,
+      x: 35 + Math.random() * 30, // Random horizontal spread
+    };
+    setFloatingEmojis((prev) => [...prev, newEmoji]);
+
+    setTimeout(() => {
+      setFloatingEmojis((prev) => prev.filter((e) => e.id !== newEmoji.id));
+    }, 1800);
+
+    // Send emoji as DM reaction
+    handleSendReply(emoji);
+  };
+
+  const handleTap = (e: React.MouseEvent<HTMLDivElement>) => {
+    if ((e.target as HTMLElement).closest("button, input, [role='dialog'], [role='menu']")) return;
+    const width = e.currentTarget.offsetWidth;
+    const x = e.nativeEvent.offsetX;
+
+    if (x < width * 0.3) {
+      handlePrev();
+    } else {
+      handleNext();
+    }
+  };
+
+  if (!currentStory) return null;
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        initial={{ opacity: 0, scale: 0.98 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.98 }}
+        className="fixed inset-0 z-50 bg-black flex items-center justify-center select-none"
+      >
+        {/* Floating Emojis Animation Layer */}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden z-40">
+          {floatingEmojis.map((item) => (
             <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.9 }}
-                className="fixed inset-0 z-50 bg-black flex items-center justify-center"
+              key={item.id}
+              initial={{ opacity: 1, y: "80vh", scale: 0.8, x: `${item.x}vw` }}
+              animate={{ opacity: 0, y: "15vh", scale: 2 }}
+              transition={{ duration: 1.8, ease: "easeOut" }}
+              className="absolute text-5xl"
             >
-                {/* Close Button */}
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    className="absolute top-4 right-4 z-50 text-white hover:bg-white/20"
-                    onClick={onClose}
+              {item.emoji}
+            </motion.div>
+          ))}
+        </div>
+
+        {/* Main Phone-frame Container */}
+        <div
+          className="relative w-full max-w-md h-full md:h-[92vh] md:rounded-3xl overflow-hidden bg-black flex flex-col justify-between shadow-2xl"
+          onMouseDown={() => setIsPaused(true)}
+          onMouseUp={() => setIsPaused(false)}
+          onTouchStart={() => setIsPaused(true)}
+          onTouchEnd={() => setIsPaused(false)}
+          onClick={handleTap}
+        >
+          {/* Top Bar: Progress Segments */}
+          <div className="absolute top-0 left-0 right-0 z-30 p-2.5 pt-3 bg-gradient-to-b from-black/80 via-black/40 to-transparent">
+            {/* Segmented Progress Indicators */}
+            <div className="flex gap-1.5 w-full">
+              {stories.map((story, index) => (
+                <div
+                  key={story.id}
+                  className="h-1 flex-1 bg-white/25 rounded-full overflow-hidden"
                 >
-                    <X className="w-6 h-6" />
+                  <div
+                    className="h-full bg-white transition-all duration-75 ease-linear rounded-full"
+                    style={{
+                      width:
+                        index < currentIndex
+                          ? "100%"
+                          : index === currentIndex
+                          ? `${progress}%`
+                          : "0%",
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+
+            {/* User Details & Controls Header */}
+            <div className="flex items-center justify-between mt-3 px-1">
+              <div className="flex items-center gap-2.5">
+                <Avatar className="w-9 h-9 border-2 border-white/80 ring-1 ring-black/40 shadow-sm">
+                  <AvatarImage src={currentStory.user.avatar_url || undefined} />
+                  <AvatarFallback className="bg-gradient-to-tr from-[#f09433] to-[#bc1888] text-white font-bold text-xs">
+                    {currentStory.user.username?.[0]?.toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-white font-bold text-sm tracking-tight drop-shadow-md">
+                      {currentStory.user.username}
+                    </span>
+                    <span className="text-white/60 text-xs font-medium">
+                      {formatDistanceToNow(new Date(currentStory.createdAt), { addSuffix: true })}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons: 3-Dots Menu & Close */}
+              <div className="flex items-center gap-1">
+                <DropdownMenu onOpenChange={(open) => setIsPaused(open)}>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="text-white/90 hover:text-white hover:bg-white/20 rounded-full w-8 h-8"
+                    >
+                      <MoreVertical className="w-4 h-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    align="end"
+                    className="w-48 bg-neutral-900/95 border-white/10 text-white backdrop-blur-xl rounded-2xl shadow-2xl p-1.5 z-50"
+                  >
+                    {isOwner ? (
+                      <>
+                        <DropdownMenuItem
+                          onClick={() => setDeleteDialogOpen(true)}
+                          className="text-red-400 hover:text-red-300 hover:bg-red-500/10 cursor-pointer font-semibold rounded-xl flex items-center gap-2"
+                        >
+                          <Trash2 className="w-4 h-4 text-red-400" />
+                          Delete Story
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={handleArchiveStory}
+                          className="hover:bg-white/10 cursor-pointer font-medium rounded-xl flex items-center gap-2"
+                        >
+                          <Archive className="w-4 h-4 text-pink-400" />
+                          Archive Story
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator className="bg-white/10 my-1" />
+                      </>
+                    ) : null}
+
+                    <DropdownMenuItem
+                      onClick={handleDownload}
+                      className="hover:bg-white/10 cursor-pointer font-medium rounded-xl flex items-center gap-2"
+                    >
+                      <Download className="w-4 h-4 text-cyan-400" />
+                      Download Media
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={handleShare}
+                      className="hover:bg-white/10 cursor-pointer font-medium rounded-xl flex items-center gap-2"
+                    >
+                      <Share2 className="w-4 h-4 text-purple-400" />
+                      Copy Story Link
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-white/90 hover:text-white hover:bg-white/20 rounded-full w-8 h-8"
+                  onClick={onClose}
+                >
+                  <X className="w-5 h-5" />
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Media Content Area */}
+          <div className="w-full h-full flex items-center justify-center bg-black relative">
+            {currentStory.type === "image" ? (
+              <img
+                src={currentStory.url}
+                alt="Story"
+                className="w-full h-full object-cover select-none pointer-events-none"
+              />
+            ) : (
+              <video
+                ref={videoRef}
+                src={currentStory.url}
+                autoPlay
+                playsInline
+                muted={false}
+                className="w-full h-full object-cover select-none pointer-events-none"
+              />
+            )}
+
+            {/* Optional Story Caption Overlay */}
+            {currentStory.caption && (
+              <div className="absolute bottom-28 left-4 right-4 z-20">
+                <div className="bg-black/60 backdrop-blur-md border border-white/10 rounded-2xl p-3 text-white text-sm font-medium text-center shadow-lg">
+                  {currentStory.caption}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Bottom Bar: Owner Viewers Pill OR Viewer Engagement */}
+          <div className="absolute bottom-0 left-0 right-0 z-30 p-4 pb-6 bg-gradient-to-t from-black/95 via-black/60 to-transparent">
+            {isOwner ? (
+              /* Story Owner Toolbar */
+              <div className="flex items-center justify-between">
+                <Button
+                  variant="ghost"
+                  onClick={handleOpenViewers}
+                  className="rounded-full bg-white/10 hover:bg-white/20 text-white text-xs font-semibold px-4 py-2 flex items-center gap-2 border border-white/15 backdrop-blur-md shadow-lg"
+                >
+                  <Eye className="w-4 h-4 text-pink-400" />
+                  <span>{viewerCount} {viewerCount === 1 ? "view" : "views"}</span>
                 </Button>
 
-                {/* Main Content Area */}
-                <div
-                    className="relative w-full max-w-md h-full md:h-[90vh] md:rounded-2xl overflow-hidden bg-gray-900"
-                    onMouseDown={() => setIsPaused(true)}
-                    onMouseUp={() => setIsPaused(false)}
-                    onTouchStart={() => setIsPaused(true)}
-                    onTouchEnd={() => setIsPaused(false)}
-                    onClick={handleTap}
-                >
-                    {/* Progress Bars */}
-                    <div className="absolute top-0 left-0 right-0 z-20 flex gap-1 p-2">
-                        {stories.map((story, index) => (
-                            <div key={story.id} className="h-1 flex-1 bg-white/30 rounded-full overflow-hidden">
-                                <div
-                                    className="h-full bg-white transition-all duration-100 ease-linear"
-                                    style={{
-                                        width: index < currentIndex ? '100%' :
-                                            index === currentIndex ? `${progress}%` : '0%'
-                                    }}
-                                />
-                            </div>
-                        ))}
-                    </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setDeleteDialogOpen(true)}
+                    className="text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-full text-xs font-bold px-3 py-1.5 flex items-center gap-1.5"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Delete
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleArchiveStory}
+                    className="text-white/80 hover:text-white hover:bg-white/15 rounded-full text-xs font-semibold px-3 py-1.5 flex items-center gap-1.5"
+                  >
+                    <Archive className="w-3.5 h-3.5 text-pink-400" />
+                    Archive
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              /* Viewer Toolbar: Quick Reactions + Reply Input */
+              <div className="space-y-3">
+                {/* Quick Emoji Reaction Pill */}
+                <div className="flex items-center justify-around bg-black/40 backdrop-blur-md border border-white/10 rounded-full px-2 py-1">
+                  {QUICK_REACTIONS.map((emoji) => (
+                    <button
+                      key={emoji}
+                      onClick={() => handleQuickReaction(emoji)}
+                      className="text-xl p-1.5 hover:scale-125 active:scale-95 transition-transform"
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
 
-                    {/* User Info */}
-                    <div className="absolute top-4 left-0 right-0 z-20 p-4 pt-6 flex items-center gap-3">
-                        <Avatar className="w-8 h-8 border border-white/50">
-                            <AvatarImage src={currentStory.user.avatar_url} />
-                            <AvatarFallback>{currentStory.user.username[0]}</AvatarFallback>
-                        </Avatar>
-                        <span className="text-white font-semibold text-sm drop-shadow-md">
-                            {currentStory.user.username}
-                        </span>
-                        <span className="text-white/70 text-xs ml-auto">
-                            {new Date(currentStory.createdAt).toLocaleDateString()}
-                        </span>
-                    </div>
-
-                    {/* Media */}
-                    <div className="w-full h-full flex items-center justify-center bg-black">
-                        {currentStory.type === 'image' ? (
-                            <img
-                                src={currentStory.url}
-                                alt="Story"
-                                className="w-full h-full object-cover"
-                            />
+                {/* Message Input & Heart */}
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <Input
+                      placeholder={`Reply to ${currentStory.user.username}...`}
+                      value={inputValue}
+                      onChange={(e) => setInputValue(e.target.value)}
+                      onFocus={() => setIsPaused(true)}
+                      onBlur={() => setIsPaused(false)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleSendReply();
+                        }
+                      }}
+                      className="bg-white/10 border-white/20 text-white placeholder:text-white/50 rounded-full h-11 pl-4 pr-10 focus-visible:ring-1 focus-visible:ring-pink-500 text-sm backdrop-blur-md"
+                    />
+                    {inputValue.trim() && (
+                      <button
+                        onClick={() => handleSendReply()}
+                        disabled={sendingMessage}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-pink-400 hover:text-pink-300 transition-colors"
+                      >
+                        {sendingMessage ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
                         ) : (
-                            <video
-                                src={currentStory.url}
-                                autoPlay
-                                muted
-                                playsInline
-                                className="w-full h-full object-cover"
-                            />
+                          <Send className="w-4 h-4" />
                         )}
+                      </button>
+                    )}
+                  </div>
+
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => handleQuickReaction("❤️")}
+                    className="rounded-full text-white hover:bg-white/20 w-11 h-11 flex-shrink-0"
+                  >
+                    <Heart className="w-6 h-6 text-pink-500 fill-pink-500/20 hover:fill-pink-500 transition-colors" />
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Desktop Previous / Next Arrows */}
+        <div className="hidden md:block absolute left-6 top-1/2 -translate-y-1/2 z-40">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onPrevUser || handlePrev}
+            className="text-white hover:bg-white/20 rounded-full w-12 h-12 border border-white/10 backdrop-blur-md"
+          >
+            <ChevronLeft className="w-7 h-7" />
+          </Button>
+        </div>
+        <div className="hidden md:block absolute right-6 top-1/2 -translate-y-1/2 z-40">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onNextUser || handleNext}
+            className="text-white hover:bg-white/20 rounded-full w-12 h-12 border border-white/10 backdrop-blur-md"
+          >
+            <ChevronRight className="w-7 h-7" />
+          </Button>
+        </div>
+
+        {/* Viewers Bottom Sheet (Owner Only) */}
+        <Sheet open={viewersOpen} onOpenChange={(open) => { setViewersOpen(open); setIsPaused(open); }}>
+          <SheetContent side="bottom" className="bg-neutral-900 border-white/10 text-white rounded-t-3xl max-h-[60vh] p-6">
+            <SheetHeader className="pb-4 border-b border-white/10">
+              <SheetTitle className="text-white flex items-center justify-between text-base font-bold">
+                <span className="flex items-center gap-2">
+                  <Eye className="w-5 h-5 text-pink-400" />
+                  Story Viewers ({viewerCount})
+                </span>
+              </SheetTitle>
+            </SheetHeader>
+
+            <div className="mt-4 overflow-y-auto max-h-[45vh] space-y-3 pr-1">
+              {loadingViewers ? (
+                <div className="flex items-center justify-center py-8 gap-2 text-white/50 text-sm">
+                  <Loader2 className="w-5 h-5 animate-spin text-pink-400" />
+                  Loading viewers...
+                </div>
+              ) : viewers.length === 0 ? (
+                <div className="text-center py-8 text-white/50 space-y-1">
+                  <Users className="w-8 h-8 mx-auto text-white/20 mb-2" />
+                  <p className="text-sm font-semibold">No views yet</p>
+                  <p className="text-xs">Followers will appear here as soon as they view this story.</p>
+                </div>
+              ) : (
+                viewers.map((viewer) => (
+                  <div
+                    key={`${viewer.id}-${viewer.viewed_at}`}
+                    className="flex items-center justify-between p-2 rounded-2xl hover:bg-white/5 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Avatar className="w-10 h-10 border border-white/20">
+                        <AvatarImage src={viewer.avatar_url || undefined} />
+                        <AvatarFallback className="bg-pink-500/20 text-pink-300 font-bold">
+                          {viewer.username[0]?.toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <p className="font-bold text-sm text-white">{viewer.username}</p>
+                        {viewer.full_name && (
+                          <p className="text-xs text-white/50">{viewer.full_name}</p>
+                        )}
+                      </div>
                     </div>
+                    <span className="text-xs text-white/40">
+                      {formatDistanceToNow(new Date(viewer.viewed_at), { addSuffix: true })}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+          </SheetContent>
+        </Sheet>
 
-                    {/* Footer / Reply */}
-                    <div className="absolute bottom-0 left-0 right-0 z-20 p-4 bg-gradient-to-t from-black/80 to-transparent">
-                        <div className="flex items-center gap-3">
-                            <Input
-                                placeholder="Send message..."
-                                className="bg-transparent border-white/30 text-white placeholder:text-white/70 rounded-full h-10 focus-visible:ring-white/50"
-                                value={inputValue}
-                                onChange={(e) => setInputValue(e.target.value)}
-                                onClick={(e) => e.stopPropagation()}
-                                onFocus={() => setIsPaused(true)}
-                                onBlur={() => setIsPaused(false)}
-                            />
-                            <Button
-                                size="icon"
-                                variant="ghost"
-                                className="text-white hover:bg-white/20 rounded-full"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    // Handle like
-                                }}
-                            >
-                                <Heart className="w-6 h-6" />
-                            </Button>
-                            <Button
-                                size="icon"
-                                variant="ghost"
-                                className="text-white hover:bg-white/20 rounded-full"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    // Handle send
-                                }}
-                            >
-                                <Send className="w-6 h-6" />
-                            </Button>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Desktop Navigation Arrows */}
-                <div className="hidden md:block absolute left-4 top-1/2 -translate-y-1/2">
-                    <Button variant="ghost" size="icon" className="text-white hover:bg-white/20 rounded-full w-12 h-12" onClick={onPrevUser}>
-                        <ChevronLeft className="w-8 h-8" />
-                    </Button>
-                </div>
-                <div className="hidden md:block absolute right-4 top-1/2 -translate-y-1/2">
-                    <Button variant="ghost" size="icon" className="text-white hover:bg-white/20 rounded-full w-12 h-12" onClick={onNextUser}>
-                        <ChevronRight className="w-8 h-8" />
-                    </Button>
-                </div>
-
-            </motion.div>
-        </AnimatePresence>
-    );
+        {/* Delete Confirmation Alert Dialog */}
+        <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+          <AlertDialogContent className="bg-neutral-900 border border-white/15 text-white rounded-2xl max-w-sm">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="text-white text-lg font-bold">Delete Story?</AlertDialogTitle>
+              <AlertDialogDescription className="text-neutral-400 text-sm">
+                This story will be permanently removed from your feed and cannot be recovered.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="mt-4 gap-2">
+              <AlertDialogCancel
+                disabled={deleting}
+                onClick={() => { setDeleteDialogOpen(false); setIsPaused(false); }}
+                className="bg-transparent border-white/20 text-white hover:bg-white/10 rounded-xl"
+              >
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction
+                disabled={deleting}
+                onClick={handleDeleteStory}
+                className="bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl"
+              >
+                {deleting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                Delete Permanently
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </motion.div>
+    </AnimatePresence>
+  );
 };
