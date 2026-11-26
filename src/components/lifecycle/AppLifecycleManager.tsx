@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { Capacitor } from "@capacitor/core";
@@ -6,6 +6,7 @@ import { App as CapApp } from "@capacitor/app";
 import { Network } from "@capacitor/network";
 import { supabase } from "@/integrations/supabase/client";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
+import { useAuth } from "@/hooks/useAuth";
 import { Wrench } from "lucide-react";
 
 export const AppLifecycleManager = ({ children }: { children: React.ReactNode }) => {
@@ -13,7 +14,9 @@ export const AppLifecycleManager = ({ children }: { children: React.ReactNode })
   const navigate = useNavigate();
   const location = useLocation();
   const { isAdmin } = useIsAdmin();
+  const { refreshSession } = useAuth();
   const [maintenanceMode, setMaintenanceMode] = useState(false);
+  const lastResumeAtRef = useRef<number>(0);
 
   // Check global maintenance_mode flag
   useEffect(() => {
@@ -57,9 +60,13 @@ export const AppLifecycleManager = ({ children }: { children: React.ReactNode })
   // Browser visibility, network recovery, and Capacitor native lifecycle
   useEffect(() => {
     const handleResumeOrReconnect = async () => {
+      const now = Date.now();
+      if (now - lastResumeAtRef.current < 1500) return;
+      lastResumeAtRef.current = now;
+
       try {
         supabase.auth.startAutoRefresh();
-        await supabase.auth.getSession();
+        await refreshSession();
       } catch {
         // Ignore transient offline errors
       }
@@ -124,7 +131,7 @@ export const AppLifecycleManager = ({ children }: { children: React.ReactNode })
       backButtonHandle?.remove();
       networkHandle?.remove();
     };
-  }, [navigate, queryClient]);
+  }, [navigate, queryClient, refreshSession]);
 
   const isBypassRoute =
     location.pathname.startsWith("/admin") ||

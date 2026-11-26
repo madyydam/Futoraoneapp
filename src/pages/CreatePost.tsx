@@ -12,6 +12,8 @@ import { useToast } from "@/hooks/use-toast";
 import type { User } from "@supabase/supabase-js";
 import imageCompression from 'browser-image-compression';
 import { useDraftPost } from "@/hooks/useDraftPost";
+import { logger } from "@/lib/logger";
+import { toSafeUserError } from "@/lib/errorMapper";
 
 const CreatePost = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -96,7 +98,7 @@ const CreatePost = () => {
     } catch (error) {
       toast({
         title: "Error",
-        description: (error as Error).message,
+        description: toSafeUserError(error, "Could not publish post. Please try again."),
         variant: "destructive",
       });
     }
@@ -140,21 +142,27 @@ const CreatePost = () => {
     const uploadedStoragePaths: string[] = [];
 
     try {
-      // AI Content Moderation Check
-      const { data: moderationData, error: moderationError } = await supabase.functions.invoke('moderate-content', {
-        body: { content: content.trim() }
-      });
-
-      if (moderationError) {
-        console.error("Moderation error:", moderationError);
-      } else if (moderationData?.flagged) {
-        toast({
-          title: "Content Warning",
-          description: "Your post contains content that violates our community guidelines. Please revise it.",
-          variant: "destructive",
+      // AI Content Moderation Check (graceful skip if function unavailable in current environment)
+      const modUnavailable = (() => {
+        try { return sessionStorage.getItem('one_mod_fn_unavailable') === '1'; } catch { return false; }
+      })();
+      if (!modUnavailable) {
+        const { data: moderationData, error: moderationError } = await supabase.functions.invoke('moderate-content', {
+          body: { content: content.trim() }
         });
-        setLoading(false);
-        return;
+
+        if (moderationError) {
+          try { sessionStorage.setItem('one_mod_fn_unavailable', '1'); } catch { /* ignore */ }
+          logger.warn("Moderation check skipped");
+        } else if (moderationData?.flagged) {
+          toast({
+            title: "Content Warning",
+            description: "Your post contains content that violates our community guidelines. Please revise it.",
+            variant: "destructive",
+          });
+          setLoading(false);
+          return;
+        }
       }
 
       let imageUrl = imagePreview;
@@ -171,8 +179,8 @@ const CreatePost = () => {
         let compressedFile = imageFile;
         try {
           compressedFile = await imageCompression(imageFile, options);
-        } catch (error) {
-          console.error("Image compression failed:", error);
+        } catch {
+          logger.warn("Image compression skipped, uploading original");
         }
 
         const fileExt = compressedFile.name.split('.').pop() || 'jpg';
@@ -274,7 +282,7 @@ const CreatePost = () => {
       }
       toast({
         title: "Error",
-        description: (error as Error).message,
+        description: toSafeUserError(error, "Could not publish post. Please try again."),
         variant: "destructive",
       });
     } finally {

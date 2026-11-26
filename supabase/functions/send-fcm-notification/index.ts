@@ -139,7 +139,7 @@ serve(async (req) => {
 
     const FCM_SERVICE_ACCOUNT_JSON = Deno.env.get('FCM_SERVICE_ACCOUNT_JSON');
     if (!FCM_SERVICE_ACCOUNT_JSON) {
-      return jsonResponse(req, { error: 'FCM service is not configured' }, 503);
+      return jsonResponse(req, { results: [], sent: 0, skipped: 'not_configured' }, 200);
     }
 
     // Resolve tokens server-side (never accept raw tokens from client)

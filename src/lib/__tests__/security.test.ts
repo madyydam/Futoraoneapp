@@ -5,6 +5,8 @@ import {
   clearUserSessionStorage,
   withRetry,
 } from "@/lib/security";
+import { toSafeUserError } from "@/lib/errorMapper";
+import { redactSensitiveText } from "@/lib/logger";
 
 vi.mock("@/utils/cache", () => ({
   clearCache: vi.fn().mockResolvedValue(undefined),
@@ -80,6 +82,45 @@ describe("security helpers", () => {
       const op = vi.fn<() => Promise<string>>().mockRejectedValue(new Error("down"));
       await expect(withRetry(op, { retries: 1, baseDelayMs: 1 })).rejects.toThrow("down");
       expect(op).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe("toSafeUserError", () => {
+    it("masks Postgres constraints, Supabase URLs, and internal tokens", () => {
+      expect(
+        toSafeUserError({
+          code: "23503",
+          message: 'insert or update on table "follows" violates foreign key constraint "follows_follower_id_fkey"',
+        })
+      ).toBe("Unable to complete action right now. Please refresh and try again.");
+
+      expect(
+        toSafeUserError({
+          message: "Failed at https://sbzsgeokspmkewrmuqgi.supabase.co/functions/v1/send-fcm-notification",
+        })
+      ).toBe("Something went wrong. Please try again.");
+
+      expect(toSafeUserError({ message: "Edge Function returned a non-2xx status code" })).toBe(
+        "Connection issue. Please check your internet and try again."
+      );
+    });
+
+    it("preserves safe actionable auth messages", () => {
+      expect(toSafeUserError({ message: "Invalid login credentials" })).toBe("Invalid email or password.");
+    });
+  });
+
+  describe("redactSensitiveText", () => {
+    it("scrubs Supabase endpoints, JWTs, and UUIDs", () => {
+      const raw =
+        "POST https://sbzsgeokspmkewrmuqgi.supabase.co/functions/v1/send-email uid=19e992ce-b70e-461a-86b2-f1d89351e30a jwt=eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.abc123";
+      const scrubbed = redactSensitiveText(raw);
+      expect(scrubbed).not.toContain("sbzsgeokspmkewrmuqgi");
+      expect(scrubbed).not.toContain("19e992ce");
+      expect(scrubbed).not.toContain("eyJhbGci");
+      expect(scrubbed).toContain("[redacted-endpoint]");
+      expect(scrubbed).toContain("[id]");
+      expect(scrubbed).toContain("[redacted-token]");
     });
   });
 });

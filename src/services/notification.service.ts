@@ -1,4 +1,23 @@
 import { supabase } from '@/integrations/supabase/client';
+import { logger } from '@/lib/logger';
+
+const PUSH_UNAVAILABLE_KEY = 'one_push_fn_unavailable';
+
+function isPushTemporarilyDisabled(): boolean {
+  try {
+    return sessionStorage.getItem(PUSH_UNAVAILABLE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function markPushTemporarilyDisabled(): void {
+  try {
+    sessionStorage.setItem(PUSH_UNAVAILABLE_KEY, '1');
+  } catch {
+    // ignore storage errors
+  }
+}
 
 interface SendNotificationParams {
   userId: string;
@@ -25,6 +44,8 @@ export const sendPushNotification = async ({
   body,
   data = {},
 }: SendNotificationParams): Promise<void> => {
+  if (isPushTemporarilyDisabled()) return;
+
   try {
     const { error } = await supabase.functions.invoke('send-fcm-notification', {
       body: {
@@ -37,10 +58,13 @@ export const sendPushNotification = async ({
     });
 
     if (error) {
-      console.error('Error sending notification:', error);
+      // Avoid spamming repeated 400/404/503 preflight/invoke errors in browser DevTools
+      markPushTemporarilyDisabled();
+      logger.warn('Push notification skipped');
     }
-  } catch (error) {
-    console.error('Error in sendPushNotification:', error);
+  } catch {
+    markPushTemporarilyDisabled();
+    logger.warn('Push notification unavailable');
   }
 };
 

@@ -13,6 +13,7 @@ import { TrendingSection } from "@/components/explore/TrendingSection";
 import { TRENDING_TOPICS, TRENDING_PROJECTS } from "@/components/explore/exploreConstants";
 import { sanitizePostgrestSearch } from "@/lib/security";
 import { useAuth } from "@/hooks/useAuth";
+import { logger } from "@/lib/logger";
 
 const Explore = () => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -57,7 +58,7 @@ const Explore = () => {
 
       setPeople(usersWithCounts);
     } catch (error) {
-      console.error("Error fetching people:", error);
+      logger.error("Error fetching people:", error);
     } finally {
       setLoadingPeople(false);
     }
@@ -113,7 +114,7 @@ const Explore = () => {
 
       setSearchResults([...peopleResults, ...topicResults, ...projectResults]);
     } catch (error) {
-      console.error("Search error:", error);
+      logger.error("Search error:", error);
     } finally {
       setSearchLoading(false);
     }
@@ -133,7 +134,6 @@ const Explore = () => {
   useEffect(() => {
     fetchPeople();
 
-    console.log("Setting up real-time profile sync for Explore...");
     const channel = supabase
       .channel('explore-profile-sync')
       .on(
@@ -144,7 +144,7 @@ const Explore = () => {
           table: 'profiles'
         },
         (payload) => {
-          console.log("Real-time profile update received in Explore:", payload);
+          logger.debug("Real-time profile update received in Explore");
           // Use unknown then intersection for cleaner casting
           const updatedProfile = payload.new as unknown as (UserProfile & { [key: string]: unknown });
 
@@ -181,11 +181,10 @@ const Explore = () => {
         }
       )
       .subscribe((status) => {
-        console.log(`Explore real-time subscription status: ${status}`);
+        logger.debug(`Explore real-time subscription status: ${status}`);
       });
 
     return () => {
-      console.log("Cleaning up Explore real-time profile sync...");
       supabase.removeChannel(channel);
     };
   }, [fetchPeople]);
@@ -248,7 +247,6 @@ const Explore = () => {
         showResults={showResults}
         searchResults={searchResults}
         handleUserClick={handleUserClick}
-        onEcosystemClick={() => navigate("/ecosystem")}
       />
 
       <div className="max-w-2xl mx-auto p-4 space-y-6">

@@ -128,6 +128,7 @@ export default defineConfig(({ mode }) => {
     ].filter(Boolean),
     build: {
       minify: "esbuild",
+      sourcemap: false,
       target: "esnext",
       chunkSizeWarningLimit: 1200,
       rollupOptions: {
@@ -144,6 +145,7 @@ export default defineConfig(({ mode }) => {
         },
       },
     },
+    esbuild: mode === "production" ? { drop: ["console", "debugger"] } : undefined,
     resolve: {
       alias: {
         "@": path.resolve(__dirname, "./src"),

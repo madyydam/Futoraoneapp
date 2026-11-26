@@ -1,7 +1,6 @@
 import { memo } from "react";
 import { motion } from "framer-motion";
-import { Search, Globe } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
@@ -34,7 +33,6 @@ interface ExploreHeaderProps {
     showResults: boolean;
     searchResults: SearchResult[];
     handleUserClick: (userId: string) => void;
-    onEcosystemClick: () => void;
 }
 
 export const ExploreHeader = memo(({
@@ -46,7 +44,6 @@ export const ExploreHeader = memo(({
     showResults,
     searchResults,
     handleUserClick,
-    onEcosystemClick
 }: ExploreHeaderProps) => {
     return (
         <motion.div
@@ -57,15 +54,6 @@ export const ExploreHeader = memo(({
             <div className="max-w-2xl mx-auto">
                 <div className="flex items-center justify-between mb-4">
                     <h1 className="text-2xl font-bold gradient-text">Explore</h1>
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={onEcosystemClick}
-                        className="rounded-full bg-[#0A0A0A] border-white/10 hover:border-white/20 text-white/90 font-black text-[10px] gap-2 transition-all hover:bg-black active:scale-95 uppercase tracking-[0.2em] shadow-2xl"
-                    >
-                        <Globe className="w-3 h-3 text-primary" />
-                        Ecosystem
-                    </Button>
                 </div>
                 <form onSubmit={handleSearch} className="relative">
                     <div className="relative group">

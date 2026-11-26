@@ -3,6 +3,7 @@ import * as Sentry from "@sentry/react";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, RefreshCcw, Sparkles } from "lucide-react";
 import { getRandomJoke } from "@/utils/jokes";
+import { logger } from "@/lib/logger";
 
 interface Props {
     children: ReactNode;
@@ -49,14 +50,12 @@ export class GlobalErrorBoundary extends Component<Props, State> {
     }
 
     public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-        console.error("Uncaught error:", error, errorInfo);
+        logger.error("Uncaught error:", error, errorInfo);
         Sentry.captureException(error);
-        console.error("Error stack:", error.stack);
-        console.error("Component stack:", errorInfo.componentStack);
 
         // Auto-retry for chunk loading errors (common during deployments)
         if (this.state.errorType === 'chunk' && this.state.retryCount < this.maxRetries) {
-            console.log(`ChunkLoadError detected, auto-retrying (${this.state.retryCount + 1}/${this.maxRetries})...`);
+            logger.debug(`ChunkLoadError detected, auto-retrying (${this.state.retryCount + 1}/${this.maxRetries})...`);
 
             // Use functional state update to increment retry count
             this.setState(prev => ({
@@ -85,8 +84,8 @@ export class GlobalErrorBoundary extends Component<Props, State> {
                 const names = await caches.keys();
                 await Promise.all(names.map((name) => caches.delete(name)));
             }
-        } catch (e) {
-            console.error("Error during reset:", e);
+        } catch {
+            logger.error("Error during cache reset");
         } finally {
             window.location.reload();
         }

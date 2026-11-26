@@ -3,6 +3,7 @@ import * as Sentry from "@sentry/react";
 import { HelmetProvider } from "react-helmet-async";
 import App from "./App.tsx";
 import "./index.css";
+import { redactSensitiveText } from "@/lib/logger";
 
 const sentryDsn = import.meta.env.VITE_SENTRY_DSN;
 
@@ -26,6 +27,14 @@ if (sentryDsn) {
         delete event.request.headers.Authorization;
         delete event.request.headers.authorization;
         delete event.request.headers.apikey;
+      }
+      if (event.message) {
+        event.message = redactSensitiveText(event.message);
+      }
+      if (event.exception?.values) {
+        for (const val of event.exception.values) {
+          if (val.value) val.value = redactSensitiveText(val.value);
+        }
       }
       return event;
     },

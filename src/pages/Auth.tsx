@@ -20,6 +20,8 @@ import { getRandomAvatar } from "@/utils/avatars";
 import { Turnstile } from '@marsidev/react-turnstile';
 import { triggerAuthEmail } from "@/services/email.service";
 import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
+import { logger } from "@/lib/logger";
+import { toSafeUserError } from "@/lib/errorMapper";
 
 const Auth = () => {
   const [searchParams] = useSearchParams();
@@ -124,7 +126,7 @@ const Auth = () => {
 
       return publicUrl;
     } catch (error) {
-      console.error('Error uploading photo:', error);
+      logger.error('Error uploading photo:', error);
       return null;
     }
   }, [profilePhoto]);
@@ -146,7 +148,7 @@ const Auth = () => {
     } catch (error) {
       toast({
         title: "Reset Failed",
-        description: error instanceof Error ? error.message : "Could not send reset email",
+        description: toSafeUserError(error, "Could not send reset email."),
         variant: "destructive",
       });
     } finally {
@@ -232,8 +234,8 @@ const Auth = () => {
         setShowLoginErrorDialog(true);
       } else {
         toast({
-          title: "Error",
-          description: errorMessage,
+          title: "Authentication Error",
+          description: toSafeUserError(error, "Unable to sign in right now. Please try again."),
           variant: "destructive",
         });
       }

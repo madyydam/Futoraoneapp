@@ -2,7 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import type { Session, User } from "@supabase/supabase-js";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { clearUserSessionStorage } from "@/lib/security";
+import { clearUserSessionStorage, withRetry } from "@/lib/security";
 import { clearAuthEmailSessionFlag, triggerAuthEmail } from "@/services/email.service";
 import { toast } from "sonner";
 
@@ -32,11 +32,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const checkBanStatus = useCallback(async (uid: string) => {
     try {
-      const { data } = await supabase
-        .from("profiles")
-        .select("is_banned")
-        .eq("id", uid)
-        .maybeSingle();
+      const { data } = await withRetry(
+        async () =>
+          supabase
+            .from("profiles")
+            .select("is_banned")
+            .eq("id", uid)
+            .maybeSingle(),
+        { retries: 2, baseDelayMs: 400 }
+      );
 
       if (!data) {
         // Self-heal missing profile row if auth user predates trigger
@@ -135,6 +139,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       const secondsRemaining = activeSession.expires_at - Math.floor(Date.now() / 1000);
       if (secondsRemaining < 120) {
         const refreshed = await supabase.auth.refreshSession();
+        if (refreshed.error && /refresh token/i.test(refreshed.error.message || "")) {
+          await supabase.auth.signOut();
+          setSession(null);
+          setUser(null);
+          await performLocalCleanup();
+          return;
+        }
         if (refreshed.data.session) {
           activeSession = refreshed.data.session;
         }
@@ -146,7 +157,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setUser(activeSession.user);
       queryClient.setQueryData(["auth_user"], activeSession.user);
     }
-  }, [queryClient]);
+  }, [performLocalCleanup, queryClient]);
 
   const value = useMemo<AuthContextValue>(() => ({
     user,

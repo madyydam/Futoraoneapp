@@ -15,6 +15,7 @@ import { BottomNav } from "@/components/BottomNav";
 import type { User } from "@supabase/supabase-js";
 import { CartoonLoader } from "@/components/CartoonLoader";
 import { sanitizeExternalUrl } from "@/lib/security";
+import { toSafeUserError } from "@/lib/errorMapper";
 
 interface Project {
   id: string;
@@ -104,7 +105,7 @@ const Projects = () => {
     } catch (error) {
       toast({
         title: "Error loading projects",
-        description: (error as Error).message,
+        description: toSafeUserError(error, "Unable to load projects."),
         variant: "destructive",
       });
     } finally {
@@ -148,7 +149,7 @@ const Projects = () => {
     } catch (error) {
       toast({
         title: "Error",
-        description: (error as Error).message,
+        description: toSafeUserError(error, "Could not create project."),
         variant: "destructive",
       });
     }
@@ -163,18 +164,21 @@ const Projects = () => {
     try {
       if (hasLiked) {
         const likeId = project?.project_likes.find((like) => like.user_id === user.id)?.id;
-        await supabase.from('project_likes').delete().eq('id', likeId);
+        if (!likeId) return;
+        const { error } = await supabase.from('project_likes').delete().eq('id', likeId);
+        if (error) throw error;
       } else {
-        await supabase.from('project_likes').insert({
+        const { error } = await supabase.from('project_likes').insert({
           user_id: user.id,
           project_id: projectId,
         });
+        if (error) throw error;
       }
       fetchProjects();
     } catch (error) {
       toast({
         title: "Error",
-        description: (error as Error).message,
+        description: toSafeUserError(error, "Could not update like."),
         variant: "destructive",
       });
     }

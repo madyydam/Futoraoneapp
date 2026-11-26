@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { UserPlus, UserMinus } from "lucide-react";
 import { sendPushNotification } from "@/utils/notifications";
+import { toSafeUserError } from "@/lib/errorMapper";
 
 interface FollowButtonProps {
     userId: string;
@@ -101,7 +102,7 @@ export const FollowButton = ({ userId, currentUserId, onFollowChange }: FollowBu
         } catch (error) {
             toast({
                 title: "Error",
-                description: (error as Error).message,
+                description: toSafeUserError(error, "Could not update follow status."),
                 variant: "destructive",
             });
         } finally {

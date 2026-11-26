@@ -627,6 +627,8 @@ CREATE POLICY "Users view own game sessions" ON public.game_sessions
   FOR SELECT TO authenticated USING (auth.uid() = user_id);
 
 -- Wallets: STRICTLY SELECT-ONLY for owner or admin (mutations ONLY via RPCs)
+REVOKE ALL ON TABLE public.native_wallets FROM anon;
+REVOKE ALL ON TABLE public.native_transactions FROM anon;
 DROP POLICY IF EXISTS "Users can view own native wallet" ON public.native_wallets;
 DROP POLICY IF EXISTS "Users or admins view native wallet" ON public.native_wallets;
 CREATE POLICY "Users or admins view native wallet" ON public.native_wallets

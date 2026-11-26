@@ -1,4 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
+import { logger } from '@/lib/logger';
 
 export type AuthEmailMode = 'auth_event' | 'welcome' | 'login';
 
@@ -46,15 +47,10 @@ export async function triggerAuthEmail(
       body: { action: mode },
     });
     if (error) {
-      // Keep session flag on FunctionsFetchError / 404 so browser doesn't spam preflight errors repeatedly
-      if (import.meta.env.DEV) {
-        console.warn('Email trigger skipped:', error.message);
-      }
+      logger.warn('Email trigger skipped');
     }
-  } catch (err) {
-    if (import.meta.env.DEV) {
-      console.warn('Email trigger error:', err);
-    }
+  } catch {
+    logger.warn('Email trigger unavailable');
   }
 }
 

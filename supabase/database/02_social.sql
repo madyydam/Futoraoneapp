@@ -472,6 +472,8 @@ ALTER TABLE public.app_feedback ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.email_logs ENABLE ROW LEVEL SECURITY;
 
 -- Projects & Project Likes
+REVOKE ALL ON TABLE public.projects FROM anon;
+REVOKE ALL ON TABLE public.project_likes FROM anon;
 DROP POLICY IF EXISTS "Projects viewable by authenticated" ON public.projects;
 CREATE POLICY "Projects viewable by authenticated" ON public.projects FOR SELECT TO authenticated USING (true);
 DROP POLICY IF EXISTS "Users create own projects" ON public.projects;
