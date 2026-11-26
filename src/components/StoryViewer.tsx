@@ -109,7 +109,8 @@ export const StoryViewer = ({
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
   const currentStory = stories[currentIndex];
-  const isOwner = Boolean(currentUserId && currentStory && currentStory.user.id === currentUserId);
+  const storyAuthorId = currentStory?.user?.id || (currentStory as any)?.user_id || (currentStory as any)?.userId;
+  const isOwner = Boolean(currentUserId && storyAuthorId && storyAuthorId === currentUserId);
   const DURATION = currentStory?.duration ? currentStory.duration * 1000 : 5000;
   const UPDATE_INTERVAL = 50;
 
@@ -421,7 +422,7 @@ export const StoryViewer = ({
         initial={{ opacity: 0, scale: 0.98 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.98 }}
-        className="fixed inset-0 z-50 bg-black flex items-center justify-center select-none"
+        className="fixed inset-0 z-[999999] bg-black flex items-center justify-center select-none"
       >
         {/* Floating Emojis Animation Layer */}
         <div className="absolute inset-0 pointer-events-none overflow-hidden z-40">
@@ -557,23 +558,38 @@ export const StoryViewer = ({
             </div>
           </div>
 
-          {/* Media Content Area */}
-          <div className="w-full h-full flex items-center justify-center bg-black relative">
+          {/* Media Content Area with Atmospheric Background */}
+          <div className="w-full h-full flex items-center justify-center bg-black relative overflow-hidden">
+            {/* Atmospheric Blurred Background (Prevents empty or cropped space for landscape/portrait) */}
             {currentStory.type === "image" ? (
-              <img
-                src={currentStory.url}
-                alt="Story"
-                className="w-full h-full object-cover select-none pointer-events-none"
-              />
+              <>
+                <img
+                  src={currentStory.url}
+                  alt=""
+                  className="absolute inset-0 w-full h-full object-cover blur-3xl opacity-40 scale-125 select-none pointer-events-none"
+                />
+                <img
+                  src={currentStory.url}
+                  alt="Story"
+                  className="relative z-10 max-w-full max-h-full object-contain select-none pointer-events-none drop-shadow-2xl"
+                />
+              </>
             ) : (
-              <video
-                ref={videoRef}
-                src={currentStory.url}
-                autoPlay
-                playsInline
-                muted={false}
-                className="w-full h-full object-cover select-none pointer-events-none"
-              />
+              <>
+                <video
+                  src={currentStory.url}
+                  muted
+                  className="absolute inset-0 w-full h-full object-cover blur-3xl opacity-40 scale-125 select-none pointer-events-none"
+                />
+                <video
+                  ref={videoRef}
+                  src={currentStory.url}
+                  autoPlay
+                  playsInline
+                  muted={false}
+                  className="relative z-10 max-w-full max-h-full object-contain select-none pointer-events-none drop-shadow-2xl"
+                />
+              </>
             )}
 
             {/* Optional Story Caption Overlay */}
@@ -587,14 +603,14 @@ export const StoryViewer = ({
           </div>
 
           {/* Bottom Bar: Owner Viewers Pill OR Viewer Engagement */}
-          <div className="absolute bottom-0 left-0 right-0 z-30 p-4 pb-6 bg-gradient-to-t from-black/95 via-black/60 to-transparent">
+          <div className="absolute bottom-0 left-0 right-0 z-30 p-4 pb-8 sm:pb-6 bg-gradient-to-t from-black/95 via-black/70 to-transparent">
             {isOwner ? (
               /* Story Owner Toolbar */
               <div className="flex items-center justify-between">
                 <Button
                   variant="ghost"
                   onClick={handleOpenViewers}
-                  className="rounded-full bg-white/10 hover:bg-white/20 text-white text-xs font-semibold px-4 py-2 flex items-center gap-2 border border-white/15 backdrop-blur-md shadow-lg"
+                  className="rounded-full bg-white/15 hover:bg-white/25 text-white text-xs font-semibold px-4 py-2 flex items-center gap-2 border border-white/20 backdrop-blur-md shadow-lg transition-transform active:scale-95"
                 >
                   <Eye className="w-4 h-4 text-pink-400" />
                   <span>{viewerCount} {viewerCount === 1 ? "view" : "views"}</span>
@@ -605,7 +621,7 @@ export const StoryViewer = ({
                     variant="ghost"
                     size="sm"
                     onClick={() => setDeleteDialogOpen(true)}
-                    className="text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-full text-xs font-bold px-3 py-1.5 flex items-center gap-1.5"
+                    className="text-red-400 hover:text-red-300 hover:bg-red-500/15 rounded-full text-xs font-bold px-3 py-1.5 flex items-center gap-1.5 border border-red-500/20 backdrop-blur-md shadow-sm"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                     Delete
@@ -614,7 +630,7 @@ export const StoryViewer = ({
                     variant="ghost"
                     size="sm"
                     onClick={handleArchiveStory}
-                    className="text-white/80 hover:text-white hover:bg-white/15 rounded-full text-xs font-semibold px-3 py-1.5 flex items-center gap-1.5"
+                    className="text-white/90 hover:text-white hover:bg-white/20 rounded-full text-xs font-semibold px-3 py-1.5 flex items-center gap-1.5 border border-white/15 backdrop-blur-md shadow-sm"
                   >
                     <Archive className="w-3.5 h-3.5 text-pink-400" />
                     Archive

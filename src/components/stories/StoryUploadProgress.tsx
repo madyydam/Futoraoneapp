@@ -11,7 +11,7 @@ export const StoryUploadProgress = ({ progress, stage = "Uploading story..." }: 
   const strokeDashoffset = circumference - (progress / 100) * circumference;
 
   return (
-    <div className="fixed inset-0 z-[100] bg-black/85 backdrop-blur-md flex flex-col items-center justify-center p-4 select-none">
+    <div className="fixed inset-0 z-[1000000] bg-black/90 backdrop-blur-xl flex flex-col items-center justify-center p-4 select-none">
       <motion.div
         initial={{ scale: 0.85, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}

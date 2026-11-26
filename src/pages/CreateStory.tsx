@@ -223,18 +223,25 @@ const CreateStory = () => {
                     exit={{ opacity: 0, scale: 0.9 }}
                     className="space-y-4"
                   >
-                    <div className="relative aspect-[9/16] max-h-[500px] rounded-xl overflow-hidden bg-muted shadow-lg">
+                    <div className="relative aspect-[9/16] max-h-[500px] rounded-xl overflow-hidden bg-black shadow-lg flex items-center justify-center">
                       {mediaFile?.type.startsWith("image/") ? (
-                        <img
-                          src={previewUrl}
-                          alt="Preview"
-                          className={`w-full h-full object-cover ${selectedFilterClass}`}
-                        />
+                        <>
+                          <img
+                            src={previewUrl}
+                            alt=""
+                            className={`absolute inset-0 w-full h-full object-cover blur-2xl opacity-40 scale-125 select-none pointer-events-none ${selectedFilterClass}`}
+                          />
+                          <img
+                            src={previewUrl}
+                            alt="Preview"
+                            className={`relative z-10 max-w-full max-h-full object-contain ${selectedFilterClass}`}
+                          />
+                        </>
                       ) : (
                         <video
                           src={previewUrl}
                           controls
-                          className="w-full h-full object-cover"
+                          className="relative z-10 max-w-full max-h-full object-contain"
                         />
                       )}
                     </div>

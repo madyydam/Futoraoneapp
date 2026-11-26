@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import imageCompression from "browser-image-compression";
 import { StoryUploadProgress } from "@/components/stories/StoryUploadProgress";
+import { StoryComposerModal } from "@/components/stories/StoryComposerModal";
 
 interface StoryUser {
   id: string;
@@ -59,12 +60,30 @@ export const Stories = memo(() => {
   const [viewedStoryIds, setViewedStoryIds] = useState<Set<string>>(new Set());
   const [currentUser, setCurrentUser] = useState<any>(null);
 
+  // Story Composer File state
+  const [composerFile, setComposerFile] = useState<File | null>(null);
+
   // Upload states
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadStage, setUploadStage] = useState("Preparing story...");
 
   const { toast } = useToast();
+
+  const handleFileSelected = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!currentUser) {
+      toast({
+        title: "Please Sign In",
+        description: "You must be signed in to post a story.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setComposerFile(file);
+    event.target.value = "";
+  };
 
   const fetchStories = useCallback(async () => {
     try {
@@ -385,7 +404,7 @@ export const Stories = memo(() => {
                 id="direct-story-upload"
                 className="hidden"
                 accept="image/*,video/*"
-                onChange={handleFileUpload}
+                onChange={handleFileSelected}
               />
             </label>
           </div>
@@ -443,6 +462,19 @@ export const Stories = memo(() => {
           onNextUser={handleNextUser}
           onPrevUser={handlePrevUser}
           onStoryDeleted={() => fetchStories()}
+        />
+      )}
+
+      {/* Fullscreen Instagram Story Composer Modal */}
+      {composerFile && currentUser && (
+        <StoryComposerModal
+          file={composerFile}
+          currentUser={currentUser}
+          onClose={() => setComposerFile(null)}
+          onStoryPublished={() => {
+            setComposerFile(null);
+            fetchStories();
+          }}
         />
       )}
     </>
