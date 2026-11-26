@@ -1,11 +1,10 @@
 import { useState, useEffect, useCallback, memo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Logo } from "@/components/Logo";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, User, Mail, Lock, Loader2, Camera } from "lucide-react";
+import { User, Mail, Lock, Loader2, Camera } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -240,71 +239,68 @@ const Auth = () => {
   }, [isLogin, email, password, fullName, username, profilePhoto, selectedAvatar, navigate, toast, uploadProfilePhoto, captchaToken]);
 
   return (
-    <div className="dark min-h-screen bg-background relative flex items-center justify-center p-4 overflow-hidden">
-      {/* Dynamic Background */}
-      <div className="absolute inset-0 bg-background z-0">
-        <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-primary/10 via-background to-background opacity-80"></div>
-        <div className="absolute -top-40 -left-40 w-[600px] h-[600px] bg-primary/20 rounded-full blur-[128px]"></div>
-        <div className="absolute -bottom-40 -right-40 w-[600px] h-[600px] bg-purple-500/10 rounded-full blur-[128px]"></div>
-      </div>
+    <div className="min-h-screen bg-[#f0f0f5] relative flex items-center justify-center p-4 overflow-hidden">
 
       <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.5, type: "spring", bounce: 0.3 }}
-        className="w-full max-w-xl relative z-10"
+        initial={{ opacity: 0, y: 16, scale: 0.97 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.4, type: "spring", bounce: 0.25 }}
+        className="w-full max-w-sm relative z-10"
       >
-        <div className="bg-card/40 backdrop-blur-xl border border-white/10 rounded-[2.5rem] shadow-2xl overflow-hidden">
-          {/* Header - Transparent & Integrated Toggle */}
-          <div className="px-8 py-4 flex items-center justify-between border-b border-white/5 bg-white/5">
+        <div className="bg-white rounded-[2rem] shadow-[0_1px_2px_rgba(0,0,0,0.05),_0_8px_32px_rgba(0,0,0,0.08)] overflow-hidden">
+
+          {/* Header */}
+          <div className="px-7 pt-7 pb-0 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Logo className="w-7 h-7" />
-              <span className="text-[10px] font-black tracking-[0.2em] text-white/40 uppercase">FutoraOne</span>
+              <div className="w-8 h-8 rounded-[9px] bg-black flex items-center justify-center">
+                <Logo className="w-4 h-4" />
+              </div>
+              <span className="text-[11px] font-black tracking-[0.18em] text-black/40 uppercase">FutoraOne</span>
             </div>
 
-            <div className="flex bg-black/40 p-1 rounded-full border border-white/10">
+            <div className="flex bg-[#f2f2f7] p-[3px] rounded-[10px] gap-[2px]">
               <button
                 onClick={() => { setIsLogin(false); navigate("?mode=signup", { replace: true }); }}
-                className={cn("px-4 py-1.5 text-[10px] font-black rounded-full transition-all", !isLogin ? "bg-primary text-white shadow-lg shadow-primary/20 scale-105" : "text-muted-foreground hover:text-white")}
+                className={cn(
+                  "px-4 py-[5px] text-[12px] font-semibold rounded-[8px] transition-all duration-200",
+                  !isLogin ? "bg-white text-black shadow-[0_1px_4px_rgba(0,0,0,0.12)]" : "text-[#8e8e93] hover:text-black"
+                )}
               >
-                SIGNUP
+                Signup
               </button>
               <button
                 onClick={() => { setIsLogin(true); navigate("?mode=login", { replace: true }); }}
-                className={cn("px-4 py-1.5 text-[10px] font-black rounded-full transition-all", isLogin ? "bg-primary text-white shadow-lg shadow-primary/20 scale-105" : "text-muted-foreground hover:text-white")}
+                className={cn(
+                  "px-4 py-[5px] text-[12px] font-semibold rounded-[8px] transition-all duration-200",
+                  isLogin ? "bg-white text-black shadow-[0_1px_4px_rgba(0,0,0,0.12)]" : "text-[#8e8e93] hover:text-black"
+                )}
               >
-                LOGIN
+                Login
               </button>
             </div>
           </div>
 
-          <div className="p-8 pt-6">
-            <div className="text-center mb-5">
-              <h2 className="text-2xl font-black tracking-tight text-white mb-1">
-                {isLogin ? "Welcome Back!" : "New Account"}
+          <div className="px-7 pt-6 pb-7">
+            {/* Headline */}
+            <div className="text-center mb-6">
+              <h2 className="text-[26px] font-extrabold tracking-tight text-black leading-[1.18] mb-0">
+                {isLogin ? (
+                  <>Welcome <span className="text-[#1a56f5]">Back</span></>
+                ) : (
+                  <>The Future of <span className="text-[#1a56f5]">Networking</span></>
+                )}
               </h2>
-              <p className="text-[11px] text-muted-foreground font-bold uppercase tracking-wider">
-                {isLogin ? "Sign in to your tech portal" : "Join the future of networking"}
-              </p>
             </div>
 
-            <div className="space-y-4 mb-5">
-              <GoogleSignInButton
-                label="Continue with Google"
-                redirectPath="/auth"
-                disabled={loading}
-                className="w-full h-11 rounded-2xl text-sm font-bold"
-              />
-              <div className="relative flex items-center justify-center">
-                <div className="border-t border-white/10 w-full" />
-                <span className="px-3 text-[10px] font-bold uppercase tracking-widest text-muted-foreground bg-transparent whitespace-nowrap">
-                  or continue with email
-                </span>
-                <div className="border-t border-white/10 w-full" />
-              </div>
-            </div>
+            {/* Google */}
+            <GoogleSignInButton
+              label="Continue with Google"
+              redirectPath="/auth"
+              disabled={loading}
+              className="w-full h-[50px] rounded-[14px] border-[1.5px] border-[#e5e5ea] bg-white shadow-[0_1px_3px_rgba(0,0,0,0.06)] text-black font-semibold text-[14px] mb-5 hover:bg-[#fafafa] transition-colors"
+            />
 
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-[10px]">
               <AnimatePresence mode="wait">
                 {!isLogin && (
                   <motion.div
@@ -312,41 +308,50 @@ const Auth = () => {
                     initial={{ opacity: 0, scale: 0.98 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.98 }}
-                    className="space-y-4"
+                    transition={{ duration: 0.2 }}
+                    className="space-y-[10px]"
                   >
-                    {/* Compact Photo Upload & Profile Info Grid */}
-                    <div className="grid grid-cols-[100px_1fr] gap-6 items-center bg-white/5 p-4 rounded-2xl border border-white/5">
-                      <div className="flex flex-col items-center gap-2">
-                        <label htmlFor="photo-upload" className="cursor-pointer group block">
-                          <div className="w-20 h-20 rounded-2xl border-2 border-primary/20 shadow-xl overflow-hidden bg-secondary/50 flex items-center justify-center relative">
-                            {photoPreview ? (
-                              <img src={photoPreview} alt="Preview" className="w-full h-full object-cover" />
-                            ) : (
-                              <User className="w-8 h-8 text-muted-foreground" />
-                            )}
-                            <div className="absolute inset-0 flex items-center justify-center bg-black/40 text-white opacity-0 group-hover:opacity-100 transition-opacity">
-                              <Camera className="w-5 h-5" />
-                            </div>
-                          </div>
-                        </label>
-                        <span className="text-[10px] font-bold text-primary/60 uppercase tracking-wider">Add Photo</span>
-                        <input id="photo-upload" type="file" accept="image/*" onChange={handlePhotoChange} className="hidden" />
-                      </div>
-
-                      <div className="space-y-3">
-                        <div className="space-y-1.5">
-                          <Label htmlFor="fullName" className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">Full Name</Label>
-                          <div className="relative">
-                            <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                            <Input id="fullName" placeholder="Full Name" value={fullName} onChange={(e) => setFullName(e.target.value)} className="pl-9 h-10 bg-black/20 border-white/5 focus:border-primary/50 text-white text-sm" required />
+                    {/* Photo + Name/Username row */}
+                    <div className="flex gap-3 items-center">
+                      <label htmlFor="photo-upload" className="cursor-pointer group flex-shrink-0">
+                        <div className="w-[68px] h-[68px] rounded-[18px] bg-[#f2f2f7] border-[1.5px] border-dashed border-[#d1d1d6] flex flex-col items-center justify-center gap-1 group-hover:bg-[#e9e9ef] transition-colors relative overflow-hidden">
+                          {photoPreview ? (
+                            <img src={photoPreview} alt="Preview" className="w-full h-full object-cover" />
+                          ) : (
+                            <>
+                              <User className="w-5 h-5 text-[#b0b0b8]" />
+                              <span className="text-[9px] font-bold text-[#b0b0b8] uppercase tracking-wider">Photo</span>
+                            </>
+                          )}
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/30 text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Camera className="w-4 h-4" />
                           </div>
                         </div>
-                        <div className="space-y-1.5">
-                          <Label htmlFor="username" className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">Username</Label>
-                          <div className="relative">
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-xs font-mono">@</span>
-                            <Input id="username" placeholder="username" value={username} onChange={(e) => setUsername(e.target.value)} className="pl-8 h-10 bg-black/20 border-white/5 focus:border-primary/50 text-white text-sm" required />
-                          </div>
+                      </label>
+                      <input id="photo-upload" type="file" accept="image/*" onChange={handlePhotoChange} className="hidden" />
+
+                      <div className="flex-1 space-y-[10px]">
+                        <div className="relative">
+                          <User className="absolute left-3 top-1/2 -translate-y-1/2 w-[14px] h-[14px] text-[#c7c7cc]" />
+                          <Input
+                            id="fullName"
+                            placeholder="Full Name"
+                            value={fullName}
+                            onChange={(e) => setFullName(e.target.value)}
+                            className="pl-[36px] h-[46px] rounded-[12px] border-[1.5px] border-[#e5e5ea] bg-[#fafafa] text-black placeholder:text-[#b0b0b8] text-[14px] focus:border-[#1a56f5] focus:bg-white focus:ring-2 focus:ring-[#1a56f5]/10 transition-all"
+                            required
+                          />
+                        </div>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#c7c7cc] text-[13px] font-mono leading-none">@</span>
+                          <Input
+                            id="username"
+                            placeholder="username"
+                            value={username}
+                            onChange={(e) => setUsername(e.target.value)}
+                            className="pl-[30px] h-[46px] rounded-[12px] border-[1.5px] border-[#e5e5ea] bg-[#fafafa] text-black placeholder:text-[#b0b0b8] text-[14px] focus:border-[#1a56f5] focus:bg-white focus:ring-2 focus:ring-[#1a56f5]/10 transition-all"
+                            required
+                          />
                         </div>
                       </div>
                     </div>
@@ -354,39 +359,45 @@ const Auth = () => {
                 )}
               </AnimatePresence>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label htmlFor="email" className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">Email Address</Label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input id="email" type="email" placeholder="name@domain.com" value={email} onChange={(e) => setEmail(e.target.value)} className="pl-9 h-10 bg-black/20 border-white/5 focus:border-primary/50 text-white text-sm" required />
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="password" className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">Password</Label>
-                    {isLogin && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setResetEmail(email);
-                          setShowResetDialog(true);
-                        }}
-                        className="text-[10px] text-primary hover:underline font-bold"
-                      >
-                        Forgot?
-                      </button>
-                    )}
-                  </div>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input id="password" type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} className="pl-9 h-10 bg-black/20 border-white/5 focus:border-primary/50 text-white text-sm" required minLength={6} />
-                  </div>
-                </div>
+              {/* Email */}
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-[14px] h-[14px] text-[#c7c7cc]" />
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="Email address"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="pl-[36px] h-[46px] rounded-[12px] border-[1.5px] border-[#e5e5ea] bg-[#fafafa] text-black placeholder:text-[#b0b0b8] text-[14px] focus:border-[#1a56f5] focus:bg-white focus:ring-2 focus:ring-[#1a56f5]/10 transition-all"
+                  required
+                />
               </div>
 
-              {/* CAPTCHA Widget - Compact */}
+              {/* Password */}
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-[14px] h-[14px] text-[#c7c7cc]" />
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder="Password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="pl-[36px] h-[46px] rounded-[12px] border-[1.5px] border-[#e5e5ea] bg-[#fafafa] text-black placeholder:text-[#b0b0b8] text-[14px] focus:border-[#1a56f5] focus:bg-white focus:ring-2 focus:ring-[#1a56f5]/10 transition-all"
+                  required
+                  minLength={6}
+                />
+                {isLogin && (
+                  <button
+                    type="button"
+                    onClick={() => { setResetEmail(email); setShowResetDialog(true); }}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-[#1a56f5] font-semibold hover:underline"
+                  >
+                    Forgot?
+                  </button>
+                )}
+              </div>
+
+              {/* CAPTCHA Widget */}
               {import.meta.env.VITE_CAPTCHA_SITE_KEY && (
                 <div className="flex justify-center scale-90 origin-center py-1">
                   <Turnstile
@@ -394,7 +405,7 @@ const Auth = () => {
                     onSuccess={(token) => setCaptchaToken(token)}
                     onError={() => setCaptchaToken(null)}
                     onExpire={() => setCaptchaToken(null)}
-                    options={{ theme: 'dark', size: 'flexible' }}
+                    options={{ theme: 'light', size: 'flexible' }}
                   />
                 </div>
               )}
@@ -402,16 +413,20 @@ const Auth = () => {
               <Button
                 type="submit"
                 disabled={loading}
-                className="w-full h-12 rounded-2xl text-xs font-black tracking-widest bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-600/90 shadow-xl shadow-primary/20 transition-all hover:scale-[1.01] active:scale-95 mt-2 uppercase"
+                className="w-full h-[52px] rounded-[14px] bg-black hover:bg-[#1a1a1a] text-white text-[15px] font-semibold tracking-normal shadow-[0_2px_8px_rgba(0,0,0,0.14)] hover:shadow-[0_4px_16px_rgba(0,0,0,0.18)] transition-all active:scale-[.98] mt-1 normal-case"
               >
-                {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : isLogin ? "Sign In to Feed" : "Create My Account"}
+                {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : isLogin ? "Sign In" : "Create My Account"}
               </Button>
             </form>
           </div>
 
-          <div className="px-8 py-4 bg-white/5 border-t border-white/5 transition-all">
-            <p className="text-[10px] text-muted-foreground text-center leading-normal">
-              By joining FutoraOne, you agree to our <span className="text-primary font-bold cursor-pointer hover:underline">Terms of Service</span> and <span className="text-primary font-bold cursor-pointer hover:underline">Privacy Policy</span>.
+          {/* Footer */}
+          <div className="px-7 py-4 bg-[#fafafa] border-t border-[#f0f0f0]">
+            <p className="text-[11px] text-[#aeaeb2] text-center leading-relaxed">
+              By joining FutoraOne, you agree to our{" "}
+              <a href="/terms" className="text-[#1a56f5] font-medium hover:underline">Terms of Service</a>
+              {" "}and{" "}
+              <a href="/privacy" className="text-[#1a56f5] font-medium hover:underline">Privacy Policy</a>.
             </p>
           </div>
         </div>

@@ -5,7 +5,6 @@
 --   1. Open: https://supabase.com/dashboard/project/sbzsgeokspmkewrmuqgi/sql
 --   2. Paste this ENTIRE file into the SQL Editor
 --   3. Click RUN once
--- All statements use IF NOT EXISTS / OR REPLACE / ON CONFLICT -- safe to re-run.
 -- ================================================================================
 
 BEGIN;
@@ -2473,12 +2472,13 @@ BEGIN
   RETURNING total_wins INTO v_new_wins;
 
   IF v_new_wins >= 10 THEN
-    INSERT INTO public.achievements (id, name, description, icon)
-    VALUES ('game_wizard', 'Game Wizard', 'Won 10 arcade games', 'gamepad')
-    ON CONFLICT (id) DO NOTHING;
+    -- Upsert the Game Wizard achievement (id is UUID on live DB, insert by name if not exists)
+    INSERT INTO public.achievements (name, description, icon)
+    SELECT 'Game Wizard', 'Won 10 arcade games', 'gamepad'
+    WHERE NOT EXISTS (SELECT 1 FROM public.achievements WHERE name = 'Game Wizard');
 
     INSERT INTO public.user_achievements (user_id, achievement_id)
-    VALUES (me, 'game_wizard')
+    SELECT me, id FROM public.achievements WHERE name = 'Game Wizard' LIMIT 1
     ON CONFLICT (user_id, achievement_id) DO NOTHING;
   END IF;
 
@@ -2923,12 +2923,18 @@ CREATE POLICY "Users view own roles or admin" ON public.user_roles
 -- SEED DATA
 -- ─────────────────────────────────────────────────────────────────────────────
 
-INSERT INTO public.achievements (id, name, description, icon, condition_type, condition_value) VALUES
-  ('first-post', 'First Post', 'Created your first post', 'pencil', 'posts_count', 1),
-  ('social-butterfly', 'Social Butterfly', 'Received 50 likes', 'heart', 'likes_received', 50),
-  ('bug-hunter', 'Bug Hunter', 'Reported a bug', 'bug', NULL, 0),
-  ('code-wizard', 'Code Wizard', 'Posted 5 code snippets', 'code', 'code_posts', 5)
-ON CONFLICT (id) DO NOTHING;
+-- Seed default achievements only on a fresh DB (safe no-op if any rows already exist)
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM public.achievements LIMIT 1) THEN
+    INSERT INTO public.achievements (name, description, icon, condition_type, condition_value)
+    VALUES
+      ('First Post',        'Created your first post',   'pencil', 'posts_count',    1),
+      ('Social Butterfly',  'Received 50 likes',          'heart',  'likes_received', 50),
+      ('Bug Hunter',        'Reported a bug',             'bug',    NULL,             0),
+      ('Code Wizard',       'Posted 5 code snippets',     'code',   'code_posts',     5);
+  END IF;
+END $$;
 
 -- ============================================================
 -- SECTION: 08_storage
@@ -3416,12 +3422,4 @@ GRANT EXECUTE ON FUNCTION public.ensure_my_wallet() TO authenticated;
 
 COMMIT;
 
--- ================================================================================
--- POST-RUN STEPS (run these after COMMIT succeeds):
--- ================================================================================
--- 1. Regenerate TypeScript types:
---    npx supabase gen types typescript --project-id sbzsgeokspmkewrmuqgi > src/integrations/supabase/types.ts
---
--- 2. Bootstrap your admin user (replace with your actual UUID):
---    INSERT INTO public.user_roles (user_id, role) VALUES ('<your-uuid>', 'admin') ON CONFLICT DO NOTHING;
--- ================================================================================
+-- POST-RUN: npx supabase gen types typescript --project-id sbzsgeokspmkewrmuqgi > src/integrations/supabase/types.ts

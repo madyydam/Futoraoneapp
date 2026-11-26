@@ -476,12 +476,13 @@ BEGIN
   RETURNING total_wins INTO v_new_wins;
 
   IF v_new_wins >= 10 THEN
-    INSERT INTO public.achievements (id, name, description, icon)
-    VALUES ('game_wizard', 'Game Wizard', 'Won 10 arcade games', 'gamepad')
-    ON CONFLICT (id) DO NOTHING;
+    -- Upsert the Game Wizard achievement (id is UUID on live DB, insert by name if not exists)
+    INSERT INTO public.achievements (name, description, icon)
+    SELECT 'Game Wizard', 'Won 10 arcade games', 'gamepad'
+    WHERE NOT EXISTS (SELECT 1 FROM public.achievements WHERE name = 'Game Wizard');
 
     INSERT INTO public.user_achievements (user_id, achievement_id)
-    VALUES (me, 'game_wizard')
+    SELECT me, id FROM public.achievements WHERE name = 'Game Wizard' LIMIT 1
     ON CONFLICT (user_id, achievement_id) DO NOTHING;
   END IF;
 

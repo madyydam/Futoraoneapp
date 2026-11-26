@@ -225,9 +225,15 @@ CREATE POLICY "Users view own roles or admin" ON public.user_roles
 -- SEED DATA
 -- ─────────────────────────────────────────────────────────────────────────────
 
-INSERT INTO public.achievements (id, name, description, icon, condition_type, condition_value) VALUES
-  ('first-post', 'First Post', 'Created your first post', 'pencil', 'posts_count', 1),
-  ('social-butterfly', 'Social Butterfly', 'Received 50 likes', 'heart', 'likes_received', 50),
-  ('bug-hunter', 'Bug Hunter', 'Reported a bug', 'bug', NULL, 0),
-  ('code-wizard', 'Code Wizard', 'Posted 5 code snippets', 'code', 'code_posts', 5)
-ON CONFLICT (id) DO NOTHING;
+-- Seed default achievements only on a fresh DB (safe no-op if any rows already exist)
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM public.achievements LIMIT 1) THEN
+    INSERT INTO public.achievements (name, description, icon, condition_type, condition_value)
+    VALUES
+      ('First Post',        'Created your first post',   'pencil', 'posts_count',    1),
+      ('Social Butterfly',  'Received 50 likes',          'heart',  'likes_received', 50),
+      ('Bug Hunter',        'Reported a bug',             'bug',    NULL,             0),
+      ('Code Wizard',       'Posted 5 code snippets',     'code',   'code_posts',     5);
+  END IF;
+END $$;
