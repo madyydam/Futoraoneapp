@@ -8,10 +8,11 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
-import { ArrowLeft, User, Lock, Bell, ChevronRight, RefreshCw, Download } from "lucide-react";
+import { ArrowLeft, User, Lock, Bell, ChevronRight, RefreshCw, Download, Archive } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { BottomNav } from "@/components/BottomNav";
 import { CartoonLoader } from "@/components/CartoonLoader";
+import { StoryArchiveModal } from "@/components/stories/StoryArchiveModal";
 import {
     Dialog,
     DialogContent,
@@ -27,6 +28,8 @@ const Settings = () => {
     const { toast } = useToast();
     const [loading, setLoading] = useState(true);
     const [user, setUser] = useState<any>(null);
+    const [profile, setProfile] = useState<{ username?: string; avatar_url?: string | null } | null>(null);
+    const [storyArchiveOpen, setStoryArchiveOpen] = useState(false);
     const [settings, setSettings] = useState<any>({
         privacy: { read_receipts: true, online_status: true },
         notifications: { push: true, email: true },
@@ -57,9 +60,13 @@ const Settings = () => {
 
         const { data: profileData } = await supabase
             .from('profiles')
-            .select('settings')
+            .select('settings, username, avatar_url')
             .eq('id', user.id)
             .maybeSingle();
+
+        if (profileData) {
+            setProfile({ username: profileData.username, avatar_url: profileData.avatar_url });
+        }
 
         if (profileData?.settings && typeof profileData.settings === 'object') {
             setSettings(profileData.settings);
@@ -161,6 +168,12 @@ const Settings = () => {
                             className="w-full justify-start px-4 py-3 data-[state=active]:bg-primary/10 data-[state=active]:text-primary"
                         >
                             <Lock className="w-4 h-4 mr-3" /> Privacy
+                        </TabsTrigger>
+                        <TabsTrigger
+                            value="archive"
+                            className="w-full justify-start px-4 py-3 data-[state=active]:bg-primary/10 data-[state=active]:text-primary"
+                        >
+                            <Archive className="w-4 h-4 mr-3" /> Archive
                         </TabsTrigger>
                         <TabsTrigger
                             value="notifications"
@@ -268,32 +281,6 @@ const Settings = () => {
                                     </Button>
                                 </CardContent>
                             </Card>
-
-                            <Card className="border-destructive/20">
-                                <CardHeader>
-                                    <CardTitle className="text-destructive">Danger Zone</CardTitle>
-                                    <CardDescription>Irreversible actions.</CardDescription>
-                                </CardHeader>
-                                <CardContent>
-                                    <Dialog>
-                                        <DialogTrigger asChild>
-                                            <Button variant="destructive" className="w-full sm:w-auto">Delete Account</Button>
-                                        </DialogTrigger>
-                                        <DialogContent>
-                                            <DialogHeader>
-                                                <DialogTitle>Are you absolutely sure?</DialogTitle>
-                                                <DialogDescription>
-                                                    This action cannot be undone. This will permanently delete your account and remove your data from our servers.
-                                                </DialogDescription>
-                                            </DialogHeader>
-                                            <DialogFooter>
-                                                <Button variant="outline">Cancel</Button>
-                                                <Button variant="destructive" onClick={handleDeleteAccount}>Delete Account</Button>
-                                            </DialogFooter>
-                                        </DialogContent>
-                                    </Dialog>
-                                </CardContent>
-                            </Card>
                         </TabsContent>
 
                         <TabsContent value="privacy" className="space-y-4 m-0">
@@ -332,6 +319,58 @@ const Settings = () => {
                                             onCheckedChange={(checked) => updateSetting('privacy', 'online_status', checked)}
                                         />
                                     </div>
+                                </CardContent>
+                            </Card>
+
+                            {/* Danger Zone: Delete Account placed at the very end of Privacy */}
+                            <Card className="border-destructive/20 bg-destructive/5">
+                                <CardHeader>
+                                    <CardTitle className="text-destructive">Danger Zone</CardTitle>
+                                    <CardDescription>Irreversible actions.</CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                    <Dialog>
+                                        <DialogTrigger asChild>
+                                            <Button variant="destructive" className="w-full sm:w-auto">Delete Account</Button>
+                                        </DialogTrigger>
+                                        <DialogContent>
+                                            <DialogHeader>
+                                                <DialogTitle>Are you absolutely sure?</DialogTitle>
+                                                <DialogDescription>
+                                                    This action cannot be undone. This will permanently delete your account and remove your data from our servers.
+                                                </DialogDescription>
+                                            </DialogHeader>
+                                            <DialogFooter>
+                                                <Button variant="outline">Cancel</Button>
+                                                <Button variant="destructive" onClick={handleDeleteAccount}>Delete Account</Button>
+                                            </DialogFooter>
+                                        </DialogContent>
+                                    </Dialog>
+                                </CardContent>
+                            </Card>
+                        </TabsContent>
+
+                        <TabsContent value="archive" className="space-y-4 m-0">
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle className="flex items-center gap-2">
+                                        <Archive className="w-5 h-5 text-pink-500" />
+                                        Story Archive
+                                    </CardTitle>
+                                    <CardDescription>
+                                        Your private story archive. Only you can view your expired stories.
+                                    </CardDescription>
+                                </CardHeader>
+                                <CardContent className="space-y-4">
+                                    <p className="text-sm text-muted-foreground">
+                                        Stories automatically move to your archive 24 hours after posting. You can replay them, view their stats, or permanently delete them at any time.
+                                    </p>
+                                    <Button
+                                        onClick={() => setStoryArchiveOpen(true)}
+                                        className="bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white font-semibold"
+                                    >
+                                        Open Story Archive
+                                    </Button>
                                 </CardContent>
                             </Card>
                         </TabsContent>

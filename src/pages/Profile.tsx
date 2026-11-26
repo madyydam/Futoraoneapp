@@ -7,9 +7,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { LogOut, Github, Linkedin, Instagram, Globe, MapPin, Edit, Eye, Shield, QrCode, Settings, MessageSquareWarning, Archive } from "lucide-react";
+import { LogOut, Github, Linkedin, Instagram, Globe, MapPin, Edit, Eye, Shield, QrCode, Settings, MessageSquareWarning } from "lucide-react";
 import { motion } from "framer-motion";
-import { StoryArchiveModal } from "@/components/stories/StoryArchiveModal";
 import type { User } from "@supabase/supabase-js";
 import { useToast } from "@/hooks/use-toast";
 import { EditProfileDialog } from "@/components/EditProfileDialog";
@@ -148,7 +147,6 @@ const Profile = () => {
   const [followersModalOpen, setFollowersModalOpen] = useState(false);
   const [followersModalTab, setFollowersModalTab] = useState<"followers" | "following">("followers");
   const [qrCodeDialogOpen, setQrCodeDialogOpen] = useState(false);
-  const [storyArchiveOpen, setStoryArchiveOpen] = useState(false);
   const { registerAction } = useHelpTour();
 
   // Register tour actions
@@ -310,24 +308,6 @@ const Profile = () => {
                   >
                     <Edit size={16} className="mr-2" />
                     Edit
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    title="Story Archive"
-                    className="border-border text-foreground w-9 h-9 hover:text-pink-500 hover:border-pink-500/50 transition-colors"
-                    onClick={() => setStoryArchiveOpen(true)}
-                  >
-                    <Archive size={16} />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    title="Story Archive"
-                    className="border-border text-foreground w-9 h-9 hover:text-pink-500 hover:border-pink-500/50 transition-colors"
-                    onClick={() => setStoryArchiveOpen(true)}
-                  >
-                    <Archive size={16} />
                   </Button>
                   <Button
                     variant="outline"
@@ -601,16 +581,6 @@ const Profile = () => {
         username={profile?.username || ""}
         userId={user?.id || ""}
       />
-
-      {user && (
-        <StoryArchiveModal
-          open={storyArchiveOpen}
-          onOpenChange={setStoryArchiveOpen}
-          userId={user.id}
-          username={profile?.username || "user"}
-          avatarUrl={profile?.avatar_url || null}
-        />
-      )}
 
       <BottomNav />
     </div>
