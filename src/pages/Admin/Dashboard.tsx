@@ -49,6 +49,7 @@ const AdminDashboard = () => {
     const fetchDashboardData = async () => {
         try {
             const { count: userCount } = await supabase.from("profiles").select("id", { count: 'exact', head: true });
+            const { count: verifiedCountExact } = await supabase.from("profiles").select("id", { count: 'exact', head: true }).eq("is_verified", true);
             const { count: postCount } = await supabase.from("posts").select("*", { count: 'exact', head: true });
             const { count: projectCount } = await supabase.from("projects").select("*", { count: 'exact', head: true });
             const { count: reportCount } = await supabase.from("reports" as any).select("*", { count: 'exact', head: true });
@@ -56,11 +57,13 @@ const AdminDashboard = () => {
             const { data: users } = await supabase
                 .from("profiles")
                 .select("id, username, full_name, avatar_url, created_at, is_verified")
-                .order("created_at", { ascending: false });
+                .order("created_at", { ascending: false })
+                .limit(100);
 
             if (users) {
+                const totalUsers = userCount || users.length;
                 setStats({
-                    userCount: userCount || 0,
+                    userCount: totalUsers,
                     postCount: postCount || 0,
                     projectCount: projectCount || 0,
                     reportCount: reportCount || 0
@@ -69,7 +72,7 @@ const AdminDashboard = () => {
                 setRecentUsers(users.slice(0, 5));
 
                 const growthMap = new Map();
-                users.slice(0, 100).forEach(user => {
+                users.forEach(user => {
                     const date = new Date(user.created_at);
                     const monthYear = date.toLocaleString('default', { month: 'short', year: '2-digit' });
                     growthMap.set(monthYear, (growthMap.get(monthYear) || 0) + 1);
@@ -81,8 +84,8 @@ const AdminDashboard = () => {
                 }
                 setGrowthData(growthChart);
 
-                const verifiedCount = users.filter(u => u.is_verified).length;
-                const unverifiedCount = users.length - verifiedCount;
+                const verifiedCount = verifiedCountExact ?? users.filter(u => u.is_verified).length;
+                const unverifiedCount = Math.max(0, totalUsers - verifiedCount);
                 setVerificationData([
                     { name: 'Verified', value: verifiedCount, color: '#3b82f6' },
                     { name: 'Unverified', value: unverifiedCount, color: '#94a3b8' },

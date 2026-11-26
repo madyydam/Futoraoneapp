@@ -149,9 +149,12 @@ $$;
 
 -- Admin-only paginated directory RPC (replaces direct client .select('*') on profiles)
 DROP FUNCTION IF EXISTS public.get_admin_users_page(INTEGER, INTEGER);
+DROP FUNCTION IF EXISTS public.get_admin_users_page(INTEGER, INTEGER, TEXT, TEXT);
 CREATE OR REPLACE FUNCTION public.get_admin_users_page(
   p_offset INTEGER DEFAULT 0,
-  p_limit INTEGER DEFAULT 50
+  p_limit INTEGER DEFAULT 50,
+  p_search TEXT DEFAULT NULL,
+  p_role_filter TEXT DEFAULT 'all'
 )
 RETURNS TABLE (
   id UUID,
@@ -163,14 +166,19 @@ RETURNS TABLE (
   verification_category TEXT,
   is_banned BOOLEAN,
   is_admin BOOLEAN,
+  is_bot BOOLEAN,
   created_at TIMESTAMPTZ,
-  balance DECIMAL(12,2)
+  balance DECIMAL(12,2),
+  total_count BIGINT
 )
 LANGUAGE plpgsql
 STABLE
 SECURITY DEFINER
 SET search_path = public
 AS $$
+DECLARE
+  v_search TEXT := NULLIF(TRIM(p_search), '');
+  v_filter TEXT := COALESCE(NULLIF(LOWER(TRIM(p_role_filter)), ''), 'all');
 BEGIN
   IF auth.uid() IS NULL OR NOT public.has_role(auth.uid(), 'admin') THEN
     RAISE EXCEPTION 'Forbidden: Admin access required';
@@ -189,13 +197,88 @@ BEGIN
     EXISTS (
       SELECT 1 FROM public.user_roles ur WHERE ur.user_id = p.id AND ur.role = 'admin'
     ) AS is_admin,
+    p.is_bot,
     p.created_at,
-    COALESCE(w.balance, 0.00) AS balance
+    COALESCE(w.balance, 0.00) AS balance,
+    COUNT(*) OVER() AS total_count
   FROM public.profiles p
   LEFT JOIN public.native_wallets w ON w.user_id = p.id
+  WHERE (
+    v_search IS NULL
+    OR p.username ILIKE '%' || v_search || '%'
+    OR p.full_name ILIKE '%' || v_search || '%'
+  )
+  AND (
+    v_filter = 'all'
+    OR (v_filter = 'bot' AND p.is_bot = TRUE)
+    OR (v_filter = 'real' AND p.is_bot = FALSE)
+    OR (v_filter = 'admin' AND EXISTS (
+      SELECT 1 FROM public.user_roles ur WHERE ur.user_id = p.id AND ur.role = 'admin'
+    ))
+  )
   ORDER BY p.created_at DESC
   OFFSET GREATEST(0, COALESCE(p_offset, 0))
   LIMIT LEAST(100, GREATEST(1, COALESCE(p_limit, 50)));
+END;
+$$;
+
+-- Admin-only role summary counts (Real Users vs Bots vs Admins)
+DROP FUNCTION IF EXISTS public.get_admin_user_role_stats();
+CREATE OR REPLACE FUNCTION public.get_admin_user_role_stats()
+RETURNS TABLE (
+  total_users BIGINT,
+  real_users BIGINT,
+  bot_users BIGINT,
+  admin_users BIGINT
+)
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF auth.uid() IS NULL OR NOT public.has_role(auth.uid(), 'admin') THEN
+    RAISE EXCEPTION 'Forbidden: Admin access required';
+  END IF;
+
+  RETURN QUERY
+  SELECT
+    COUNT(*)::BIGINT AS total_users,
+    COUNT(*) FILTER (WHERE p.is_bot = FALSE)::BIGINT AS real_users,
+    COUNT(*) FILTER (WHERE p.is_bot = TRUE)::BIGINT AS bot_users,
+    (SELECT COUNT(DISTINCT ur.user_id)::BIGINT FROM public.user_roles ur WHERE ur.role = 'admin') AS admin_users
+  FROM public.profiles p;
+END;
+$$;
+
+-- Admin-only RPC to toggle bot classification with audit log
+DROP FUNCTION IF EXISTS public.admin_set_user_bot_status(UUID, BOOLEAN);
+CREATE OR REPLACE FUNCTION public.admin_set_user_bot_status(
+  p_user_id UUID,
+  p_is_bot BOOLEAN
+)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF auth.uid() IS NULL OR NOT public.has_role(auth.uid(), 'admin') THEN
+    RAISE EXCEPTION 'Forbidden: Admin access required';
+  END IF;
+
+  UPDATE public.profiles
+  SET is_bot = COALESCE(p_is_bot, FALSE)
+  WHERE id = p_user_id;
+
+  INSERT INTO public.admin_logs (admin_id, action, target_type, target_id, details)
+  VALUES (
+    auth.uid(),
+    CASE WHEN COALESCE(p_is_bot, FALSE) THEN 'MARK_AS_BOT' ELSE 'MARK_AS_REAL_USER' END,
+    'profile',
+    p_user_id::TEXT,
+    jsonb_build_object('is_bot', COALESCE(p_is_bot, FALSE))
+  );
 END;
 $$;
 
@@ -304,10 +387,14 @@ ON CONFLICT (user_id) DO UPDATE SET fcm_token = EXCLUDED.fcm_token;
 UPDATE public.profiles SET fcm_token = NULL WHERE fcm_token IS NOT NULL;
 
 -- Revoke direct client reads/writes to PII/internal columns on public.profiles
-REVOKE SELECT (email, fcm_token, last_digest_at) ON public.profiles FROM anon, authenticated;
-REVOKE UPDATE (email, fcm_token, last_digest_at) ON public.profiles FROM anon, authenticated;
-GRANT SELECT (email, fcm_token, last_digest_at) ON public.profiles TO service_role;
-GRANT UPDATE (email, fcm_token, last_digest_at) ON public.profiles TO service_role;
+REVOKE SELECT (email, fcm_token, last_digest_at, is_bot) ON public.profiles FROM anon, authenticated;
+REVOKE UPDATE (email, fcm_token, last_digest_at, is_bot) ON public.profiles FROM anon, authenticated;
+GRANT SELECT (email, fcm_token, last_digest_at, is_bot) ON public.profiles TO service_role;
+GRANT UPDATE (email, fcm_token, last_digest_at, is_bot) ON public.profiles TO service_role;
+
+GRANT EXECUTE ON FUNCTION public.get_admin_users_page(INTEGER, INTEGER, TEXT, TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_admin_user_role_stats() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.admin_set_user_bot_status(UUID, BOOLEAN) TO authenticated;
 
 -- Prevent clients from directly invoking internal XP, streak, achievement, trigger, or rate-limit RPCs
 REVOKE ALL ON FUNCTION public.give_xp(UUID, INTEGER) FROM PUBLIC, anon, authenticated;

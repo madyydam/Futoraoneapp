@@ -1,4 +1,4 @@
-﻿-- ================================================================================
+-- ================================================================================
 -- FUTORAONE MASTER DATABASE SETUP (Single-Shot, Idempotent)
 -- ================================================================================
 -- HOW TO RUN:
@@ -87,6 +87,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   -- Status & Verification
   is_verified BOOLEAN DEFAULT FALSE,
   is_admin BOOLEAN DEFAULT FALSE,
+  is_bot BOOLEAN NOT NULL DEFAULT FALSE,
   verification_category TEXT,
   is_banned BOOLEAN NOT NULL DEFAULT FALSE,
 
@@ -141,6 +142,7 @@ ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS instagram_url TEXT;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS tech_skills TEXT[];
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT FALSE;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS is_bot BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS verification_category TEXT;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS is_banned BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS fcm_token TEXT;
@@ -186,6 +188,7 @@ WHERE NOT EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = u.id)
 ON CONFLICT DO NOTHING;
 
 CREATE INDEX IF NOT EXISTS idx_profiles_username ON public.profiles(username);
+CREATE INDEX IF NOT EXISTS idx_profiles_is_bot ON public.profiles(is_bot);
 CREATE INDEX IF NOT EXISTS idx_profiles_badges ON public.profiles USING GIN(badges);
 CREATE INDEX IF NOT EXISTS idx_profiles_fcm_token ON public.profiles(fcm_token);
 CREATE INDEX IF NOT EXISTS idx_profiles_last_activity ON public.profiles(last_activity_date DESC);
@@ -310,6 +313,7 @@ BEGIN
     NEW.fcm_token := NULL;
     IF NOT is_privileged THEN
       NEW.is_admin := FALSE;
+      NEW.is_bot := FALSE;
       NEW.is_verified := FALSE;
       NEW.verification_category := NULL;
       NEW.xp := 0;
@@ -327,6 +331,7 @@ BEGIN
 
   IF NOT is_privileged THEN
     IF NEW.is_admin IS DISTINCT FROM OLD.is_admin
+       OR NEW.is_bot IS DISTINCT FROM OLD.is_bot
        OR NEW.is_verified IS DISTINCT FROM OLD.is_verified
        OR NEW.verification_category IS DISTINCT FROM OLD.verification_category
        OR NEW.xp IS DISTINCT FROM OLD.xp
@@ -1593,6 +1598,10 @@ CREATE TABLE IF NOT EXISTS public.notifications (
   is_read BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+ALTER TABLE public.notifications
+  ADD COLUMN IF NOT EXISTS title TEXT,
+  ADD COLUMN IF NOT EXISTS message TEXT,
+  ADD COLUMN IF NOT EXISTS data JSONB;
 CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON public.notifications(user_id) WHERE is_read = false;
 
 CREATE TABLE IF NOT EXISTS public.reports (
@@ -1778,6 +1787,9 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
+  IF EXISTS (SELECT 1 FROM public.profiles WHERE id = NEW.following_id AND is_bot = TRUE) THEN
+    RETURN NEW;
+  END IF;
   INSERT INTO public.notifications (user_id, type, title, message, actor_id)
   VALUES (NEW.following_id, 'follow', 'New Follower', 'Someone started following you', NEW.follower_id);
   RETURN NEW;
@@ -1825,6 +1837,9 @@ DECLARE
   commenter_name TEXT;
 BEGIN
   SELECT user_id INTO post_author_id FROM public.posts WHERE id = NEW.post_id;
+  IF post_author_id IS NOT NULL AND EXISTS (SELECT 1 FROM public.profiles WHERE id = post_author_id AND is_bot = TRUE) THEN
+    RETURN NEW;
+  END IF;
   SELECT COALESCE(full_name, username) INTO commenter_name FROM public.profiles WHERE id = NEW.user_id;
   IF post_author_id IS NOT NULL AND post_author_id != NEW.user_id THEN
     INSERT INTO public.notifications (user_id, type, title, message, actor_id, post_id)
@@ -3298,9 +3313,12 @@ $$;
 
 -- Admin-only paginated directory RPC (replaces direct client .select('*') on profiles)
 DROP FUNCTION IF EXISTS public.get_admin_users_page(INTEGER, INTEGER);
+DROP FUNCTION IF EXISTS public.get_admin_users_page(INTEGER, INTEGER, TEXT, TEXT);
 CREATE OR REPLACE FUNCTION public.get_admin_users_page(
   p_offset INTEGER DEFAULT 0,
-  p_limit INTEGER DEFAULT 50
+  p_limit INTEGER DEFAULT 50,
+  p_search TEXT DEFAULT NULL,
+  p_role_filter TEXT DEFAULT 'all'
 )
 RETURNS TABLE (
   id UUID,
@@ -3312,14 +3330,19 @@ RETURNS TABLE (
   verification_category TEXT,
   is_banned BOOLEAN,
   is_admin BOOLEAN,
+  is_bot BOOLEAN,
   created_at TIMESTAMPTZ,
-  balance DECIMAL(12,2)
+  balance DECIMAL(12,2),
+  total_count BIGINT
 )
 LANGUAGE plpgsql
 STABLE
 SECURITY DEFINER
 SET search_path = public
 AS $$
+DECLARE
+  v_search TEXT := NULLIF(TRIM(p_search), '');
+  v_filter TEXT := COALESCE(NULLIF(LOWER(TRIM(p_role_filter)), ''), 'all');
 BEGIN
   IF auth.uid() IS NULL OR NOT public.has_role(auth.uid(), 'admin') THEN
     RAISE EXCEPTION 'Forbidden: Admin access required';
@@ -3338,13 +3361,88 @@ BEGIN
     EXISTS (
       SELECT 1 FROM public.user_roles ur WHERE ur.user_id = p.id AND ur.role = 'admin'
     ) AS is_admin,
+    p.is_bot,
     p.created_at,
-    COALESCE(w.balance, 0.00) AS balance
+    COALESCE(w.balance, 0.00) AS balance,
+    COUNT(*) OVER() AS total_count
   FROM public.profiles p
   LEFT JOIN public.native_wallets w ON w.user_id = p.id
+  WHERE (
+    v_search IS NULL
+    OR p.username ILIKE '%' || v_search || '%'
+    OR p.full_name ILIKE '%' || v_search || '%'
+  )
+  AND (
+    v_filter = 'all'
+    OR (v_filter = 'bot' AND p.is_bot = TRUE)
+    OR (v_filter = 'real' AND p.is_bot = FALSE)
+    OR (v_filter = 'admin' AND EXISTS (
+      SELECT 1 FROM public.user_roles ur WHERE ur.user_id = p.id AND ur.role = 'admin'
+    ))
+  )
   ORDER BY p.created_at DESC
   OFFSET GREATEST(0, COALESCE(p_offset, 0))
   LIMIT LEAST(100, GREATEST(1, COALESCE(p_limit, 50)));
+END;
+$$;
+
+-- Admin-only role summary counts (Real Users vs Bots vs Admins)
+DROP FUNCTION IF EXISTS public.get_admin_user_role_stats();
+CREATE OR REPLACE FUNCTION public.get_admin_user_role_stats()
+RETURNS TABLE (
+  total_users BIGINT,
+  real_users BIGINT,
+  bot_users BIGINT,
+  admin_users BIGINT
+)
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF auth.uid() IS NULL OR NOT public.has_role(auth.uid(), 'admin') THEN
+    RAISE EXCEPTION 'Forbidden: Admin access required';
+  END IF;
+
+  RETURN QUERY
+  SELECT
+    COUNT(*)::BIGINT AS total_users,
+    COUNT(*) FILTER (WHERE p.is_bot = FALSE)::BIGINT AS real_users,
+    COUNT(*) FILTER (WHERE p.is_bot = TRUE)::BIGINT AS bot_users,
+    (SELECT COUNT(DISTINCT ur.user_id)::BIGINT FROM public.user_roles ur WHERE ur.role = 'admin') AS admin_users
+  FROM public.profiles p;
+END;
+$$;
+
+-- Admin-only RPC to toggle bot classification with audit log
+DROP FUNCTION IF EXISTS public.admin_set_user_bot_status(UUID, BOOLEAN);
+CREATE OR REPLACE FUNCTION public.admin_set_user_bot_status(
+  p_user_id UUID,
+  p_is_bot BOOLEAN
+)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF auth.uid() IS NULL OR NOT public.has_role(auth.uid(), 'admin') THEN
+    RAISE EXCEPTION 'Forbidden: Admin access required';
+  END IF;
+
+  UPDATE public.profiles
+  SET is_bot = COALESCE(p_is_bot, FALSE)
+  WHERE id = p_user_id;
+
+  INSERT INTO public.admin_logs (admin_id, action, target_type, target_id, details)
+  VALUES (
+    auth.uid(),
+    CASE WHEN COALESCE(p_is_bot, FALSE) THEN 'MARK_AS_BOT' ELSE 'MARK_AS_REAL_USER' END,
+    'profile',
+    p_user_id::TEXT,
+    jsonb_build_object('is_bot', COALESCE(p_is_bot, FALSE))
+  );
 END;
 $$;
 
@@ -3453,10 +3551,14 @@ ON CONFLICT (user_id) DO UPDATE SET fcm_token = EXCLUDED.fcm_token;
 UPDATE public.profiles SET fcm_token = NULL WHERE fcm_token IS NOT NULL;
 
 -- Revoke direct client reads/writes to PII/internal columns on public.profiles
-REVOKE SELECT (email, fcm_token, last_digest_at) ON public.profiles FROM anon, authenticated;
-REVOKE UPDATE (email, fcm_token, last_digest_at) ON public.profiles FROM anon, authenticated;
-GRANT SELECT (email, fcm_token, last_digest_at) ON public.profiles TO service_role;
-GRANT UPDATE (email, fcm_token, last_digest_at) ON public.profiles TO service_role;
+REVOKE SELECT (email, fcm_token, last_digest_at, is_bot) ON public.profiles FROM anon, authenticated;
+REVOKE UPDATE (email, fcm_token, last_digest_at, is_bot) ON public.profiles FROM anon, authenticated;
+GRANT SELECT (email, fcm_token, last_digest_at, is_bot) ON public.profiles TO service_role;
+GRANT UPDATE (email, fcm_token, last_digest_at, is_bot) ON public.profiles TO service_role;
+
+GRANT EXECUTE ON FUNCTION public.get_admin_users_page(INTEGER, INTEGER, TEXT, TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_admin_user_role_stats() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.admin_set_user_bot_status(UUID, BOOLEAN) TO authenticated;
 
 -- Prevent clients from directly invoking internal XP, streak, achievement, trigger, or rate-limit RPCs
 REVOKE ALL ON FUNCTION public.give_xp(UUID, INTEGER) FROM PUBLIC, anon, authenticated;

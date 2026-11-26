@@ -157,6 +157,10 @@ CREATE TABLE IF NOT EXISTS public.notifications (
   is_read BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+ALTER TABLE public.notifications
+  ADD COLUMN IF NOT EXISTS title TEXT,
+  ADD COLUMN IF NOT EXISTS message TEXT,
+  ADD COLUMN IF NOT EXISTS data JSONB;
 CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON public.notifications(user_id) WHERE is_read = false;
 
 CREATE TABLE IF NOT EXISTS public.reports (
@@ -342,6 +346,9 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
+  IF EXISTS (SELECT 1 FROM public.profiles WHERE id = NEW.following_id AND is_bot = TRUE) THEN
+    RETURN NEW;
+  END IF;
   INSERT INTO public.notifications (user_id, type, title, message, actor_id)
   VALUES (NEW.following_id, 'follow', 'New Follower', 'Someone started following you', NEW.follower_id);
   RETURN NEW;
@@ -389,6 +396,9 @@ DECLARE
   commenter_name TEXT;
 BEGIN
   SELECT user_id INTO post_author_id FROM public.posts WHERE id = NEW.post_id;
+  IF post_author_id IS NOT NULL AND EXISTS (SELECT 1 FROM public.profiles WHERE id = post_author_id AND is_bot = TRUE) THEN
+    RETURN NEW;
+  END IF;
   SELECT COALESCE(full_name, username) INTO commenter_name FROM public.profiles WHERE id = NEW.user_id;
   IF post_author_id IS NOT NULL AND post_author_id != NEW.user_id THEN
     INSERT INTO public.notifications (user_id, type, title, message, actor_id, post_id)

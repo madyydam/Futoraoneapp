@@ -85,6 +85,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   -- Status & Verification
   is_verified BOOLEAN DEFAULT FALSE,
   is_admin BOOLEAN DEFAULT FALSE,
+  is_bot BOOLEAN NOT NULL DEFAULT FALSE,
   verification_category TEXT,
   is_banned BOOLEAN NOT NULL DEFAULT FALSE,
 
@@ -139,6 +140,7 @@ ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS instagram_url TEXT;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS tech_skills TEXT[];
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT FALSE;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS is_bot BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS verification_category TEXT;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS is_banned BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS fcm_token TEXT;
@@ -184,6 +186,7 @@ WHERE NOT EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = u.id)
 ON CONFLICT DO NOTHING;
 
 CREATE INDEX IF NOT EXISTS idx_profiles_username ON public.profiles(username);
+CREATE INDEX IF NOT EXISTS idx_profiles_is_bot ON public.profiles(is_bot);
 CREATE INDEX IF NOT EXISTS idx_profiles_badges ON public.profiles USING GIN(badges);
 CREATE INDEX IF NOT EXISTS idx_profiles_fcm_token ON public.profiles(fcm_token);
 CREATE INDEX IF NOT EXISTS idx_profiles_last_activity ON public.profiles(last_activity_date DESC);
@@ -308,6 +311,7 @@ BEGIN
     NEW.fcm_token := NULL;
     IF NOT is_privileged THEN
       NEW.is_admin := FALSE;
+      NEW.is_bot := FALSE;
       NEW.is_verified := FALSE;
       NEW.verification_category := NULL;
       NEW.xp := 0;
@@ -325,6 +329,7 @@ BEGIN
 
   IF NOT is_privileged THEN
     IF NEW.is_admin IS DISTINCT FROM OLD.is_admin
+       OR NEW.is_bot IS DISTINCT FROM OLD.is_bot
        OR NEW.is_verified IS DISTINCT FROM OLD.is_verified
        OR NEW.verification_category IS DISTINCT FROM OLD.verification_category
        OR NEW.xp IS DISTINCT FROM OLD.xp

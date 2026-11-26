@@ -20,17 +20,17 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
     CheckCircle,
-    Mail,
     XCircle,
     Trash2,
     Edit2,
-    Settings as SettingsIcon,
     AlertTriangle,
     Search,
-    Filter,
     Download,
     Shield,
-    MoreHorizontal
+    MoreHorizontal,
+    Bot,
+    Users as UsersIcon,
+    UserCheck
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -59,7 +59,12 @@ import {
 
 const UsersPage = () => {
     const [searchTerm, setSearchTerm] = useState("");
+    const [debouncedSearch, setDebouncedSearch] = useState("");
+    const [roleFilter, setRoleFilter] = useState<"all" | "real" | "bot" | "admin">("all");
     const [users, setUsers] = useState<any[]>([]);
+    const [totalCount, setTotalCount] = useState(0);
+    const [roleStats, setRoleStats] = useState({ total_users: 0, real_users: 0, bot_users: 0, admin_users: 0 });
+    const [botSchemaReady, setBotSchemaReady] = useState(true);
     const [loading, setLoading] = useState(true);
     const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -78,8 +83,37 @@ const UsersPage = () => {
     const PAGE_SIZE = 50;
 
     useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebouncedSearch(searchTerm.trim());
+            setPage(0);
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [searchTerm]);
+
+    useEffect(() => {
         fetchUsers();
-    }, [page]);
+    }, [page, debouncedSearch, roleFilter]);
+
+    useEffect(() => {
+        fetchRoleStats();
+    }, []);
+
+    const fetchRoleStats = async () => {
+        try {
+            const { data, error } = await (supabase.rpc as any)("get_admin_user_role_stats");
+            if (!error && Array.isArray(data) && data[0]) {
+                setRoleStats({
+                    total_users: Number(data[0].total_users || 0),
+                    real_users: Number(data[0].real_users || 0),
+                    bot_users: Number(data[0].bot_users || 0),
+                    admin_users: Number(data[0].admin_users || 0),
+                });
+                setBotSchemaReady(true);
+            }
+        } catch {
+            // Fallback handled in fetchUsers if migration isn't applied yet
+        }
+    };
 
     const fetchUsers = async () => {
         try {
@@ -87,11 +121,28 @@ const UsersPage = () => {
             const { data, error } = await (supabase.rpc as any)("get_admin_users_page", {
                 p_offset: page * PAGE_SIZE,
                 p_limit: PAGE_SIZE,
+                p_search: debouncedSearch || null,
+                p_role_filter: roleFilter,
             });
 
-            if (error) throw error;
+            if (error) {
+                // Backward-compatible fallback if new RPC signature hasn't been applied on DB yet
+                const fallback = await (supabase.rpc as any)("get_admin_users_page", {
+                    p_offset: page * PAGE_SIZE,
+                    p_limit: PAGE_SIZE,
+                });
+                if (fallback.error) throw fallback.error;
+                const rows = (fallback.data as any[]) || [];
+                setUsers(rows);
+                setTotalCount(rows.length);
+                setBotSchemaReady(false);
+                return;
+            }
 
-            setUsers((data as any[]) || []);
+            const rows = (data as any[]) || [];
+            setUsers(rows);
+            setTotalCount(rows[0]?.total_count ? Number(rows[0].total_count) : rows.length);
+            setBotSchemaReady(true);
         } catch (error) {
             console.error("Error fetching users:", error);
             toast({
@@ -272,14 +323,19 @@ const UsersPage = () => {
             const safe = /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
             return `"${safe.replace(/"/g, '""')}"`;
         };
-        const headers = ["id", "username", "full_name", "is_verified", "is_banned", "balance", "created_at"];
-        const rows = filteredUsers.map(u => headers.map(h => escapeCell(u[h])).join(","));
+        const headers = ["id", "username", "full_name", "role", "is_verified", "is_banned", "balance", "created_at"];
+        const rows = filteredUsers.map(u => {
+            const roleLabel = u.is_bot ? "Bot" : u.is_admin ? "Admin" : "User";
+            return headers
+                .map(h => escapeCell(h === "role" ? roleLabel : u[h]))
+                .join(",");
+        });
         const csv = [headers.join(","), ...rows].join("\n");
         const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = url;
-        link.download = `futoraone-users-page-${page + 1}.csv`;
+        link.download = `one-users-page-${page + 1}.csv`;
         link.click();
         URL.revokeObjectURL(url);
     };
@@ -357,22 +413,56 @@ const UsersPage = () => {
         }
     };
 
+    const handleToggleBotStatus = async (userId: string, currentlyBot: boolean) => {
+        try {
+            const { error } = await (supabase.rpc as any)("admin_set_user_bot_status", {
+                p_user_id: userId,
+                p_is_bot: !currentlyBot,
+            });
+            if (error) throw error;
+
+            setUsers(users.map(u => u.id === userId ? { ...u, is_bot: !currentlyBot } : u));
+            fetchRoleStats();
+            toast({
+                title: currentlyBot ? "Marked as Real User" : "Marked as Bot",
+                description: `Account role updated to ${currentlyBot ? "User" : "Bot"}.`,
+            });
+        } catch (error) {
+            console.error("Error updating bot status:", error);
+            toast({
+                title: "Error",
+                description: "Failed to update bot status. Ensure latest SQL migration is applied.",
+                variant: "destructive",
+            });
+        }
+    };
+
     const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
         setSearchTerm(e.target.value);
     };
 
-    const filteredUsers = users.filter(user =>
-    (user.username?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        user.full_name?.toLowerCase().includes(searchTerm.toLowerCase()))
-    );
+    const filteredUsers = botSchemaReady
+        ? users
+        : users.filter(user => {
+            const matchesSearch =
+                !searchTerm.trim() ||
+                user.username?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                user.full_name?.toLowerCase().includes(searchTerm.toLowerCase());
+            const matchesRole =
+                roleFilter === "all" ||
+                (roleFilter === "bot" && Boolean(user.is_bot)) ||
+                (roleFilter === "admin" && Boolean(user.is_admin)) ||
+                (roleFilter === "real" && !user.is_bot);
+            return matchesSearch && matchesRole;
+        });
 
     return (
         <AdminLayout>
             <div className="space-y-6">
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 mb-10">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 mb-6">
                     <div>
                         <h2 className="text-4xl font-black tracking-tight text-slate-900 mb-2">Users</h2>
-                        <p className="text-slate-500 font-medium">Manage user accounts and roles.</p>
+                        <p className="text-slate-500 font-medium">Manage user accounts, bots, and roles.</p>
                     </div>
                     <div className="flex gap-3">
                         <Button
@@ -389,6 +479,79 @@ const UsersPage = () => {
                     </div>
                 </div>
 
+                {!botSchemaReady && (
+                    <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-3 text-sm text-amber-800 font-medium">
+                        Run <code className="font-mono font-bold">supabase/migrations/20261126_01_bot_schema_admin.sql</code> in Supabase SQL Editor to enable live Bot/Real role separation and full cross-page search.
+                    </div>
+                )}
+
+                {/* Role Summary Filter Tabs */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <button
+                        type="button"
+                        onClick={() => { setRoleFilter("all"); setPage(0); }}
+                        className={`flex items-center justify-between px-4 py-3 rounded-2xl border text-left transition-all ${
+                            roleFilter === "all"
+                                ? "bg-primary text-white border-primary shadow-md shadow-primary/20"
+                                : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                        }`}
+                    >
+                        <div>
+                            <p className={`text-[10px] font-black uppercase tracking-widest ${roleFilter === "all" ? "text-white/80" : "text-slate-400"}`}>All Accounts</p>
+                            <p className="text-xl font-black">{botSchemaReady ? roleStats.total_users : users.length}</p>
+                        </div>
+                        <UsersIcon className="w-5 h-5 opacity-80" />
+                    </button>
+
+                    <button
+                        type="button"
+                        onClick={() => { setRoleFilter("real"); setPage(0); }}
+                        className={`flex items-center justify-between px-4 py-3 rounded-2xl border text-left transition-all ${
+                            roleFilter === "real"
+                                ? "bg-emerald-600 text-white border-emerald-600 shadow-md shadow-emerald-600/20"
+                                : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                        }`}
+                    >
+                        <div>
+                            <p className={`text-[10px] font-black uppercase tracking-widest ${roleFilter === "real" ? "text-white/80" : "text-slate-400"}`}>Real Users</p>
+                            <p className="text-xl font-black">{botSchemaReady ? roleStats.real_users : users.filter(u => !u.is_bot).length}</p>
+                        </div>
+                        <UserCheck className="w-5 h-5 opacity-80" />
+                    </button>
+
+                    <button
+                        type="button"
+                        onClick={() => { setRoleFilter("bot"); setPage(0); }}
+                        className={`flex items-center justify-between px-4 py-3 rounded-2xl border text-left transition-all ${
+                            roleFilter === "bot"
+                                ? "bg-purple-600 text-white border-purple-600 shadow-md shadow-purple-600/20"
+                                : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                        }`}
+                    >
+                        <div>
+                            <p className={`text-[10px] font-black uppercase tracking-widest ${roleFilter === "bot" ? "text-white/80" : "text-slate-400"}`}>Bots</p>
+                            <p className="text-xl font-black">{botSchemaReady ? roleStats.bot_users : users.filter(u => u.is_bot).length}</p>
+                        </div>
+                        <Bot className="w-5 h-5 opacity-80" />
+                    </button>
+
+                    <button
+                        type="button"
+                        onClick={() => { setRoleFilter("admin"); setPage(0); }}
+                        className={`flex items-center justify-between px-4 py-3 rounded-2xl border text-left transition-all ${
+                            roleFilter === "admin"
+                                ? "bg-slate-900 text-white border-slate-900 shadow-md shadow-slate-900/20"
+                                : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                        }`}
+                    >
+                        <div>
+                            <p className={`text-[10px] font-black uppercase tracking-widest ${roleFilter === "admin" ? "text-white/80" : "text-slate-400"}`}>Admins</p>
+                            <p className="text-xl font-black">{botSchemaReady ? roleStats.admin_users : users.filter(u => u.is_admin).length}</p>
+                        </div>
+                        <Shield className="w-5 h-5 opacity-80" />
+                    </button>
+                </div>
+
                 <div className="flex items-center gap-4 bg-white p-2 rounded-2xl border border-slate-200 shadow-xl shadow-slate-200/20 mb-8">
                     <div className="relative flex-1">
                         <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
@@ -399,9 +562,6 @@ const UsersPage = () => {
                             className="pl-14 h-14 bg-transparent border-none focus-visible:ring-0 focus-visible:ring-offset-0 text-slate-900 font-medium placeholder:text-slate-300 text-lg"
                         />
                     </div>
-                    <Button variant="ghost" size="icon" className="w-14 h-14 rounded-xl hover:bg-slate-50 text-slate-500">
-                        <Filter className="w-6 h-6" />
-                    </Button>
                 </div>
 
                 <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl shadow-slate-200/40">
@@ -436,8 +596,18 @@ const UsersPage = () => {
                                         </div>
                                     </TableCell>
                                     <TableCell>
-                                        <Badge className={`font-bold px-3 py-0.5 rounded-full ${user.is_admin ? "bg-primary/10 text-primary border-primary/20" : "bg-slate-100 text-slate-600 border-slate-200"}`} variant="outline">
-                                            {user.is_admin ? "Admin" : "User"}
+                                        <Badge
+                                            className={`font-bold px-3 py-0.5 rounded-full inline-flex items-center gap-1.5 ${
+                                                user.is_bot
+                                                    ? "bg-purple-50 text-purple-700 border-purple-200"
+                                                    : user.is_admin
+                                                    ? "bg-primary/10 text-primary border-primary/20"
+                                                    : "bg-slate-100 text-slate-600 border-slate-200"
+                                            }`}
+                                            variant="outline"
+                                        >
+                                            {user.is_bot && <Bot className="w-3 h-3" />}
+                                            {user.is_bot ? "Bot" : user.is_admin ? "Admin" : "User"}
                                         </Badge>
                                     </TableCell>
                                     <TableCell>
@@ -493,6 +663,9 @@ const UsersPage = () => {
                                                 <DropdownMenuItem onClick={() => handleToggleAdminRole(user.id, Boolean(user.is_admin))}>
                                                     <Shield className="mr-2 h-4 w-4" /> {user.is_admin ? "Revoke Admin" : "Make Admin"}
                                                 </DropdownMenuItem>
+                                                <DropdownMenuItem onClick={() => handleToggleBotStatus(user.id, Boolean(user.is_bot))}>
+                                                    <Bot className="mr-2 h-4 w-4" /> {user.is_bot ? "Mark as Real User" : "Mark as Bot"}
+                                                </DropdownMenuItem>
                                                 <DropdownMenuSeparator />
                                                 <DropdownMenuItem className="text-destructive" onClick={() => handleDeleteClick(user)}>
                                                     <Trash2 className="mr-2 h-4 w-4" /> Delete
@@ -508,7 +681,7 @@ const UsersPage = () => {
 
                 <div className="flex items-center justify-between px-2">
                     <p className="text-xs font-bold text-slate-500">
-                        Page {page + 1} &middot; Showing {filteredUsers.length} users
+                        Page {page + 1} &middot; Showing {filteredUsers.length} of {totalCount} users
                     </p>
                     <div className="flex items-center gap-2">
                         <Button
@@ -523,7 +696,7 @@ const UsersPage = () => {
                         <Button
                             variant="outline"
                             size="sm"
-                            disabled={users.length < PAGE_SIZE || loading}
+                            disabled={(page + 1) * PAGE_SIZE >= totalCount || users.length < PAGE_SIZE || loading}
                             onClick={() => setPage((p) => p + 1)}
                             className="rounded-xl font-bold"
                         >

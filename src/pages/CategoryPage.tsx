@@ -285,27 +285,6 @@ const CategoryPage = () => {
     const fetchCategoryPosts = async () => {
         setLoading(true);
         try {
-            // Try to fetch real posts (you can add category tags to posts table later)
-            const { data, error } = await supabase
-                .from('posts')
-                .select(`
-                    id,
-                    content,
-                    created_at,
-                    profiles(username, full_name, avatar_url, is_verified),
-                    likes(id),
-                    comments(id)
-                `)
-                .order(
-                    activeFilter === 'new' ? 'created_at' :
-                        activeFilter === 'top' ? 'created_at' : 'created_at',
-                    { ascending: false }
-                )
-                .limit(10);
-
-            if (error) throw error;
-
-            // Filter by content (basic keyword matching until we add category tags)
             const categoryKeywords: { [key: string]: string[] } = {
                 "AI & ML": ["AI", "ML", "machine learning", "neural", "model", "GPT", "LLM"],
                 "Web Dev": ["React", "Next", "Vue", "Angular", "CSS", "HTML", "JavaScript", "TypeScript"],
@@ -318,11 +297,30 @@ const CategoryPage = () => {
             };
 
             const keywords = categoryKeywords[category || ""] || [];
-            const filtered = data?.filter(post =>
+
+            // Query matching category or recent 80 posts so seeded category posts are always found
+            const { data, error } = await supabase
+                .from('posts')
+                .select(`
+                    id,
+                    content,
+                    category,
+                    created_at,
+                    profiles(username, full_name, avatar_url, is_verified),
+                    likes(id),
+                    comments(id)
+                `)
+                .order('created_at', { ascending: false })
+                .limit(80);
+
+            if (error) throw error;
+
+            const filtered = (data || []).filter((post: any) =>
+                (category && post.category && post.category.toLowerCase() === category.toLowerCase()) ||
                 keywords.some(keyword =>
                     post.content.toLowerCase().includes(keyword.toLowerCase())
                 )
-            ) || [];
+            );
 
             setPosts(filtered);
         } catch (error) {

@@ -896,6 +896,7 @@ export type Database = {
           github_url: string | null
           id: string
           instagram_url: string | null
+          is_bot: boolean
           is_tech_match_unlocked: boolean | null
           is_verified: boolean | null
           last_activity_date: string | null
@@ -928,6 +929,7 @@ export type Database = {
           github_url?: string | null
           id: string
           instagram_url?: string | null
+          is_bot?: boolean
           is_tech_match_unlocked?: boolean | null
           is_verified?: boolean | null
           last_activity_date?: string | null
@@ -960,6 +962,7 @@ export type Database = {
           github_url?: string | null
           id?: string
           instagram_url?: string | null
+          is_bot?: boolean
           is_tech_match_unlocked?: boolean | null
           is_verified?: boolean | null
           last_activity_date?: string | null
@@ -1487,6 +1490,42 @@ export type Database = {
     }
     Functions: {
       delete_expired_stories: { Args: never; Returns: undefined }
+      admin_set_user_bot_status: {
+        Args: { p_is_bot: boolean; p_user_id: string }
+        Returns: undefined
+      }
+      get_admin_user_role_stats: {
+        Args: never
+        Returns: {
+          admin_users: number
+          bot_users: number
+          real_users: number
+          total_users: number
+        }[]
+      }
+      get_admin_users_page: {
+        Args: {
+          p_limit?: number
+          p_offset?: number
+          p_role_filter?: string
+          p_search?: string
+        }
+        Returns: {
+          avatar_url: string | null
+          balance: number
+          bio: string | null
+          created_at: string
+          full_name: string
+          id: string
+          is_admin: boolean
+          is_banned: boolean
+          is_bot: boolean
+          is_verified: boolean
+          total_count: number
+          username: string
+          verification_category: string | null
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
