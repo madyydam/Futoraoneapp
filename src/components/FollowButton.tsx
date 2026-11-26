@@ -63,10 +63,20 @@ export const FollowButton = ({ userId, currentUserId, onFollowChange }: FollowBu
                     description: "You have unfollowed this user",
                 });
             } else {
-                const { error } = await supabase.from("follows").insert({
+                let { error } = await supabase.from("follows").insert({
                     follower_id: currentUserId,
                     following_id: userId,
                 });
+
+                // Auto-heal missing profile row if FK constraint fires, then retry once
+                if (error && (error.code === "23503" || error.message?.includes("follows_follower_id_fkey"))) {
+                    await (supabase.rpc as any)("ensure_my_profile");
+                    const retry = await supabase.from("follows").insert({
+                        follower_id: currentUserId,
+                        following_id: userId,
+                    });
+                    error = retry.error;
+                }
 
                 if (error) throw error;
 

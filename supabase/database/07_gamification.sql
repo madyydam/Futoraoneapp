@@ -153,11 +153,36 @@ BEGIN
     RETURN;
   END IF;
 
+  -- Unlock master_achievements slugs when master_achievements table exists
+  IF to_regclass('public.master_achievements') IS NOT NULL THEN
+    BEGIN
+      IF condition_type_to_check = 'posts_count' AND current_val >= 1 THEN
+        INSERT INTO public.user_achievements (user_id, achievement_id)
+        VALUES (target_user_id, 'first_post')
+        ON CONFLICT (user_id, achievement_id) DO NOTHING;
+      ELSIF condition_type_to_check = 'likes_received' AND current_val >= 1 THEN
+        INSERT INTO public.user_achievements (user_id, achievement_id)
+        VALUES (target_user_id, 'first_like')
+        ON CONFLICT (user_id, achievement_id) DO NOTHING;
+      ELSIF condition_type_to_check = 'code_posts' AND current_val >= 10 THEN
+        INSERT INTO public.user_achievements (user_id, achievement_id)
+        VALUES (target_user_id, 'code_master')
+        ON CONFLICT (user_id, achievement_id) DO NOTHING;
+      END IF;
+    EXCEPTION WHEN OTHERS THEN
+      NULL;
+    END;
+  END IF;
+
   FOR ach IN SELECT * FROM public.achievements WHERE condition_type = condition_type_to_check LOOP
     IF current_val >= ach.condition_value THEN
-      INSERT INTO public.user_achievements (user_id, achievement_id)
-      VALUES (target_user_id, ach.id)
-      ON CONFLICT (user_id, achievement_id) DO NOTHING;
+      BEGIN
+        INSERT INTO public.user_achievements (user_id, achievement_id)
+        VALUES (target_user_id, ach.id::TEXT)
+        ON CONFLICT (user_id, achievement_id) DO NOTHING;
+      EXCEPTION WHEN OTHERS THEN
+        NULL;
+      END;
     END IF;
   END LOOP;
 END;

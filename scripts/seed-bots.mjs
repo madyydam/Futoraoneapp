@@ -99,14 +99,15 @@ async function fetchJson(url, options = {}, retries = 3) {
   }
 }
 
-async function batchInsert(table, rows, chunkSize = 500, ignoreDuplicates = true) {
+async function batchInsert(table, rows, chunkSize = 500, ignoreDuplicates = true, onConflictCols = null) {
   if (!rows.length) return;
   const prefer = ignoreDuplicates
     ? "resolution=ignore-duplicates,return=minimal"
     : "return=minimal";
+  const qs = ignoreDuplicates && onConflictCols ? `?on_conflict=${onConflictCols}` : "";
   for (let i = 0; i < rows.length; i += chunkSize) {
     const chunk = rows.slice(i, i + chunkSize);
-    await fetchJson(`${SUPABASE_URL}/rest/v1/${table}`, {
+    await fetchJson(`${SUPABASE_URL}/rest/v1/${table}${qs}`, {
       method: "POST",
       headers: { ...HEADERS, Prefer: prefer },
       body: JSON.stringify(chunk),
@@ -524,19 +525,22 @@ async function main() {
       });
     }
   }
-  // Have ~12 bots follow existing real users so real accounts also see natural activity
+  // Have ~18 bots follow existing real users so real accounts also see natural activity
+  const seenFollowKeys = new Set(followRows.map((r) => `${r.follower_id}:${r.following_id}`));
   for (const realId of realUserIds) {
     const fanCount = Math.min(18, bots.length);
     for (let k = 0; k < fanCount; k++) {
-      const bot = bots[randInt(0, bots.length - 1)];
-      if (bot.id !== realId) {
+      const bot = bots[(k * 11 + randInt(0, 7)) % bots.length];
+      const key = `${bot.id}:${realId}`;
+      if (bot.id !== realId && !seenFollowKeys.has(key)) {
+        seenFollowKeys.add(key);
         followRows.push({ follower_id: bot.id, following_id: realId });
       }
     }
   }
 
   console.log(`   Inserting ${followRows.length} follow edges in chunks...`);
-  await batchInsert("follows", followRows, 1000, true);
+  await batchInsert("follows", followRows, 1000, true, "follower_id,following_id");
   console.log("✅ Follower network populated (130–175 followers & following each).");
 
   // Step D: Seed Projects (45 realistic projects)
@@ -582,7 +586,7 @@ async function main() {
         projectLikeRows.push({ user_id: uid, project_id: proj.id });
       }
     }
-    await batchInsert("project_likes", projectLikeRows, 500, true);
+    await batchInsert("project_likes", projectLikeRows, 500, true, "user_id,project_id");
     console.log(`✅ Created ${projectRows.length} projects and ${projectLikeRows.length} project likes.`);
 
     // Step E: Seed 520+ Categorized Lightweight Posts
@@ -667,7 +671,7 @@ async function main() {
       }
     }
 
-    await batchInsert("likes", likeRows, 1000, true);
+    await batchInsert("likes", likeRows, 1000, true, "user_id,post_id");
     await batchInsert("comments", commentRows, 500, true);
     console.log(`✅ Added ${likeRows.length} likes and ${commentRows.length} comments.`);
   }

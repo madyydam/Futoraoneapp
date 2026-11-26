@@ -480,6 +480,41 @@ CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
+CREATE OR REPLACE FUNCTION public.ensure_my_profile()
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_uid UUID := auth.uid();
+  v_user RECORD;
+  base_username TEXT;
+  candidate_username TEXT;
+  resolved_avatar TEXT;
+  resolved_full_name TEXT;
+BEGIN
+  IF v_uid IS NULL THEN RETURN FALSE; END IF;
+  IF EXISTS (SELECT 1 FROM public.profiles WHERE id = v_uid) THEN RETURN TRUE; END IF;
+  SELECT id, email, raw_user_meta_data INTO v_user FROM auth.users WHERE id = v_uid;
+  IF NOT FOUND THEN RETURN FALSE; END IF;
+  base_username := regexp_replace(lower(COALESCE(v_user.raw_user_meta_data->>'username', split_part(COALESCE(v_user.email, 'user'), '@', 1), 'user')), '[^a-z0-9_]', '_', 'g');
+  IF length(base_username) < 2 THEN base_username := 'user'; END IF;
+  candidate_username := base_username;
+  WHILE EXISTS (SELECT 1 FROM public.profiles WHERE username = candidate_username AND id <> v_uid) LOOP
+    candidate_username := base_username || '_' || substr(replace(gen_random_uuid()::text, '-', ''), 1, 6);
+  END LOOP;
+  resolved_avatar := COALESCE(NULLIF(v_user.raw_user_meta_data->>'avatar_url', ''), NULLIF(v_user.raw_user_meta_data->>'picture', ''), 'https://api.dicebear.com/7.x/personas/svg?seed=' || candidate_username);
+  resolved_full_name := COALESCE(NULLIF(v_user.raw_user_meta_data->>'full_name', ''), NULLIF(v_user.raw_user_meta_data->>'name', ''), candidate_username);
+  INSERT INTO public.profiles (id, email, username, full_name, avatar_url, is_bot)
+  VALUES (v_uid, v_user.email, candidate_username, resolved_full_name, resolved_avatar, FALSE)
+  ON CONFLICT (id) DO NOTHING;
+  INSERT INTO public.native_wallets (user_id, balance, currency) VALUES (v_uid, 1000.00, 'COINS') ON CONFLICT (user_id) DO NOTHING;
+  RETURN TRUE;
+END;
+$$;
+GRANT EXECUTE ON FUNCTION public.ensure_my_profile() TO authenticated;
+
 -- ─────────────────────────────────────────────────────────────────────────────
 -- RLS
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -2899,11 +2934,36 @@ BEGIN
     RETURN;
   END IF;
 
+  -- Unlock master_achievements slugs when master_achievements table exists
+  IF to_regclass('public.master_achievements') IS NOT NULL THEN
+    BEGIN
+      IF condition_type_to_check = 'posts_count' AND current_val >= 1 THEN
+        INSERT INTO public.user_achievements (user_id, achievement_id)
+        VALUES (target_user_id, 'first_post')
+        ON CONFLICT (user_id, achievement_id) DO NOTHING;
+      ELSIF condition_type_to_check = 'likes_received' AND current_val >= 1 THEN
+        INSERT INTO public.user_achievements (user_id, achievement_id)
+        VALUES (target_user_id, 'first_like')
+        ON CONFLICT (user_id, achievement_id) DO NOTHING;
+      ELSIF condition_type_to_check = 'code_posts' AND current_val >= 10 THEN
+        INSERT INTO public.user_achievements (user_id, achievement_id)
+        VALUES (target_user_id, 'code_master')
+        ON CONFLICT (user_id, achievement_id) DO NOTHING;
+      END IF;
+    EXCEPTION WHEN OTHERS THEN
+      NULL;
+    END;
+  END IF;
+
   FOR ach IN SELECT * FROM public.achievements WHERE condition_type = condition_type_to_check LOOP
     IF current_val >= ach.condition_value THEN
-      INSERT INTO public.user_achievements (user_id, achievement_id)
-      VALUES (target_user_id, ach.id)
-      ON CONFLICT (user_id, achievement_id) DO NOTHING;
+      BEGIN
+        INSERT INTO public.user_achievements (user_id, achievement_id)
+        VALUES (target_user_id, ach.id::TEXT)
+        ON CONFLICT (user_id, achievement_id) DO NOTHING;
+      EXCEPTION WHEN OTHERS THEN
+        NULL;
+      END;
     END IF;
   END LOOP;
 END;

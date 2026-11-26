@@ -38,6 +38,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         .eq("id", uid)
         .maybeSingle();
 
+      if (!data) {
+        // Self-heal missing profile row if auth user predates trigger
+        await (supabase.rpc as any)("ensure_my_profile");
+        return;
+      }
+
       if ((data as { is_banned?: boolean } | null)?.is_banned) {
         toast.error("Your account has been suspended by moderation.");
         await supabase.auth.signOut();
