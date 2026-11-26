@@ -24,6 +24,16 @@ CREATE TABLE IF NOT EXISTS public.achievements (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Idempotent column guards: add any columns that may be missing in existing live DB
+ALTER TABLE public.achievements ADD COLUMN IF NOT EXISTS name TEXT;
+ALTER TABLE public.achievements ADD COLUMN IF NOT EXISTS description TEXT;
+ALTER TABLE public.achievements ADD COLUMN IF NOT EXISTS icon TEXT;
+ALTER TABLE public.achievements ADD COLUMN IF NOT EXISTS criteria JSONB;
+ALTER TABLE public.achievements ADD COLUMN IF NOT EXISTS condition_type TEXT;
+ALTER TABLE public.achievements ADD COLUMN IF NOT EXISTS condition_value INTEGER DEFAULT 1;
+ALTER TABLE public.achievements ADD COLUMN IF NOT EXISTS xp_reward INTEGER DEFAULT 100;
+ALTER TABLE public.achievements ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+
 CREATE TABLE IF NOT EXISTS public.user_achievements (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,

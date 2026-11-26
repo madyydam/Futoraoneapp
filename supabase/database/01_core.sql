@@ -126,18 +126,47 @@ CREATE TABLE IF NOT EXISTS public.profiles (
 );
 
 -- Ensure columns exist cleanly when re-running on existing DBs
-ALTER TABLE public.profiles
-  ADD COLUMN IF NOT EXISTS email TEXT,
-  ADD COLUMN IF NOT EXISTS fcm_token TEXT,
-  ADD COLUMN IF NOT EXISTS is_banned BOOLEAN NOT NULL DEFAULT FALSE,
-  ADD COLUMN IF NOT EXISTS total_wins INTEGER NOT NULL DEFAULT 0,
-  ADD COLUMN IF NOT EXISTS is_tech_match_unlocked BOOLEAN NOT NULL DEFAULT FALSE,
-  ADD COLUMN IF NOT EXISTS settings JSONB DEFAULT '{
+-- Idempotent column guards: add any profiles columns missing in the live DB
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS email TEXT;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS banner_url TEXT;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS bio TEXT;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS location TEXT DEFAULT 'Pune';
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS theme_color TEXT;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS github_url TEXT;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS linkedin_url TEXT;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS portfolio_url TEXT;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS instagram_url TEXT;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS tech_skills TEXT[];
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS verification_category TEXT;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS is_banned BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS fcm_token TEXT;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS one_signal_player_id TEXT;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS digest_mode BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS last_digest_at TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS xp INTEGER DEFAULT 0;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS level INTEGER DEFAULT 1;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS current_streak INTEGER DEFAULT 0;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS longest_streak INTEGER DEFAULT 0;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS total_wins INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS last_activity_date TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS badges TEXT[] DEFAULT '{}';
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS trust_score INTEGER DEFAULT 50;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS is_tech_match_unlocked BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS daily_challenges JSONB DEFAULT '[
+    {"id": "story", "title": "Share a Story", "xp": 50, "completed": false, "current": 0, "target": 1},
+    {"id": "likes", "title": "Like 5 Posts", "xp": 25, "completed": false, "current": 0, "target": 5},
+    {"id": "comment", "title": "Leave a Comment", "xp": 30, "completed": false, "current": 0, "target": 1}
+  ]'::jsonb;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS vibe_mood TEXT DEFAULT '😎';
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS vibe_status TEXT;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS settings JSONB DEFAULT '{
     "privacy": {"read_receipts": true, "online_status": true},
     "notifications": {"push": true, "email": true, "marketing": false},
     "theme": {"accent_color": "default"}
-  }'::jsonb,
-  ADD COLUMN IF NOT EXISTS last_digest_at TIMESTAMPTZ DEFAULT NOW();
+  }'::jsonb;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
 
 -- Backfill profiles for any auth.users created before triggers existed (prevents downstream FK errors)
 INSERT INTO public.profiles (id, email, username, full_name, avatar_url)
