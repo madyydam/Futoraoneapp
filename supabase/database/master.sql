@@ -1,11 +1,14 @@
 ﻿-- ================================================================================
--- FUTORAONE MASTER DATABASE SETUP (Single-Shot)
--- Paste entire file into Supabase SQL Editor and click RUN once.
--- All statements are idempotent: safe to re-run.
+-- FUTORAONE MASTER DATABASE SETUP (Single-Shot, Idempotent)
+-- ================================================================================
+-- HOW TO RUN:
+--   1. Open: https://supabase.com/dashboard/project/sbzsgeokspmkewrmuqgi/sql
+--   2. Paste this ENTIRE file into the SQL Editor
+--   3. Click RUN once
+-- All statements use IF NOT EXISTS / OR REPLACE / ON CONFLICT -- safe to re-run.
 -- ================================================================================
 
 BEGIN;
-
 
 -- ============================================================
 -- SECTION: 01_core
@@ -128,6 +131,8 @@ CREATE TABLE IF NOT EXISTS public.profiles (
 
 -- Ensure columns exist cleanly when re-running on existing DBs
 ALTER TABLE public.profiles
+  ADD COLUMN IF NOT EXISTS email TEXT,
+  ADD COLUMN IF NOT EXISTS fcm_token TEXT,
   ADD COLUMN IF NOT EXISTS is_banned BOOLEAN NOT NULL DEFAULT FALSE,
   ADD COLUMN IF NOT EXISTS total_wins INTEGER NOT NULL DEFAULT 0,
   ADD COLUMN IF NOT EXISTS is_tech_match_unlocked BOOLEAN NOT NULL DEFAULT FALSE,
@@ -137,6 +142,21 @@ ALTER TABLE public.profiles
     "theme": {"accent_color": "default"}
   }'::jsonb,
   ADD COLUMN IF NOT EXISTS last_digest_at TIMESTAMPTZ DEFAULT NOW();
+
+-- Backfill profiles for any auth.users created before triggers existed (prevents downstream FK errors)
+INSERT INTO public.profiles (id, email, username, full_name, avatar_url)
+SELECT
+  u.id,
+  u.email,
+  COALESCE(
+    NULLIF(regexp_replace(lower(COALESCE(u.raw_user_meta_data->>'username', split_part(COALESCE(u.email, ''), '@', 1), 'user')), '[^a-z0-9_]', '_', 'g'), ''),
+    'user'
+  ) || '_' || substr(replace(u.id::text, '-', ''), 1, 6),
+  COALESCE(NULLIF(u.raw_user_meta_data->>'full_name', ''), NULLIF(u.raw_user_meta_data->>'name', ''), 'User'),
+  COALESCE(NULLIF(u.raw_user_meta_data->>'avatar_url', ''), NULLIF(u.raw_user_meta_data->>'picture', ''), 'https://api.dicebear.com/7.x/avataaars/svg?seed=' || u.id::text)
+FROM auth.users u
+WHERE NOT EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = u.id)
+ON CONFLICT DO NOTHING;
 
 CREATE INDEX IF NOT EXISTS idx_profiles_username ON public.profiles(username);
 CREATE INDEX IF NOT EXISTS idx_profiles_badges ON public.profiles USING GIN(badges);
@@ -377,7 +397,7 @@ BEGIN
     avatar_url = COALESCE(NULLIF(public.profiles.avatar_url, ''), EXCLUDED.avatar_url);
 
   INSERT INTO public.native_wallets (user_id, balance, currency)
-  VALUES (NEW.id, 1000.00, 'INR')
+  VALUES (NEW.id, 1000.00, 'COINS')
   ON CONFLICT (user_id) DO NOTHING
   RETURNING id INTO new_wallet_id;
 
@@ -496,7 +516,6 @@ DO $$ BEGIN
     ALTER PUBLICATION supabase_realtime ADD TABLE public.user_presence;
   END IF;
 END $$;
-
 
 -- ============================================================
 -- SECTION: 04_groups
@@ -673,7 +692,6 @@ DO $$ BEGIN
     ALTER PUBLICATION supabase_realtime ADD TABLE public.group_members;
   END IF;
 END $$;
-
 
 -- ============================================================
 -- SECTION: 05_communities
@@ -895,7 +913,6 @@ DO $$ BEGIN
   END IF;
 END $$;
 
-
 -- ============================================================
 -- SECTION: 03_messages_chat
 -- ============================================================
@@ -912,6 +929,11 @@ CREATE TABLE IF NOT EXISTS public.conversations (
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+ALTER TABLE public.conversations
+  ADD COLUMN IF NOT EXISTS name TEXT,
+  ADD COLUMN IF NOT EXISTS wallpaper_config JSONB DEFAULT '{"type": "transparent"}'::jsonb,
+  ADD COLUMN IF NOT EXISTS bubble_config JSONB DEFAULT '{}'::jsonb;
 
 CREATE TABLE IF NOT EXISTS public.conversation_participants (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -944,7 +966,9 @@ CREATE TABLE IF NOT EXISTS public.messages (
 );
 
 ALTER TABLE public.messages
-  ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN NOT NULL DEFAULT FALSE;
+  ADD COLUMN IF NOT EXISTS message_type TEXT DEFAULT 'normal',
+  ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN NOT NULL DEFAULT FALSE,
+  ADD COLUMN IF NOT EXISTS read_at TIMESTAMPTZ;
 
 CREATE TABLE IF NOT EXISTS public.room_categories (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1354,7 +1378,6 @@ DO $$ BEGIN
   END IF;
 END $$;
 
-
 -- ============================================================
 -- SECTION: 02_social
 -- ============================================================
@@ -1401,6 +1424,12 @@ CREATE TABLE IF NOT EXISTS public.posts (
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+ALTER TABLE public.posts
+  ADD COLUMN IF NOT EXISTS is_project_update BOOLEAN DEFAULT FALSE,
+  ADD COLUMN IF NOT EXISTS project_id UUID REFERENCES public.projects(id) ON DELETE CASCADE,
+  ADD COLUMN IF NOT EXISTS category TEXT,
+  ADD COLUMN IF NOT EXISTS tags TEXT[] DEFAULT '{}';
 
 CREATE INDEX IF NOT EXISTS idx_posts_created_at ON public.posts(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_posts_user_id ON public.posts(user_id);
@@ -1633,6 +1662,7 @@ CREATE TRIGGER trigger_extract_hashtags
   BEFORE INSERT OR UPDATE OF content ON public.posts
   FOR EACH ROW EXECUTE FUNCTION public.extract_hashtags();
 
+DROP FUNCTION IF EXISTS public.delete_expired_stories();
 CREATE OR REPLACE FUNCTION public.delete_expired_stories()
 RETURNS VOID
 LANGUAGE plpgsql
@@ -1644,6 +1674,7 @@ BEGIN
 END;
 $$;
 
+DROP FUNCTION IF EXISTS public.get_waitlist_position(UUID);
 CREATE OR REPLACE FUNCTION public.get_waitlist_position(user_uuid UUID)
 RETURNS INTEGER
 LANGUAGE plpgsql
@@ -1661,6 +1692,7 @@ BEGIN
 END;
 $$;
 
+DROP FUNCTION IF EXISTS public.check_rate_limit(TEXT, INT, INTERVAL);
 CREATE OR REPLACE FUNCTION public.check_rate_limit(limit_key TEXT, limit_count INT, window_interval INTERVAL)
 RETURNS BOOLEAN
 LANGUAGE plpgsql
@@ -1943,7 +1975,6 @@ DO $$ BEGIN
   END IF;
 END $$;
 
-
 -- ============================================================
 -- SECTION: 06_economy_wallet
 -- ============================================================
@@ -2004,14 +2035,14 @@ CREATE TABLE IF NOT EXISTS public.game_sessions (
 );
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- NATIVE WALLET (INR, real money / Futora Coin ledger)
+-- NATIVE WALLET (100% In-App Futora Coin Ledger)
 -- ─────────────────────────────────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS public.native_wallets (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   balance DECIMAL(12,2) NOT NULL DEFAULT 0.00,
-  currency TEXT NOT NULL DEFAULT 'INR',
+  currency TEXT NOT NULL DEFAULT 'COINS',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   UNIQUE(user_id),
@@ -2076,6 +2107,11 @@ CREATE TABLE IF NOT EXISTS public.gig_applications (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Deduplicate legacy rows before enforcing unique indexes
+DELETE FROM public.gig_applications a
+USING public.gig_applications b
+WHERE a.ctid < b.ctid AND a.gig_id = b.gig_id AND a.applicant_id = b.applicant_id;
+
 CREATE UNIQUE INDEX IF NOT EXISTS idx_gig_applications_unique
   ON public.gig_applications(gig_id, applicant_id);
 
@@ -2102,6 +2138,10 @@ CREATE TABLE IF NOT EXISTS public.founder_applications (
   status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'rejected')),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+DELETE FROM public.founder_applications a
+USING public.founder_applications b
+WHERE a.ctid < b.ctid AND a.listing_id = b.listing_id AND a.applicant_id = b.applicant_id;
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_founder_applications_unique
   ON public.founder_applications(listing_id, applicant_id);
@@ -2153,15 +2193,64 @@ CREATE TRIGGER on_review_created
 DROP TRIGGER IF EXISTS on_auth_user_created_wallet ON auth.users;
 DROP FUNCTION IF EXISTS public.handle_new_user_wallet();
 
--- Backfill wallets for existing users (safe to re-run)
-INSERT INTO public.native_wallets (user_id, balance)
-SELECT id, 1000.00 FROM auth.users ON CONFLICT (user_id) DO NOTHING;
+-- Backfill wallets for existing users present in both auth.users and public.profiles (safe to re-run)
+WITH inserted_wallets AS (
+  INSERT INTO public.native_wallets (user_id, balance, currency)
+  SELECT p.id, 1000.00, 'COINS'
+  FROM public.profiles p
+  INNER JOIN auth.users u ON u.id = p.id
+  ON CONFLICT (user_id) DO NOTHING
+  RETURNING id, user_id
+)
+INSERT INTO public.native_transactions (wallet_id, type, amount, description, status, idempotency_key)
+SELECT w.id, 'cashback', 1000.00, 'Welcome Bonus 🎁', 'completed', 'signup_bonus_' || w.user_id::text
+FROM inserted_wallets w
+ON CONFLICT DO NOTHING;
+
+-- In-app self-heal RPC: ensures authenticated user always has their native wallet row
+DROP FUNCTION IF EXISTS public.ensure_my_wallet();
+CREATE OR REPLACE FUNCTION public.ensure_my_wallet()
+RETURNS public.native_wallets
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  me UUID := auth.uid();
+  v_wallet public.native_wallets%ROWTYPE;
+BEGIN
+  IF me IS NULL THEN
+    RAISE EXCEPTION 'Unauthorized';
+  END IF;
+
+  SELECT * INTO v_wallet FROM public.native_wallets WHERE user_id = me;
+  IF FOUND THEN
+    RETURN v_wallet;
+  END IF;
+
+  INSERT INTO public.native_wallets (user_id, balance, currency)
+  VALUES (me, 1000.00, 'COINS')
+  ON CONFLICT (user_id) DO NOTHING
+  RETURNING * INTO v_wallet;
+
+  IF v_wallet.id IS NOT NULL THEN
+    INSERT INTO public.native_transactions (wallet_id, type, amount, description, status, idempotency_key)
+    VALUES (v_wallet.id, 'cashback', 1000.00, 'Welcome Bonus 🎁', 'completed', 'signup_bonus_' || me::text)
+    ON CONFLICT DO NOTHING;
+    RETURN v_wallet;
+  END IF;
+
+  SELECT * INTO v_wallet FROM public.native_wallets WHERE user_id = me;
+  RETURN v_wallet;
+END;
+$$;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- ATOMIC ECONOMY RPCs (server-authoritative, deadlock-safe, idempotent)
 -- ─────────────────────────────────────────────────────────────────────────────
 
 -- Launch reward popup function
+DROP FUNCTION IF EXISTS public.claim_launch_reward_popup();
 CREATE OR REPLACE FUNCTION public.claim_launch_reward_popup()
 RETURNS BOOLEAN
 LANGUAGE plpgsql
@@ -2179,6 +2268,8 @@ END;
 $$;
 
 -- Atomic feature unlock (Tech Match = 1000 coins) with row-lock-first TOCTOU fix
+DROP FUNCTION IF EXISTS public.unlock_feature(TEXT);
+DROP FUNCTION IF EXISTS public.unlock_feature(TEXT, TEXT);
 CREATE OR REPLACE FUNCTION public.unlock_feature(
   p_feature_name TEXT,
   p_idempotency_key TEXT DEFAULT NULL
@@ -2219,7 +2310,7 @@ BEGIN
 
   IF NOT FOUND THEN
     INSERT INTO public.native_wallets (user_id, balance, currency)
-    VALUES (me, 1000.00, 'INR')
+    VALUES (me, 1000.00, 'COINS')
     ON CONFLICT (user_id) DO NOTHING;
 
     SELECT id, balance INTO v_wallet FROM public.native_wallets WHERE user_id = me FOR UPDATE;
@@ -2276,6 +2367,8 @@ END;
 $$;
 
 -- Server-authoritative game reward RPC with rate limiting (prevents client tampering)
+DROP FUNCTION IF EXISTS public.process_game_win(TEXT);
+DROP FUNCTION IF EXISTS public.process_game_win(TEXT, TEXT);
 CREATE OR REPLACE FUNCTION public.process_game_win(
   p_game_key TEXT DEFAULT 'arcade',
   p_idempotency_key TEXT DEFAULT NULL
@@ -2319,7 +2412,7 @@ BEGIN
   SELECT id, balance INTO v_wallet FROM public.native_wallets WHERE user_id = me FOR UPDATE;
   IF NOT FOUND THEN
     INSERT INTO public.native_wallets (user_id, balance, currency)
-    VALUES (me, 1000.00, 'INR')
+    VALUES (me, 1000.00, 'COINS')
     ON CONFLICT (user_id) DO NOTHING;
     SELECT id, balance INTO v_wallet FROM public.native_wallets WHERE user_id = me FOR UPDATE;
   END IF;
@@ -2371,6 +2464,7 @@ END;
 $$;
 
 -- In-app P2P coin transfer RPC (deadlock-safe ordered row locking)
+DROP FUNCTION IF EXISTS public.transfer_wallet_coins(TEXT, DECIMAL, TEXT, TEXT);
 CREATE OR REPLACE FUNCTION public.transfer_wallet_coins(
   p_recipient_username TEXT,
   p_amount DECIMAL(12,2),
@@ -2579,7 +2673,6 @@ CREATE POLICY "Users create own reviews" ON public.reviews
 INSERT INTO public.feature_locks (feature_name, required_coins)
 VALUES ('tech_match', 1000) ON CONFLICT (feature_name) DO NOTHING;
 
-
 -- ============================================================
 -- SECTION: 07_gamification
 -- ============================================================
@@ -2630,6 +2723,7 @@ CREATE TABLE IF NOT EXISTS public.user_roles (
 -- ─────────────────────────────────────────────────────────────────────────────
 
 -- Level calculation (sqrt-based curve)
+DROP FUNCTION IF EXISTS public.calculate_level(INTEGER);
 CREATE OR REPLACE FUNCTION public.calculate_level(xp INTEGER)
 RETURNS INTEGER
 LANGUAGE plpgsql
@@ -2643,6 +2737,7 @@ END;
 $$;
 
 -- Give XP and recalculate level (internal-only: execute revoked from clients)
+DROP FUNCTION IF EXISTS public.give_xp(UUID, INTEGER);
 CREATE OR REPLACE FUNCTION public.give_xp(user_id UUID, amount INTEGER)
 RETURNS VOID
 LANGUAGE plpgsql
@@ -2665,6 +2760,7 @@ END;
 $$;
 
 -- Streak updater (internal-only)
+DROP FUNCTION IF EXISTS public.update_user_streak(UUID);
 CREATE OR REPLACE FUNCTION public.update_user_streak(target_user_id UUID)
 RETURNS VOID
 LANGUAGE plpgsql
@@ -2695,6 +2791,7 @@ END;
 $$;
 
 -- Check and unlock achievements (internal-only)
+DROP FUNCTION IF EXISTS public.check_achievements(UUID, TEXT);
 CREATE OR REPLACE FUNCTION public.check_achievements(target_user_id UUID, condition_type_to_check TEXT)
 RETURNS VOID
 LANGUAGE plpgsql
@@ -2793,7 +2890,6 @@ INSERT INTO public.achievements (id, name, description, icon, condition_type, co
   ('bug-hunter', 'Bug Hunter', 'Reported a bug', 'bug', NULL, 0),
   ('code-wizard', 'Code Wizard', 'Posted 5 code snippets', 'code', 'code_posts', 5)
 ON CONFLICT (id) DO NOTHING;
-
 
 -- ============================================================
 -- SECTION: 08_storage
@@ -2962,7 +3058,6 @@ CREATE POLICY "Admins full storage access v2"
 ON storage.objects FOR ALL TO authenticated
 USING (public.has_role(auth.uid(), 'admin'));
 
-
 -- ============================================================
 -- SECTION: 09_admin_performance
 -- ============================================================
@@ -3025,6 +3120,7 @@ CREATE INDEX IF NOT EXISTS idx_follows_following_id ON public.follows(following_
 -- ─────────────────────────────────────────────────────────────────────────────
 
 -- Atomic verification review RPC for admins
+DROP FUNCTION IF EXISTS public.review_verification_request(UUID, TEXT, TEXT);
 CREATE OR REPLACE FUNCTION public.review_verification_request(
   p_request_id UUID,
   p_action TEXT,
@@ -3080,6 +3176,7 @@ END;
 $$;
 
 -- Admin audit log helper RPC
+DROP FUNCTION IF EXISTS public.log_admin_action(TEXT, TEXT, TEXT, JSONB);
 CREATE OR REPLACE FUNCTION public.log_admin_action(
   p_action TEXT,
   p_target_type TEXT DEFAULT NULL,
@@ -3102,6 +3199,7 @@ END;
 $$;
 
 -- Admin-only paginated directory RPC (replaces direct client .select('*') on profiles)
+DROP FUNCTION IF EXISTS public.get_admin_users_page(INTEGER, INTEGER);
 CREATE OR REPLACE FUNCTION public.get_admin_users_page(
   p_offset INTEGER DEFAULT 0,
   p_limit INTEGER DEFAULT 50
@@ -3153,6 +3251,7 @@ END;
 $$;
 
 -- Admin-only wallet user directory RPC (safe email access for admins)
+DROP FUNCTION IF EXISTS public.get_admin_wallet_users();
 CREATE OR REPLACE FUNCTION public.get_admin_wallet_users()
 RETURNS TABLE (
   id UUID,
@@ -3247,7 +3346,10 @@ CREATE POLICY "Users can view own waitlist entry" ON public.waitlist
 
 -- Migrate any legacy profile fcm_tokens into owner-only user_push_tokens & scrub profiles
 INSERT INTO public.user_push_tokens (user_id, fcm_token)
-SELECT id, fcm_token FROM public.profiles WHERE fcm_token IS NOT NULL
+SELECT p.id, p.fcm_token
+FROM public.profiles p
+INNER JOIN auth.users u ON u.id = p.id
+WHERE p.fcm_token IS NOT NULL
 ON CONFLICT (user_id) DO UPDATE SET fcm_token = EXCLUDED.fcm_token;
 
 UPDATE public.profiles SET fcm_token = NULL WHERE fcm_token IS NOT NULL;
@@ -3270,8 +3372,17 @@ REVOKE ALL ON FUNCTION public.notify_on_profile_view() FROM PUBLIC, anon, authen
 REVOKE ALL ON FUNCTION public.check_rate_limit(TEXT, INT, INTERVAL) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.check_rate_limit(TEXT, INT, INTERVAL) TO service_role;
 
+-- Allow authenticated users to call ensure_my_wallet (self-heal their own wallet row)
+GRANT EXECUTE ON FUNCTION public.ensure_my_wallet() TO authenticated;
+
 COMMIT;
 
--- After running:
---   1. npx supabase gen types typescript --project-id sbzsgeokspmkewrmuqgi > src/integrations/supabase/types.ts
---   2. INSERT INTO public.user_roles (user_id, role) VALUES ('<your-uuid>', 'admin') ON CONFLICT DO NOTHING;
+-- ================================================================================
+-- POST-RUN STEPS (run these after COMMIT succeeds):
+-- ================================================================================
+-- 1. Regenerate TypeScript types:
+--    npx supabase gen types typescript --project-id sbzsgeokspmkewrmuqgi > src/integrations/supabase/types.ts
+--
+-- 2. Bootstrap your admin user (replace with your actual UUID):
+--    INSERT INTO public.user_roles (user_id, role) VALUES ('<your-uuid>', 'admin') ON CONFLICT DO NOTHING;
+-- ================================================================================

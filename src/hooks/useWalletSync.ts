@@ -3,8 +3,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 
 /**
- * Ensures the authenticated user's in-app wallet is synced cleanly.
- * Wallet creation & the 1,000-coin Welcome Bonus happen server-side via DB trigger/RPC.
+ * Ensures the authenticated user's in-app wallet exists (100% in-app, no third-party sync).
+ * Calls ensure_my_wallet() RPC which creates the wallet + 1,000-coin Welcome Bonus if missing.
  */
 export const useWalletSync = () => {
   const { userId } = useAuth();
@@ -12,14 +12,11 @@ export const useWalletSync = () => {
   useEffect(() => {
     if (!userId) return;
 
-    supabase
-      .from('native_wallets')
-      .select('id')
-      .eq('user_id', userId)
-      .maybeSingle()
+    // Self-heal: ensure wallet row exists for this user (idempotent, server-side)
+    (supabase.rpc as unknown as (fn: string) => Promise<{ error: unknown }>)('ensure_my_wallet')
       .then(({ error }) => {
         if (error) {
-          console.error('Wallet sync check error:', error);
+          console.error('Wallet sync error:', error);
         }
       });
   }, [userId]);

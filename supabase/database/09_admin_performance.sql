@@ -295,7 +295,10 @@ CREATE POLICY "Users can view own waitlist entry" ON public.waitlist
 
 -- Migrate any legacy profile fcm_tokens into owner-only user_push_tokens & scrub profiles
 INSERT INTO public.user_push_tokens (user_id, fcm_token)
-SELECT id, fcm_token FROM public.profiles WHERE fcm_token IS NOT NULL
+SELECT p.id, p.fcm_token
+FROM public.profiles p
+INNER JOIN auth.users u ON u.id = p.id
+WHERE p.fcm_token IS NOT NULL
 ON CONFLICT (user_id) DO UPDATE SET fcm_token = EXCLUDED.fcm_token;
 
 UPDATE public.profiles SET fcm_token = NULL WHERE fcm_token IS NOT NULL;
@@ -317,3 +320,6 @@ REVOKE ALL ON FUNCTION public.update_trust_score() FROM PUBLIC, anon, authentica
 REVOKE ALL ON FUNCTION public.notify_on_profile_view() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.check_rate_limit(TEXT, INT, INTERVAL) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.check_rate_limit(TEXT, INT, INTERVAL) TO service_role;
+
+-- Allow authenticated users to call ensure_my_wallet (self-heal their own wallet row)
+GRANT EXECUTE ON FUNCTION public.ensure_my_wallet() TO authenticated;

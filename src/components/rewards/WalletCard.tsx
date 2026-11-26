@@ -1,12 +1,10 @@
-import React from "react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Wallet, ExternalLink, ChevronRight, Loader2 } from "lucide-react";
+import { Wallet, ChevronRight, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/useAuth";
 
 interface WalletCardProps {
     customBalance?: number;
@@ -14,27 +12,29 @@ interface WalletCardProps {
 
 export const WalletCard = ({ customBalance }: WalletCardProps) => {
     const navigate = useNavigate();
+    const { userId } = useAuth();
 
     const { data: walletData, isLoading } = useQuery({
-        queryKey: ["native_wallet_v2"],
+        queryKey: ["native_wallet_v2", userId],
         queryFn: async () => {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) return null;
+            if (!userId) return null;
 
             const { data, error } = await supabase
                 .from('native_wallets')
                 .select('*')
-                .eq('user_id', user.id)
+                .eq('user_id', userId)
                 .maybeSingle();
 
             if (error) {
                 console.error("Wallet Card Error:", error);
                 return null;
             }
+            if (data) return data;
 
-            return data;
+            const { data: ensured } = await (supabase.rpc as any)("ensure_my_wallet");
+            return ensured ?? null;
         },
-        enabled: customBalance === undefined,
+        enabled: customBalance === undefined && Boolean(userId),
     });
 
     const balance = customBalance !== undefined ? customBalance : walletData?.balance;

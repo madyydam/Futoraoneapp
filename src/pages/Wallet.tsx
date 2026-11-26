@@ -118,7 +118,11 @@ export default function Wallet() {
         .eq("user_id", userId)
         .maybeSingle();
       if (error) throw error;
-      return data as WalletData | null;
+      if (data) return data as WalletData;
+
+      const { data: ensured, error: ensureError } = await (supabase.rpc as any)("ensure_my_wallet");
+      if (ensureError) throw ensureError;
+      return (ensured as WalletData) ?? null;
     },
     enabled: Boolean(userId),
   });

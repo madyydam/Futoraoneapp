@@ -127,6 +127,8 @@ CREATE TABLE IF NOT EXISTS public.profiles (
 
 -- Ensure columns exist cleanly when re-running on existing DBs
 ALTER TABLE public.profiles
+  ADD COLUMN IF NOT EXISTS email TEXT,
+  ADD COLUMN IF NOT EXISTS fcm_token TEXT,
   ADD COLUMN IF NOT EXISTS is_banned BOOLEAN NOT NULL DEFAULT FALSE,
   ADD COLUMN IF NOT EXISTS total_wins INTEGER NOT NULL DEFAULT 0,
   ADD COLUMN IF NOT EXISTS is_tech_match_unlocked BOOLEAN NOT NULL DEFAULT FALSE,
@@ -136,6 +138,21 @@ ALTER TABLE public.profiles
     "theme": {"accent_color": "default"}
   }'::jsonb,
   ADD COLUMN IF NOT EXISTS last_digest_at TIMESTAMPTZ DEFAULT NOW();
+
+-- Backfill profiles for any auth.users created before triggers existed (prevents downstream FK errors)
+INSERT INTO public.profiles (id, email, username, full_name, avatar_url)
+SELECT
+  u.id,
+  u.email,
+  COALESCE(
+    NULLIF(regexp_replace(lower(COALESCE(u.raw_user_meta_data->>'username', split_part(COALESCE(u.email, ''), '@', 1), 'user')), '[^a-z0-9_]', '_', 'g'), ''),
+    'user'
+  ) || '_' || substr(replace(u.id::text, '-', ''), 1, 6),
+  COALESCE(NULLIF(u.raw_user_meta_data->>'full_name', ''), NULLIF(u.raw_user_meta_data->>'name', ''), 'User'),
+  COALESCE(NULLIF(u.raw_user_meta_data->>'avatar_url', ''), NULLIF(u.raw_user_meta_data->>'picture', ''), 'https://api.dicebear.com/7.x/avataaars/svg?seed=' || u.id::text)
+FROM auth.users u
+WHERE NOT EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = u.id)
+ON CONFLICT DO NOTHING;
 
 CREATE INDEX IF NOT EXISTS idx_profiles_username ON public.profiles(username);
 CREATE INDEX IF NOT EXISTS idx_profiles_badges ON public.profiles USING GIN(badges);
@@ -376,7 +393,7 @@ BEGIN
     avatar_url = COALESCE(NULLIF(public.profiles.avatar_url, ''), EXCLUDED.avatar_url);
 
   INSERT INTO public.native_wallets (user_id, balance, currency)
-  VALUES (NEW.id, 1000.00, 'INR')
+  VALUES (NEW.id, 1000.00, 'COINS')
   ON CONFLICT (user_id) DO NOTHING
   RETURNING id INTO new_wallet_id;
 

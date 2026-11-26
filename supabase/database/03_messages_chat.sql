@@ -22,6 +22,11 @@ CREATE TABLE IF NOT EXISTS public.conversations (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+ALTER TABLE public.conversations
+  ADD COLUMN IF NOT EXISTS name TEXT,
+  ADD COLUMN IF NOT EXISTS wallpaper_config JSONB DEFAULT '{"type": "transparent"}'::jsonb,
+  ADD COLUMN IF NOT EXISTS bubble_config JSONB DEFAULT '{}'::jsonb;
+
 CREATE TABLE IF NOT EXISTS public.conversation_participants (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   conversation_id UUID NOT NULL REFERENCES public.conversations(id) ON DELETE CASCADE,
@@ -53,7 +58,9 @@ CREATE TABLE IF NOT EXISTS public.messages (
 );
 
 ALTER TABLE public.messages
-  ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN NOT NULL DEFAULT FALSE;
+  ADD COLUMN IF NOT EXISTS message_type TEXT DEFAULT 'normal',
+  ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN NOT NULL DEFAULT FALSE,
+  ADD COLUMN IF NOT EXISTS read_at TIMESTAMPTZ;
 
 CREATE TABLE IF NOT EXISTS public.room_categories (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

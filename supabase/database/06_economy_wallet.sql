@@ -67,14 +67,14 @@ CREATE TABLE IF NOT EXISTS public.game_sessions (
 );
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- NATIVE WALLET (INR, real money / Futora Coin ledger)
+-- NATIVE WALLET (100% In-App Futora Coin Ledger)
 -- ─────────────────────────────────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS public.native_wallets (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   balance DECIMAL(12,2) NOT NULL DEFAULT 0.00,
-  currency TEXT NOT NULL DEFAULT 'INR',
+  currency TEXT NOT NULL DEFAULT 'COINS',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   UNIQUE(user_id),
@@ -139,6 +139,11 @@ CREATE TABLE IF NOT EXISTS public.gig_applications (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Deduplicate legacy rows before enforcing unique indexes
+DELETE FROM public.gig_applications a
+USING public.gig_applications b
+WHERE a.ctid < b.ctid AND a.gig_id = b.gig_id AND a.applicant_id = b.applicant_id;
+
 CREATE UNIQUE INDEX IF NOT EXISTS idx_gig_applications_unique
   ON public.gig_applications(gig_id, applicant_id);
 
@@ -165,6 +170,10 @@ CREATE TABLE IF NOT EXISTS public.founder_applications (
   status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'rejected')),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+DELETE FROM public.founder_applications a
+USING public.founder_applications b
+WHERE a.ctid < b.ctid AND a.listing_id = b.listing_id AND a.applicant_id = b.applicant_id;
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_founder_applications_unique
   ON public.founder_applications(listing_id, applicant_id);
@@ -216,9 +225,57 @@ CREATE TRIGGER on_review_created
 DROP TRIGGER IF EXISTS on_auth_user_created_wallet ON auth.users;
 DROP FUNCTION IF EXISTS public.handle_new_user_wallet();
 
--- Backfill wallets for existing users (safe to re-run)
-INSERT INTO public.native_wallets (user_id, balance)
-SELECT id, 1000.00 FROM auth.users ON CONFLICT (user_id) DO NOTHING;
+-- Backfill wallets for existing users present in both auth.users and public.profiles (safe to re-run)
+WITH inserted_wallets AS (
+  INSERT INTO public.native_wallets (user_id, balance, currency)
+  SELECT p.id, 1000.00, 'COINS'
+  FROM public.profiles p
+  INNER JOIN auth.users u ON u.id = p.id
+  ON CONFLICT (user_id) DO NOTHING
+  RETURNING id, user_id
+)
+INSERT INTO public.native_transactions (wallet_id, type, amount, description, status, idempotency_key)
+SELECT w.id, 'cashback', 1000.00, 'Welcome Bonus 🎁', 'completed', 'signup_bonus_' || w.user_id::text
+FROM inserted_wallets w
+ON CONFLICT DO NOTHING;
+
+-- In-app self-heal RPC: ensures authenticated user always has their native wallet row
+DROP FUNCTION IF EXISTS public.ensure_my_wallet();
+CREATE OR REPLACE FUNCTION public.ensure_my_wallet()
+RETURNS public.native_wallets
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  me UUID := auth.uid();
+  v_wallet public.native_wallets%ROWTYPE;
+BEGIN
+  IF me IS NULL THEN
+    RAISE EXCEPTION 'Unauthorized';
+  END IF;
+
+  SELECT * INTO v_wallet FROM public.native_wallets WHERE user_id = me;
+  IF FOUND THEN
+    RETURN v_wallet;
+  END IF;
+
+  INSERT INTO public.native_wallets (user_id, balance, currency)
+  VALUES (me, 1000.00, 'COINS')
+  ON CONFLICT (user_id) DO NOTHING
+  RETURNING * INTO v_wallet;
+
+  IF v_wallet.id IS NOT NULL THEN
+    INSERT INTO public.native_transactions (wallet_id, type, amount, description, status, idempotency_key)
+    VALUES (v_wallet.id, 'cashback', 1000.00, 'Welcome Bonus 🎁', 'completed', 'signup_bonus_' || me::text)
+    ON CONFLICT DO NOTHING;
+    RETURN v_wallet;
+  END IF;
+
+  SELECT * INTO v_wallet FROM public.native_wallets WHERE user_id = me;
+  RETURN v_wallet;
+END;
+$$;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- ATOMIC ECONOMY RPCs (server-authoritative, deadlock-safe, idempotent)
@@ -285,7 +342,7 @@ BEGIN
 
   IF NOT FOUND THEN
     INSERT INTO public.native_wallets (user_id, balance, currency)
-    VALUES (me, 1000.00, 'INR')
+    VALUES (me, 1000.00, 'COINS')
     ON CONFLICT (user_id) DO NOTHING;
 
     SELECT id, balance INTO v_wallet FROM public.native_wallets WHERE user_id = me FOR UPDATE;
@@ -387,7 +444,7 @@ BEGIN
   SELECT id, balance INTO v_wallet FROM public.native_wallets WHERE user_id = me FOR UPDATE;
   IF NOT FOUND THEN
     INSERT INTO public.native_wallets (user_id, balance, currency)
-    VALUES (me, 1000.00, 'INR')
+    VALUES (me, 1000.00, 'COINS')
     ON CONFLICT (user_id) DO NOTHING;
     SELECT id, balance INTO v_wallet FROM public.native_wallets WHERE user_id = me FOR UPDATE;
   END IF;
