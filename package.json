@@ -13,7 +13,6 @@
     "preview": "vite preview",
     "send-digest": "ts-node scripts/send-digest.ts",
     "send-email-digest": "node scripts/send-email-digest.mjs",
-    "seed:bots": "node scripts/seed-bots.mjs",
     "test:email": "node --test scripts/test-cloudflare-smtp.mjs"
   },
   "dependencies": {
