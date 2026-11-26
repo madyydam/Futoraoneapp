@@ -61,7 +61,7 @@ export const useFeedLogic = () => {
             if (!user) return null;
             const { data, error } = await supabase
                 .from("profiles")
-                .select("*")
+                .select("id, username, full_name, avatar_url, bio, is_verified, xp, level, badges")
                 .eq("id", user.id)
                 .single();
             if (error) throw error;
@@ -155,9 +155,14 @@ export const useFeedLogic = () => {
 
     const posts = useMemo(() => data?.pages.flatMap(page => page.posts) || [], [data]);
 
-    // Real-time Subscriptions
+    // Real-time Subscriptions & reconnect sync
     useEffect(() => {
         if (!user) return;
+
+        const handleReconnect = () => {
+            queryClient.invalidateQueries({ queryKey: ["posts_feed"] });
+        };
+        window.addEventListener("futora:reconnected", handleReconnect);
 
         const postChannel = supabase
             .channel("feed-updates")
@@ -165,7 +170,7 @@ export const useFeedLogic = () => {
                 setUnreadCount(prev => prev + 1);
             })
             .on("postgres_changes" as any, { event: "DELETE", schema: "public", table: "posts" }, (payload: { old: { id: string } }) => {
-                queryClient.setQueryData(["posts_feed"], (old: { pages: { posts: Post[] }[] } | undefined) => {
+                queryClient.setQueriesData({ queryKey: ["posts_feed"] }, (old: { pages: { posts: Post[] }[] } | undefined) => {
                     if (!old) return old;
                     return {
                         ...old,
@@ -182,7 +187,7 @@ export const useFeedLogic = () => {
             .channel("profile-sync")
             .on("postgres_changes", { event: "UPDATE", schema: "public", table: "profiles" },
                 throttle((payload: { new: { id: string; username: string; full_name: string; avatar_url: string | null } }) => {
-                    queryClient.setQueryData(["posts_feed"], (old: { pages: { posts: Post[] }[] } | undefined) => {
+                    queryClient.setQueriesData({ queryKey: ["posts_feed"] }, (old: { pages: { posts: Post[] }[] } | undefined) => {
                         if (!old) return old;
                         return {
                             ...old,
@@ -210,6 +215,7 @@ export const useFeedLogic = () => {
             .subscribe();
 
         return () => {
+            window.removeEventListener("futora:reconnected", handleReconnect);
             supabase.removeChannel(postChannel);
             supabase.removeChannel(profileChannel);
         };
@@ -218,8 +224,8 @@ export const useFeedLogic = () => {
     const toggleLike = useCallback(async (postId: string, isLiked: boolean) => {
         if (!user) return;
 
-        // Optimistic Update
-        queryClient.setQueryData(["posts_feed"], (old: { pages: { posts: Post[] }[] } | undefined) => {
+        // Optimistic Update across all active feed cache variants
+        queryClient.setQueriesData({ queryKey: ["posts_feed"] }, (old: { pages: { posts: Post[] }[] } | undefined) => {
             if (!old) return old;
             return {
                 ...old,
@@ -240,9 +246,11 @@ export const useFeedLogic = () => {
 
         try {
             if (isLiked) {
-                await supabase.from("likes").delete().eq("post_id", postId).eq("user_id", user.id);
+                const { error } = await supabase.from("likes").delete().eq("post_id", postId).eq("user_id", user.id);
+                if (error) throw error;
             } else {
-                await supabase.from("likes").insert({ post_id: postId, user_id: user.id });
+                const { error } = await supabase.from("likes").insert({ post_id: postId, user_id: user.id });
+                if (error) throw error;
             }
         } catch (error) {
             queryClient.invalidateQueries({ queryKey: ["posts_feed"] });
@@ -253,8 +261,8 @@ export const useFeedLogic = () => {
     const toggleSave = useCallback(async (postId: string, isSaved: boolean) => {
         if (!user) return;
 
-        // Optimistic Update
-        queryClient.setQueryData(["posts_feed"], (old: { pages: { posts: Post[] }[] } | undefined) => {
+        // Optimistic Update across all active feed cache variants
+        queryClient.setQueriesData({ queryKey: ["posts_feed"] }, (old: { pages: { posts: Post[] }[] } | undefined) => {
             if (!old) return old;
             return {
                 ...old,
@@ -275,9 +283,11 @@ export const useFeedLogic = () => {
 
         try {
             if (isSaved) {
-                await supabase.from("saves").delete().eq("post_id", postId).eq("user_id", user.id);
+                const { error } = await supabase.from("saves").delete().eq("post_id", postId).eq("user_id", user.id);
+                if (error) throw error;
             } else {
-                await supabase.from("saves").insert({ post_id: postId, user_id: user.id });
+                const { error } = await supabase.from("saves").insert({ post_id: postId, user_id: user.id });
+                if (error) throw error;
             }
         } catch (error) {
             queryClient.invalidateQueries({ queryKey: ["posts_feed"] });

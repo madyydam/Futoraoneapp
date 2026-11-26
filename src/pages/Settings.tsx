@@ -55,13 +55,23 @@ const Settings = () => {
         setUser(user);
         setEmail(user.email || "");
 
-        // Load settings from localStorage as fallback since settings column doesn't exist
-        const savedSettings = localStorage.getItem('futora_settings');
-        if (savedSettings) {
-            try {
-                setSettings(JSON.parse(savedSettings));
-            } catch (e) {
-                console.error("Error parsing settings:", e);
+        const { data: profileData } = await supabase
+            .from('profiles')
+            .select('settings')
+            .eq('id', user.id)
+            .maybeSingle();
+
+        if (profileData?.settings && typeof profileData.settings === 'object') {
+            setSettings(profileData.settings);
+            localStorage.setItem('futora_settings', JSON.stringify(profileData.settings));
+        } else {
+            const savedSettings = localStorage.getItem('futora_settings');
+            if (savedSettings) {
+                try {
+                    setSettings(JSON.parse(savedSettings));
+                } catch (e) {
+                    console.error("Error parsing settings:", e);
+                }
             }
         }
         setLoading(false);
@@ -79,6 +89,17 @@ const Settings = () => {
         setSettings(newSettings);
         localStorage.setItem('futora_settings', JSON.stringify(newSettings));
 
+        if (user?.id) {
+            const { error } = await supabase
+                .from('profiles')
+                .update({ settings: newSettings })
+                .eq('id', user.id);
+
+            if (error) {
+                console.error("Error persisting settings:", error);
+            }
+        }
+
         toast({ title: "Settings updated", description: "Your preferences have been saved." });
     };
 
@@ -87,8 +108,8 @@ const Settings = () => {
             toast({ title: "Error", description: "Passwords do not match", variant: "destructive" });
             return;
         }
-        if (password.length < 6) {
-            toast({ title: "Error", description: "Password must be at least 6 characters", variant: "destructive" });
+        if (password.length < 8) {
+            toast({ title: "Error", description: "Password must be at least 8 characters", variant: "destructive" });
             return;
         }
 

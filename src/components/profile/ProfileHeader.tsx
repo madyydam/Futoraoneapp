@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
+import { sanitizeExternalUrl } from "@/lib/security";
 
 // Social Link Button Component
 interface SocialLinkButtonProps {
@@ -39,8 +40,9 @@ const SocialLinkButton = memo<SocialLinkButtonProps>(({
     const handleClick = useCallback((e: React.MouseEvent) => {
         e.preventDefault();
 
-        if (url) {
-            window.open(url, '_blank', 'noopener,noreferrer');
+        const safeUrl = sanitizeExternalUrl(url);
+        if (safeUrl) {
+            window.open(safeUrl, '_blank', 'noopener,noreferrer');
         } else {
             if (isOwnProfile) {
                 onEditProfile();

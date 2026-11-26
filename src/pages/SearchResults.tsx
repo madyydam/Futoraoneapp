@@ -11,6 +11,7 @@ import { FollowButton } from "@/components/FollowButton";
 import { StartChatButton } from "@/components/StartChatButton";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
 import type { User } from "@supabase/supabase-js";
+import { sanitizePostgrestSearch } from "@/lib/security";
 
 interface SearchUser {
     id: string;
@@ -46,11 +47,17 @@ const SearchResults = () => {
     };
 
     const searchUsers = async (searchTerm: string) => {
+        const cleanTerm = sanitizePostgrestSearch(searchTerm);
+        if (!cleanTerm) {
+            setUsers([]);
+            setLoading(false);
+            return;
+        }
         setLoading(true);
         const { data, error } = await supabase
             .from("profiles")
             .select("id, username, full_name, avatar_url, bio, is_verified")
-            .or(`username.ilike.%${searchTerm}%,full_name.ilike.%${searchTerm}%`)
+            .or(`username.ilike.%${cleanTerm}%,full_name.ilike.%${cleanTerm}%`)
             .limit(20);
 
         if (!error && data) {

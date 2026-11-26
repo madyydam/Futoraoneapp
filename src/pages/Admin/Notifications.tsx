@@ -1,15 +1,18 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { AdminLayout } from "@/components/AdminLayout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Send, Bell, ShieldAlert, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
+import { Send, Bell, ShieldAlert, CheckCircle2, AlertCircle, Loader2, Mail } from "lucide-react";
 import { sendBulkNotifications } from "@/services/notification.service";
+import { sendAdminTestEmail, triggerFiveDayEmailDigest } from "@/services/email.service";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useAuth } from "@/hooks/useAuth";
 
 const AdminNotifications = () => {
+    const { user: currentAdmin } = useAuth();
     // Simple Badge component since we might not have it or want a custom one
     const Badge = ({ children, className }: { children: React.ReactNode, className?: string }) => (
         <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider text-white ${className}`}>
@@ -21,6 +24,14 @@ const AdminNotifications = () => {
     const [body, setBody] = useState("");
     const [loading, setLoading] = useState(false);
     const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle');
+    const [testEmailTo, setTestEmailTo] = useState("");
+    const [emailLoading, setEmailLoading] = useState(false);
+
+    useEffect(() => {
+        if (currentAdmin?.email && !testEmailTo) {
+            setTestEmailTo(currentAdmin.email);
+        }
+    }, [currentAdmin?.email, testEmailTo]);
 
     const handleBroadcast = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -36,31 +47,36 @@ const AdminNotifications = () => {
         setStatus('idle');
 
         try {
-            // 1. Fetch all user IDs who have an FCM token
-            const { data: profiles, error: fetchError } = await supabase
-                .from('profiles')
-                .select('id')
-                .not('fcm_token', 'is', null);
+            const { data: pushUsers, error: fetchError } = await supabase
+                .from('user_push_tokens' as any)
+                .select('user_id');
 
             if (fetchError) throw fetchError;
 
-            if (!profiles || profiles.length === 0) {
+            if (!pushUsers || pushUsers.length === 0) {
                 toast.error("No users found with active push tokens.");
                 setLoading(false);
                 return;
             }
 
-            const userIds = profiles.map(p => p.id);
+            const userIds = (pushUsers as { user_id: string }[]).map(p => p.user_id);
 
-            // 2. Send Bulk Notifications
             await sendBulkNotifications({
                 userIds,
                 title,
                 body,
+                isBroadcast: true,
                 data: {
                     type: 'broadcast',
                     sent_at: new Date().toISOString()
                 }
+            });
+
+            await (supabase.rpc as any)('log_admin_action', {
+                p_action: 'BROADCAST_PUSH',
+                p_target_type: 'push_notification',
+                p_target_id: String(userIds.length),
+                p_details: { title, recipient_count: userIds.length },
             });
 
             toast.success(`Broadcast sent to ${userIds.length} users! 🚀`);
@@ -144,14 +160,14 @@ const AdminNotifications = () => {
                                             const { data: { user } } = await supabase.auth.getUser();
                                             if (!user) return toast.error("Log in first");
 
-                                            // Get my own token
-                                            const { data: profile } = await supabase
-                                                .from('profiles')
+                                            // Verify current admin has an active push token saved in owner-only table
+                                            const { data: pushToken } = await supabase
+                                                .from('user_push_tokens' as never)
                                                 .select('fcm_token')
-                                                .eq('id', user.id)
-                                                .single();
+                                                .eq('user_id', user.id)
+                                                .maybeSingle();
 
-                                            if (!profile?.fcm_token) {
+                                            if (!(pushToken as { fcm_token?: string } | null)?.fcm_token) {
                                                 return toast.error("Your device has no token saved. Refresh app.");
                                             }
 
@@ -170,6 +186,62 @@ const AdminNotifications = () => {
                                     className="w-full text-xs font-bold gap-2"
                                 >
                                     <Bell size={14} /> Test My Device
+                                </Button>
+                            </CardContent>
+                        </Card>
+
+                        <Card className="border-slate-200 bg-indigo-50/50">
+                            <CardHeader className="pb-2">
+                                <CardTitle className="text-sm font-bold text-indigo-900 uppercase flex items-center gap-2">
+                                    <Mail size={14} /> Cloudflare SMTP (One)
+                                </CardTitle>
+                                <CardDescription className="text-xs">
+                                    Sender: sales@futoragroup.in via smtp.mx.cloudflare.net:465
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-3">
+                                <Input
+                                    type="email"
+                                    placeholder="recipient@domain.com"
+                                    value={testEmailTo}
+                                    onChange={(e) => setTestEmailTo(e.target.value)}
+                                    className="h-9 text-xs bg-white"
+                                />
+                                <Button
+                                    disabled={emailLoading}
+                                    onClick={async () => {
+                                        setEmailLoading(true);
+                                        try {
+                                            const res = await sendAdminTestEmail(testEmailTo.trim() || undefined);
+                                            toast.success(`Test email sent to ${res.to}`);
+                                        } catch (err) {
+                                            toast.error(err instanceof Error ? err.message : "Failed to send SMTP test");
+                                        } finally {
+                                            setEmailLoading(false);
+                                        }
+                                    }}
+                                    variant="outline"
+                                    className="w-full text-xs font-bold gap-2"
+                                >
+                                    <Mail size={14} /> Send SMTP Test Email
+                                </Button>
+                                <Button
+                                    disabled={emailLoading}
+                                    onClick={async () => {
+                                        setEmailLoading(true);
+                                        try {
+                                            const res = await triggerFiveDayEmailDigest();
+                                            toast.success(`5-day digest: ${res.sent} sent, ${res.failed} failed`);
+                                        } catch (err) {
+                                            toast.error(err instanceof Error ? err.message : "Failed to run 5-day digest");
+                                        } finally {
+                                            setEmailLoading(false);
+                                        }
+                                    }}
+                                    variant="default"
+                                    className="w-full text-xs font-bold gap-2"
+                                >
+                                    <Send size={14} /> Run 5-Day Email Digest
                                 </Button>
                             </CardContent>
                         </Card>

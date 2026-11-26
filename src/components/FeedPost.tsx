@@ -105,8 +105,6 @@ export const FeedPost = memo(({ post, currentUser, onLike, onSave, onShare, onDe
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ delay: Math.min(index * 0.05, 0.3), type: "spring", stiffness: 80, damping: 20 }}
       className="group mb-6"
-      style={{ willChange: "transform, opacity", contentVisibility: "auto" }}
-      layout="position"
     >
       <Card
         className="overflow-hidden border border-border shadow-sm hover:shadow-lg transition-all duration-300 bg-card rounded-[1.25rem] ring-1 ring-black/5 dark:ring-white/5"
@@ -192,14 +190,21 @@ export const FeedPost = memo(({ post, currentUser, onLike, onSave, onShare, onDe
     </motion.div>
   );
 }, (prevProps, nextProps) => {
-  // Custom deep comparison for maximum performance
+  // Custom deep comparison for maximum performance while preserving edit/profile updates
   return (
     prevProps.post.id === nextProps.post.id &&
+    prevProps.post.content === nextProps.post.content &&
+    prevProps.post.image_url === nextProps.post.image_url &&
+    prevProps.post.video_url === nextProps.post.video_url &&
+    prevProps.post.updated_at === nextProps.post.updated_at &&
+    prevProps.post.profiles?.avatar_url === nextProps.post.profiles?.avatar_url &&
+    prevProps.post.profiles?.full_name === nextProps.post.profiles?.full_name &&
+    prevProps.post.profiles?.is_verified === nextProps.post.profiles?.is_verified &&
     prevProps.post.likes.length === nextProps.post.likes.length &&
     prevProps.post.comments.length === nextProps.post.comments.length &&
     prevProps.post.saves?.length === nextProps.post.saves?.length &&
     prevProps.currentUser?.id === nextProps.currentUser?.id &&
-    prevProps.post.created_at === nextProps.post.created_at // Check for content updates
+    prevProps.post.created_at === nextProps.post.created_at
   );
 });
 

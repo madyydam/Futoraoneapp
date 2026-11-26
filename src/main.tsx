@@ -1,25 +1,39 @@
 import { createRoot } from "react-dom/client";
 import * as Sentry from "@sentry/react";
+import { HelmetProvider } from "react-helmet-async";
 import App from "./App.tsx";
 import "./index.css";
 
-Sentry.init({
-    dsn: import.meta.env.VITE_SENTRY_DSN, // Ensure you add VITE_SENTRY_DSN to your .env file
-    integrations: [
-        Sentry.browserTracingIntegration(),
-        Sentry.replayIntegration(),
-    ],
-    // Tracing
-    tracesSampleRate: 1.0, //  Capture 100% of the transactions
-    // Session Replay
-    replaysSessionSampleRate: 1.0,
-    replaysOnErrorSampleRate: 1.0,
-});
+const sentryDsn = import.meta.env.VITE_SENTRY_DSN;
 
-import { HelmetProvider } from "react-helmet-async";
+if (sentryDsn) {
+  Sentry.init({
+    dsn: sentryDsn,
+    environment: import.meta.env.MODE,
+    sendDefaultPii: false,
+    integrations: [
+      Sentry.browserTracingIntegration(),
+      Sentry.replayIntegration({
+        maskAllText: true,
+        blockAllMedia: true,
+      }),
+    ],
+    tracesSampleRate: import.meta.env.PROD ? 0.1 : 1.0,
+    replaysSessionSampleRate: 0.0,
+    replaysOnErrorSampleRate: import.meta.env.PROD ? 0.5 : 0.0,
+    beforeSend(event) {
+      if (event.request?.headers) {
+        delete event.request.headers.Authorization;
+        delete event.request.headers.authorization;
+        delete event.request.headers.apikey;
+      }
+      return event;
+    },
+  });
+}
 
 createRoot(document.getElementById("root")!).render(
-    <HelmetProvider>
-        <App />
-    </HelmetProvider>
+  <HelmetProvider>
+    <App />
+  </HelmetProvider>
 );

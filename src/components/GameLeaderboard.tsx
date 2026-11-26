@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent } from "@/components/ui/card";
@@ -36,14 +36,7 @@ const GameLeaderboard = ({ currentUserId, isWidget = true, variant = "global" }:
     const [timeFilter, setTimeFilter] = useState<"all" | "week" | "month">("all");
     const [userRank, setUserRank] = useState<number | null>(null);
 
-    useEffect(() => {
-        fetchLeaderboard();
-        const handleUpdate = () => fetchLeaderboard();
-        window.addEventListener('leaderboard-update', handleUpdate);
-        return () => window.removeEventListener('leaderboard-update', handleUpdate);
-    }, [variant, timeFilter]);
-
-    const fetchLeaderboard = async () => {
+    const fetchLeaderboard = useCallback(async () => {
         setLoading(true);
         try {
             let query = supabase
@@ -86,7 +79,14 @@ const GameLeaderboard = ({ currentUserId, isWidget = true, variant = "global" }:
         } finally {
             setLoading(false);
         }
-    };
+    }, [timeFilter, variant]);
+
+    useEffect(() => {
+        fetchLeaderboard();
+        const handleUpdate = () => fetchLeaderboard();
+        window.addEventListener('leaderboard-update', handleUpdate);
+        return () => window.removeEventListener('leaderboard-update', handleUpdate);
+    }, [fetchLeaderboard]);
 
     useEffect(() => {
         if (currentUserId) {

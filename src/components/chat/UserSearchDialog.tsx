@@ -6,6 +6,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Search, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useStartChat } from "@/hooks/useStartChat";
+import { sanitizePostgrestSearch } from "@/lib/security";
 
 interface Profile {
     id: string;
@@ -28,13 +29,14 @@ export function UserSearchDialog({ open, onOpenChange, currentUserId }: UserSear
 
     const handleSearch = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!query.trim()) return;
+        const cleanQuery = sanitizePostgrestSearch(query);
+        if (!cleanQuery) return;
 
         setSearching(true);
         const { data, error } = await supabase
             .from("profiles")
-            .select("*")
-            .or(`username.ilike.%${query}%,full_name.ilike.%${query}%`)
+            .select("id, username, full_name, avatar_url")
+            .or(`username.ilike.%${cleanQuery}%,full_name.ilike.%${cleanQuery}%`)
             .neq("id", currentUserId)
             .limit(10);
 

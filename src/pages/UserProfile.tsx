@@ -193,11 +193,16 @@ const UserProfile = () => {
                 .from('profiles')
                 .update({
                     is_verified: true,
-                    verification_category: 'admin'
+                    verification_category: 'verified'
                 })
                 .eq('id', userId);
 
             if (error) throw error;
+            await (supabase.rpc as any)('log_admin_action', {
+                p_action: 'VERIFY_USER',
+                p_target_type: 'profile',
+                p_target_id: userId,
+            });
 
             toast({
                 title: "✅ User Verified!",
@@ -206,7 +211,7 @@ const UserProfile = () => {
 
             const { data: updatedProfile } = await supabase
                 .from("profiles")
-                .select("*")
+                .select("id, username, full_name, avatar_url, bio, location, github_url, linkedin_url, portfolio_url, tech_skills, verification_category, is_verified, theme_color, vibe_mood, badges")
                 .eq("id", userId)
                 .single();
 
@@ -236,6 +241,11 @@ const UserProfile = () => {
                 .eq('id', userId);
 
             if (error) throw error;
+            await (supabase.rpc as any)('log_admin_action', {
+                p_action: 'UNVERIFY_USER',
+                p_target_type: 'profile',
+                p_target_id: userId,
+            });
 
             toast({
                 title: "Verification Removed",
@@ -244,7 +254,7 @@ const UserProfile = () => {
 
             const { data: updatedProfile } = await supabase
                 .from("profiles")
-                .select("*")
+                .select("id, username, full_name, avatar_url, bio, location, github_url, linkedin_url, portfolio_url, tech_skills, verification_category, is_verified, theme_color, vibe_mood, badges")
                 .eq("id", userId)
                 .single();
 
@@ -262,7 +272,7 @@ const UserProfile = () => {
     };
 
     const handleSaveVibe = async (vibe: { mood: string; color: string; status: string }) => {
-        if (!userId) return;
+        if (!userId || !currentUser || currentUser.id !== userId) return;
 
         try {
             const { error } = await supabase
@@ -310,7 +320,7 @@ const UserProfile = () => {
 
         const { data: profileData, error: profileError } = await supabase
             .from("profiles")
-            .select("*")
+            .select("id, username, full_name, avatar_url, bio, location, github_url, linkedin_url, portfolio_url, tech_skills, verification_category, is_verified, theme_color, vibe_mood, badges")
             .eq("id", userId)
             .single();
 
@@ -324,11 +334,6 @@ const UserProfile = () => {
             return;
         }
 
-        // Sanu's special profile customization
-        const isSanu = profileData.username?.toLowerCase() === 'sanu';
-
-
-
         const enhancedProfile: Profile = {
             id: profileData.id,
             username: profileData.username,
@@ -340,28 +345,14 @@ const UserProfile = () => {
             linkedin_url: profileData.linkedin_url,
             portfolio_url: profileData.portfolio_url,
             tech_skills: profileData.tech_skills,
-            verification_category: isSanu ? 'creator' : profileData.verification_category,
-            is_verified: isSanu ? true : profileData.is_verified,
-            theme_color: isSanu ? '#FFE6EA' : profileData.theme_color,
+            verification_category: profileData.verification_category,
+            is_verified: profileData.is_verified,
+            theme_color: profileData.theme_color,
             vibe_mood: (profileData as any).vibe_mood || '😎',
             vibe_status: profileData.bio,
         };
 
-        // Fetch wallet balance
-        let walletBalance = 0;
-        const { data: walletData } = await supabase
-            .from('native_wallets')
-            .select('balance')
-            .eq('user_id', userId)
-            .maybeSingle();
-
-        if (walletData) {
-            walletBalance = walletData.balance;
-        }
-
-        // Extending the local Profile interface to include balance
-        const visibleProfile = { ...enhancedProfile, balance: walletBalance };
-        setProfile(visibleProfile);
+        setProfile(enhancedProfile);
 
         // Fetch all data in parallel for better performance
         const [projectsResult, postsResult] = await Promise.all([

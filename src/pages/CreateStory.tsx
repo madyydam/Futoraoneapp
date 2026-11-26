@@ -39,6 +39,14 @@ const CreateStory = () => {
         });
         return;
       }
+      if (file.size > 25 * 1024 * 1024) {
+        toast({
+          title: "File too large",
+          description: "Story media must be under 25MB",
+          variant: "destructive",
+        });
+        return;
+      }
       setMediaFile(file);
       setPreviewUrl(URL.createObjectURL(file));
     }
@@ -55,20 +63,22 @@ const CreateStory = () => {
     }
 
     setUploading(true);
+    let uploadedPath: string | null = null;
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
       // Upload media to storage
-      const fileExt = mediaFile.name.split(".").pop();
-      const fileName = `${user.id}/${Date.now()}.${fileExt}`;
+      const fileExt = mediaFile.name.split(".").pop() || "bin";
+      const fileName = `${user.id}/${crypto.randomUUID()}.${fileExt}`;
 
-      const { error: uploadError, data: uploadData } = await supabase.storage
+      const { error: uploadError } = await supabase.storage
         .from("stories")
         .upload(fileName, mediaFile);
 
       if (uploadError) throw uploadError;
+      uploadedPath = fileName;
 
       const { data: { publicUrl } } = supabase.storage
         .from("stories")
@@ -95,6 +105,9 @@ const CreateStory = () => {
 
       navigate("/feed");
     } catch (error: any) {
+      if (uploadedPath) {
+        await supabase.storage.from("stories").remove([uploadedPath]).catch(() => {});
+      }
       console.error("Error creating story:", error);
       toast({
         title: "Error",

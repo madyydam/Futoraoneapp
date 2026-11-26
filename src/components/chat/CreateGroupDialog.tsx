@@ -170,6 +170,11 @@ export function CreateGroupDialog({ onGroupCreated, trigger }: CreateGroupDialog
     const handleIconChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
+        const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+        if (!allowedTypes.includes(file.type) || file.size > 5 * 1024 * 1024) {
+            toast.error("Please select a valid image under 5 MB");
+            return;
+        }
         setIconFile(file);
         const reader = new FileReader();
         reader.onloadend = () => setIconPreview(reader.result as string);
@@ -179,6 +184,8 @@ export function CreateGroupDialog({ onGroupCreated, trigger }: CreateGroupDialog
     const handleCreate = async () => {
         if (!name.trim()) return;
         setLoading(true);
+        let uploadedPath: string | null = null;
+        let createdGroupId: string | null = null;
 
         try {
             const { data: { user } } = await supabase.auth.getUser();
@@ -195,12 +202,12 @@ export function CreateGroupDialog({ onGroupCreated, trigger }: CreateGroupDialog
                 const ext = compressed.name.split('.').pop();
                 const path = `${user.id}/group_${Date.now()}.${ext}`;
                 const { error: uploadErr } = await supabase.storage
-                    .from('post_images').upload(path, compressed, { upsert: true, contentType: compressed.type });
+                    .from('group-avatars').upload(path, compressed, { upsert: true, contentType: compressed.type });
 
-                if (!uploadErr) {
-                    const { data: { publicUrl } } = supabase.storage.from('post_images').getPublicUrl(path);
-                    avatarUrl = publicUrl;
-                }
+                if (uploadErr) throw uploadErr;
+                uploadedPath = path;
+                const { data: { publicUrl } } = supabase.storage.from('group-avatars').getPublicUrl(path);
+                avatarUrl = publicUrl;
             }
 
             // Create group
@@ -216,11 +223,12 @@ export function CreateGroupDialog({ onGroupCreated, trigger }: CreateGroupDialog
                 .select().single();
 
             if (groupErr) throw groupErr;
+            createdGroupId = (group as any).id;
 
             // Add creator as admin
             const { error: memberErr } = await supabase
                 .from('group_members' as any)
-                .insert({ group_id: (group as any).id, user_id: user.id, role: 'admin' });
+                .insert({ group_id: createdGroupId, user_id: user.id, role: 'admin' });
 
             if (memberErr) throw memberErr;
 
@@ -229,6 +237,13 @@ export function CreateGroupDialog({ onGroupCreated, trigger }: CreateGroupDialog
             resetForm();
             onGroupCreated?.();
         } catch (err) {
+            // Roll back partial storage/group artifacts on failure
+            if (createdGroupId) {
+                await supabase.from('groups' as any).delete().eq('id', createdGroupId);
+            }
+            if (uploadedPath) {
+                await supabase.storage.from('group-avatars').remove([uploadedPath]);
+            }
             console.error('Error creating group:', err);
             toast.error('Failed to create group');
         } finally {

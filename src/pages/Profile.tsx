@@ -26,6 +26,8 @@ import { CartoonLoader } from "@/components/CartoonLoader";
 import { AchievementShowcase } from "@/components/AchievementShowcase";
 import { ProfileStatsCard } from "@/components/ProfileStatsCard";
 import { WalletCard } from "@/components/rewards/WalletCard";
+import { useAuth } from "@/hooks/useAuth";
+import { sanitizeExternalUrl } from "@/lib/security";
 
 interface Profile {
   id: string;
@@ -85,9 +87,15 @@ const SocialLinkButton = memo(({
   const handleClick = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
 
-    if (url) {
-      // If URL exists, open it
-      window.open(url, '_blank', 'noopener,noreferrer');
+    const safeUrl = sanitizeExternalUrl(url);
+    if (safeUrl) {
+      window.open(safeUrl, '_blank', 'noopener,noreferrer');
+    } else if (url) {
+      toast({
+        title: "Invalid URL",
+        description: "Only http:// and https:// links are allowed.",
+        variant: "destructive",
+      });
     } else {
       // If URL doesn't exist
       if (isOwnProfile) {
@@ -126,6 +134,7 @@ const Profile = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { isAdmin } = useIsAdmin();
+  const { signOut } = useAuth();
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -164,7 +173,7 @@ const Profile = () => {
         await Promise.all([
           supabase
             .from("profiles")
-            .select("*")
+            .select("id, username, full_name, avatar_url, bio, location, github_url, linkedin_url, portfolio_url, tech_skills, verification_category, is_verified, theme_color, vibe_mood, xp, level, badges, is_admin, trust_score, is_banned")
             .eq("id", user.id)
             .single(),
           supabase
@@ -187,17 +196,7 @@ const Profile = () => {
             .eq("follower_id", user.id)
         ]);
 
-      let profile = profileResult.data as unknown as Profile;
-
-      // Apply custom theme for @sanu
-      if (profile?.username?.toLowerCase() === 'sanu') {
-        profile = {
-          ...profile,
-          verification_category: 'creator',
-          theme_color: '#FFE6EA',
-          is_verified: true
-        };
-      }
+      const profile = profileResult.data as unknown as Profile;
 
       return {
         profile,
@@ -243,10 +242,10 @@ const Profile = () => {
   }, []);
 
   const confirmLogout = useCallback(async () => {
-    await supabase.auth.signOut();
+    await signOut();
     toast({ title: "Logged out successfully", description: "See you next time! 👋" });
     navigate("/");
-  }, [toast, navigate]);
+  }, [signOut, toast, navigate]);
 
   if (loading || isLoading) {
     return <CartoonLoader />;

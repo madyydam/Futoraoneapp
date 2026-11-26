@@ -52,6 +52,11 @@ const ReportsPage = () => {
                 .eq("id", reportId);
 
             if (error) throw error;
+            await (supabase.rpc as any)("log_admin_action", {
+                p_action: `REPORT_${status.toUpperCase()}`,
+                p_target_type: "report",
+                p_target_id: reportId,
+            });
         },
         onSuccess: (_, variables) => {
             toast({ title: `Report ${variables.status}` });

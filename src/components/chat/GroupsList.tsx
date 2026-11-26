@@ -233,7 +233,7 @@ export function GroupsList({ currentUserId, searchQuery = '' }: GroupsListProps)
             const joinedIds = Object.keys(membershipMap);
 
             // 2. Fetch all visible groups (public + joined)
-            let query = supabase
+            const query = supabase
                 .from('groups')
                 .select('id, name, description, avatar_url, is_public, created_by, created_at, updated_at')
                 .order('updated_at', { ascending: false });
@@ -252,58 +252,62 @@ export function GroupsList({ currentUserId, searchQuery = '' }: GroupsListProps)
             }
 
             const groupIds = visibleGroups.map((g: any) => g.id);
+            const joinedSet = new Set(joinedIds);
 
-            // 3. Member counts per group
-            const memberCountPromises = groupIds.map(id =>
+            // 3 & 4 & 5. Batch member counts and recent messages in 2 parallel queries instead of 3*N queries
+            const [{ data: allMembers }, { data: recentMessages }] = await Promise.all([
                 supabase
                     .from('group_members')
-                    .select('*', { count: 'exact', head: true })
-                    .eq('group_id', id)
-            );
-
-            // 4. Last message per group
-            const lastMsgPromises = groupIds.map(id =>
+                    .select('group_id')
+                    .in('group_id', groupIds),
                 supabase
                     .from('messages')
-                    .select('content, created_at')
-                    .eq('group_id', id)
+                    .select('group_id, content, created_at, is_read, sender_id')
+                    .in('group_id', groupIds)
                     .order('created_at', { ascending: false })
-                    .limit(1)
-                    .maybeSingle()
-            );
-
-            // 5. Unread counts per group (only for joined groups)
-            const unreadPromises = groupIds.map(id =>
-                joinedIds.includes(id)
-                    ? supabase
-                        .from('messages')
-                        .select('*', { count: 'exact', head: true })
-                        .eq('group_id', id)
-                        .eq('is_read', false)
-                        .neq('sender_id', currentUserId)
-                    : Promise.resolve({ count: 0 })
-            );
-
-            const [memberCounts, lastMsgs, unreadCounts] = await Promise.all([
-                Promise.all(memberCountPromises),
-                Promise.all(lastMsgPromises),
-                Promise.all(unreadPromises),
+                    .limit(Math.max(groupIds.length * 15, 100)),
             ]);
 
-            const enriched: GroupItem[] = visibleGroups.map((g: any, i: number) => ({
-                id: g.id,
-                name: g.name,
-                description: g.description || '',
-                avatar_url: g.avatar_url,
-                is_public: g.is_public,
-                is_verified: (g as any).is_verified ?? false,
-                member_count: memberCounts[i]?.count ?? 0,
-                unread_count: unreadCounts[i]?.count ?? 0,
-                last_message: lastMsgs[i]?.data?.content ?? null,
-                last_active: lastMsgs[i]?.data?.created_at ?? g.updated_at,
-                role: membershipMap[g.id] ?? null,
-                created_by: g.created_by,
-            }));
+            const memberCountMap = new Map<string, number>();
+            (allMembers || []).forEach((m: { group_id: string }) => {
+                memberCountMap.set(m.group_id, (memberCountMap.get(m.group_id) || 0) + 1);
+            });
+
+            const lastMsgMap = new Map<string, { content: string | null; created_at: string }>();
+            const unreadMap = new Map<string, number>();
+            (recentMessages || []).forEach((msg: {
+                group_id: string | null;
+                content: string | null;
+                created_at: string;
+                is_read: boolean | null;
+                sender_id: string;
+            }) => {
+                if (!msg.group_id) return;
+                if (!lastMsgMap.has(msg.group_id)) {
+                    lastMsgMap.set(msg.group_id, { content: msg.content, created_at: msg.created_at });
+                }
+                if (joinedSet.has(msg.group_id) && msg.is_read === false && msg.sender_id !== currentUserId) {
+                    unreadMap.set(msg.group_id, (unreadMap.get(msg.group_id) || 0) + 1);
+                }
+            });
+
+            const enriched: GroupItem[] = visibleGroups.map((g: any) => {
+                const lastMsg = lastMsgMap.get(g.id);
+                return {
+                    id: g.id,
+                    name: g.name,
+                    description: g.description || '',
+                    avatar_url: g.avatar_url,
+                    is_public: g.is_public,
+                    is_verified: (g as any).is_verified ?? false,
+                    member_count: memberCountMap.get(g.id) ?? 0,
+                    unread_count: unreadMap.get(g.id) ?? 0,
+                    last_message: lastMsg?.content ?? null,
+                    last_active: lastMsg?.created_at ?? g.updated_at,
+                    role: membershipMap[g.id] ?? null,
+                    created_by: g.created_by,
+                };
+            });
 
             // Sort: joined groups first by last active, then discover
             enriched.sort((a, b) => {
@@ -324,13 +328,24 @@ export function GroupsList({ currentUserId, searchQuery = '' }: GroupsListProps)
     useEffect(() => {
         fetchGroups();
 
+        let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+        const debouncedFetch = () => {
+            if (debounceTimer) clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+                fetchGroups();
+            }, 400);
+        };
+
         const channel = supabase.channel('groups_list_realtime')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'groups' }, fetchGroups)
-            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, fetchGroups)
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'group_members', filter: `user_id=eq.${currentUserId}` }, fetchGroups)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'groups' }, debouncedFetch)
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, debouncedFetch)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'group_members', filter: `user_id=eq.${currentUserId}` }, debouncedFetch)
             .subscribe();
 
-        return () => { supabase.removeChannel(channel); };
+        return () => {
+            if (debounceTimer) clearTimeout(debounceTimer);
+            supabase.removeChannel(channel);
+        };
     }, [currentUserId, fetchGroups]);
 
     const handleJoin = useCallback(async (groupId: string) => {

@@ -208,6 +208,11 @@ const ModerationPage = () => {
         mutationFn: async (postId: string) => {
             const { error } = await supabase.from("posts").delete().eq("id", postId);
             if (error) throw error;
+            await (supabase.rpc as any)("log_admin_action", {
+                p_action: "DELETE_POST",
+                p_target_type: "post",
+                p_target_id: postId,
+            });
         },
         onSuccess: () => {
             toast({ title: "Post Deleted" });
@@ -219,6 +224,11 @@ const ModerationPage = () => {
         mutationFn: async (projectId: string) => {
             const { error } = await supabase.from("projects").delete().eq("id", projectId);
             if (error) throw error;
+            await (supabase.rpc as any)("log_admin_action", {
+                p_action: "DELETE_PROJECT",
+                p_target_type: "project",
+                p_target_id: projectId,
+            });
         },
         onSuccess: () => {
             toast({ title: "Project Deleted" });
@@ -230,6 +240,11 @@ const ModerationPage = () => {
         mutationFn: async (commentId: string) => {
             const { error } = await supabase.from("comments").delete().eq("id", commentId);
             if (error) throw error;
+            await (supabase.rpc as any)("log_admin_action", {
+                p_action: "DELETE_COMMENT",
+                p_target_type: "comment",
+                p_target_id: commentId,
+            });
         },
         onSuccess: () => {
             toast({ title: "Comment Deleted" });

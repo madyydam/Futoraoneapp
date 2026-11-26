@@ -10,6 +10,7 @@ import { Upload, Image as ImageIcon } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import imageCompression from 'browser-image-compression';
 import { useNavigate } from "react-router-dom";
+import { sanitizeExternalUrl } from "@/lib/security";
 
 interface Profile {
   id: string;
@@ -57,21 +58,30 @@ const EditProfileDialogComponent = ({ open, onOpenChange, profile, userId, onUpd
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    const uploadedAvatarPaths: string[] = [];
+    const uploadedBannerPaths: string[] = [];
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
+      // Validate external links to prevent javascript:/data: XSS
+      const urlFields = [
+        { label: "GitHub URL", raw: formData.github_url },
+        { label: "LinkedIn URL", raw: formData.linkedin_url },
+        { label: "Instagram URL", raw: formData.instagram_url },
+        { label: "Portfolio URL", raw: formData.portfolio_url },
+      ];
+      for (const field of urlFields) {
+        if (field.raw.trim() && !sanitizeExternalUrl(field.raw)) {
+          throw new Error(`${field.label} must start with https:// or http://`);
+        }
+      }
+
       let avatarUrl = profile?.avatar_url;
 
-      // Upload avatar file if changed
       if (avatarFile) {
-        const options = {
-          maxSizeMB: 0.5,
-          maxWidthOrHeight: 500,
-          useWebWorker: true,
-        };
-
+        const options = { maxSizeMB: 0.5, maxWidthOrHeight: 500, useWebWorker: true };
         let compressedFile = avatarFile;
         try {
           compressedFile = await imageCompression(avatarFile, options);
@@ -79,39 +89,24 @@ const EditProfileDialogComponent = ({ open, onOpenChange, profile, userId, onUpd
           console.error("Avatar compression failed:", error);
         }
 
-        const fileExt = compressedFile.name.split('.').pop();
-        // Standardized path: bucket/[userId]/[filename]
+        const fileExt = compressedFile.name.split('.').pop() || 'jpg';
         const fileName = `${user.id}/avatar_${Date.now()}.${fileExt}`;
 
         const { error: uploadError } = await supabase.storage
-          .from('post_images')
-          .upload(fileName, compressedFile, {
-            upsert: true,
-            contentType: compressedFile.type
-          });
+          .from('avatars')
+          .upload(fileName, compressedFile, { upsert: true, contentType: compressedFile.type });
 
-        if (uploadError) {
-          console.error('Avatar upload error:', uploadError);
-          throw new Error(`Avatar upload failed: ${uploadError.message}`);
-        }
+        if (uploadError) throw new Error(`Avatar upload failed: ${uploadError.message}`);
+        uploadedAvatarPaths.push(fileName);
 
-        const { data: { publicUrl } } = supabase.storage
-          .from('post_images')
-          .getPublicUrl(fileName);
-
+        const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(fileName);
         avatarUrl = publicUrl;
       }
 
       let bannerUrl = profile?.banner_url;
 
-      // Upload banner if changed
       if (bannerFile) {
-        const options = {
-          maxSizeMB: 1,
-          maxWidthOrHeight: 1500,
-          useWebWorker: true,
-        };
-
+        const options = { maxSizeMB: 1, maxWidthOrHeight: 1500, useWebWorker: true };
         let compressedFile = bannerFile;
         try {
           compressedFile = await imageCompression(bannerFile, options);
@@ -119,45 +114,37 @@ const EditProfileDialogComponent = ({ open, onOpenChange, profile, userId, onUpd
           console.error("Banner compression failed:", error);
         }
 
-        const fileExt = compressedFile.name.split('.').pop();
+        const fileExt = compressedFile.name.split('.').pop() || 'jpg';
         const fileName = `${user.id}/banner_${Date.now()}.${fileExt}`;
 
         const { error: uploadError } = await supabase.storage
           .from('post_images')
-          .upload(fileName, compressedFile, {
-            upsert: true,
-            contentType: compressedFile.type
-          });
+          .upload(fileName, compressedFile, { upsert: true, contentType: compressedFile.type });
 
-        if (uploadError) {
-          console.error('Banner upload error:', uploadError);
-          throw new Error(`Banner upload failed: ${uploadError.message}`);
-        }
+        if (uploadError) throw new Error(`Banner upload failed: ${uploadError.message}`);
+        uploadedBannerPaths.push(fileName);
 
-        const { data: { publicUrl } } = supabase.storage
-          .from('post_images')
-          .getPublicUrl(fileName);
-
+        const { data: { publicUrl } } = supabase.storage.from('post_images').getPublicUrl(fileName);
         bannerUrl = publicUrl;
       }
 
       const { error } = await supabase
         .from('profiles')
-        .upsert({
-          id: user.id,
-          full_name: formData.full_name,
-          username: formData.username,
+        .update({
+          full_name: formData.full_name.trim(),
+          username: formData.username.trim(),
           bio: formData.bio,
           location: formData.location,
-          github_url: formData.github_url,
-          linkedin_url: formData.linkedin_url,
-          instagram_url: formData.instagram_url,
-          portfolio_url: formData.portfolio_url,
+          github_url: sanitizeExternalUrl(formData.github_url) || null,
+          linkedin_url: sanitizeExternalUrl(formData.linkedin_url) || null,
+          instagram_url: sanitizeExternalUrl(formData.instagram_url) || null,
+          portfolio_url: sanitizeExternalUrl(formData.portfolio_url) || null,
           tech_skills: formData.tech_skills.split(',').map(s => s.trim()).filter(Boolean),
           avatar_url: avatarUrl,
           banner_url: bannerUrl,
           digest_mode: formData.digest_mode,
-        });
+        })
+        .eq('id', user.id);
 
       if (error) throw error;
 
@@ -169,6 +156,12 @@ const EditProfileDialogComponent = ({ open, onOpenChange, profile, userId, onUpd
       onUpdate();
       onOpenChange(false);
     } catch (error) {
+      if (uploadedAvatarPaths.length) {
+        await supabase.storage.from('avatars').remove(uploadedAvatarPaths).catch(() => {});
+      }
+      if (uploadedBannerPaths.length) {
+        await supabase.storage.from('post_images').remove(uploadedBannerPaths).catch(() => {});
+      }
       toast({
         title: "Error",
         description: (error as Error).message,

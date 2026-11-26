@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useLocation } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
 
 export type BroadcastPopupData = {
     id: string;
@@ -9,36 +10,44 @@ export type BroadcastPopupData = {
     type: string;
     audience: string;
     created_at: string;
+    is_active?: boolean;
+};
+
+const isNewUser = (createdAt: string) => {
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    return new Date(createdAt) > thirtyDaysAgo;
 };
 
 export const useBroadcastPopup = () => {
     const [popup, setPopup] = useState<BroadcastPopupData | null>(null);
     const location = useLocation();
+    const { userId } = useAuth();
+    const pathnameRef = useRef(location.pathname);
 
-    const fetchLatestUnseenPopup = async () => {
+    useEffect(() => {
+        pathnameRef.current = location.pathname;
+    }, [location.pathname]);
+
+    const fetchLatestUnseenPopup = useCallback(async () => {
+        if (!userId) {
+            setPopup(null);
+            return;
+        }
         try {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) return;
-
             // Get user's signup date
             const { data: profile } = await supabase
                 .from('profiles')
                 .select('created_at')
-                .eq('id', user.id)
+                .eq('id', userId)
                 .single();
 
             if (!profile) return;
 
-            // Fetch the latest active popup that:
-            // 1. Was created AFTER the user's signup
-            // 2. Has NOT been seen by the user
-            // 3. Is currently active
-            // 4. Has not expired (if expires_at is set)
-
             const { data: seenPopups } = await supabase
                 .from('user_popup_status')
                 .select('popup_id')
-                .eq('user_id', user.id);
+                .eq('user_id', userId);
 
             const seenIds = seenPopups?.map(s => s.popup_id) || [];
 
@@ -74,31 +83,25 @@ export const useBroadcastPopup = () => {
         } catch (error) {
             console.error("Error fetching broadcast popup:", error);
         }
-    };
+    }, [userId]);
 
-    const markAsSeen = async (popupId: string) => {
+    const markAsSeen = useCallback(async (popupId: string) => {
+        if (!userId) return;
         try {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) return;
-
             await supabase
                 .from('user_popup_status')
-                .insert([{ user_id: user.id, popup_id: popupId }]);
+                .insert([{ user_id: userId, popup_id: popupId }]);
 
             setPopup(null);
         } catch (error) {
             console.error("Error marking popup as seen:", error);
         }
-    };
-
-    const isNewUser = (createdAt: string) => {
-        const thirtyDaysAgo = new Date();
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-        return new Date(createdAt) > thirtyDaysAgo;
-    };
+    }, [userId]);
 
     useEffect(() => {
-        // Initial fetch
+        if (!userId) return;
+
+        // Initial fetch (once per user session instead of re-fetching on every route change)
         fetchLatestUnseenPopup();
 
         // Subscribe to real-time broadcasts
@@ -110,10 +113,11 @@ export const useBroadcastPopup = () => {
                 (payload) => {
                     const newPopup = payload.new as BroadcastPopupData;
                     // Check if user is on a protected route (payment, auth)
+                    const currentPath = pathnameRef.current;
                     const isProtectedPage =
-                        location.pathname.includes('/auth') ||
-                        location.pathname.includes('/wallet') ||
-                        location.pathname.includes('/admin');
+                        currentPath.includes('/auth') ||
+                        currentPath.includes('/wallet') ||
+                        currentPath.includes('/admin');
 
                     if (!isProtectedPage && newPopup.is_active) {
                         setPopup(newPopup);
@@ -125,7 +129,7 @@ export const useBroadcastPopup = () => {
         return () => {
             supabase.removeChannel(channel);
         };
-    }, [location.pathname]);
+    }, [userId, fetchLatestUnseenPopup]);
 
     return { popup, markAsSeen };
 };

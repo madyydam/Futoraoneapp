@@ -37,33 +37,18 @@ const AdminCoins = () => {
     const fetchData = async () => {
         setLoading(true);
         try {
-            // Fetch all profiles
-            const { data: profiles, error: profileError } = await supabase
-                .from('profiles')
-                .select('id, username, full_name, avatar_url, email');
+            const { data, error } = await (supabase.rpc as any)('get_admin_wallet_users');
 
-            if (profileError) throw profileError;
+            if (error) throw error;
 
-            // Fetch all native wallets
-            const { data: wallets, error: walletError } = await supabase
-                .from('native_wallets')
-                .select('user_id, balance');
-
-            if (walletError) throw walletError;
-
-            // Merge data
-            const combinedData: UserBalance[] = (profiles || []).map(profile => {
-                const wallet = (wallets || []).find(w => w.user_id === profile.id);
-                // Default to 0 if no wallet found (though trigger should handle creation)
-                return {
-                    id: profile.id,
-                    username: profile.username,
-                    full_name: profile.full_name,
-                    avatar_url: profile.avatar_url || '',
-                    email: (profile as any).email || '',
-                    balance: wallet ? wallet.balance : 0
-                };
-            });
+            const combinedData: UserBalance[] = ((data as any[]) || []).map(row => ({
+                id: row.id,
+                username: row.username,
+                full_name: row.full_name,
+                avatar_url: row.avatar_url || '',
+                email: row.email || '',
+                balance: Number(row.balance || 0),
+            }));
 
             setUsers(combinedData);
         } catch (error) {

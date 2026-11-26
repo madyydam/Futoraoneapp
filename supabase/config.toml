@@ -1,7 +1,37 @@
 project_id = "sbzsgeokspmkewrmuqgi"
 
+[auth]
+enabled = true
+site_url = "https://futoraone.vercel.app"
+additional_redirect_urls = [
+  "http://localhost:8080",
+  "http://localhost:8080/auth",
+  "http://localhost:8080/feed",
+  "http://localhost:5173/auth",
+  "http://localhost:5173/feed",
+  "https://futoraone.vercel.app/auth",
+  "https://futoraone.vercel.app/feed",
+  "https://futora1.vercel.app/auth",
+  "https://futora1.vercel.app/feed"
+]
+
+[auth.external.google]
+enabled = true
+client_id = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID)"
+secret = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET)"
+skip_nonce_check = false
+
 [functions.manage-verification]
 verify_jwt = true
 
 [functions.ai-mentor]
+verify_jwt = true
+
+[functions.moderate-content]
+verify_jwt = true
+
+[functions.send-fcm-notification]
+verify_jwt = true
+
+[functions.send-email]
 verify_jwt = false

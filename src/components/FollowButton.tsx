@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -16,22 +16,25 @@ export const FollowButton = ({ userId, currentUserId, onFollowChange }: FollowBu
     const [loading, setLoading] = useState(false);
     const { toast } = useToast();
 
-    useEffect(() => {
-        checkFollowStatus();
-    }, [userId, currentUserId]);
-
-    const checkFollowStatus = async () => {
-        if (!currentUserId) return;
+    const checkFollowStatus = useCallback(async () => {
+        if (!currentUserId) {
+            setIsFollowing(false);
+            return;
+        }
 
         const { data } = await supabase
             .from("follows")
             .select("id")
             .eq("follower_id", currentUserId)
             .eq("following_id", userId)
-            .single();
+            .maybeSingle();
 
         setIsFollowing(!!data);
-    };
+    }, [currentUserId, userId]);
+
+    useEffect(() => {
+        checkFollowStatus();
+    }, [checkFollowStatus]);
 
     const handleFollow = async () => {
         if (!currentUserId) {
@@ -47,34 +50,27 @@ export const FollowButton = ({ userId, currentUserId, onFollowChange }: FollowBu
 
         try {
             if (isFollowing) {
-                // Unfollow
-                await supabase
+                const { error } = await supabase
                     .from("follows")
                     .delete()
                     .eq("follower_id", currentUserId)
                     .eq("following_id", userId);
 
+                if (error) throw error;
                 setIsFollowing(false);
                 toast({
                     title: "Unfollowed",
                     description: "You have unfollowed this user",
                 });
             } else {
-                // Follow
-                await supabase.from("follows").insert({
+                const { error } = await supabase.from("follows").insert({
                     follower_id: currentUserId,
                     following_id: userId,
                 });
 
-                // Create notification
-                await supabase.from("notifications").insert({
-                    user_id: userId,
-                    type: "follow",
-                    actor_id: currentUserId,
-                    is_read: false,
-                });
+                if (error) throw error;
 
-                // Send Push Notification
+                // DB trigger creates the notification row; send push notification best-effort
                 const { data: currentUserProfile } = await supabase
                     .from('profiles')
                     .select('full_name, username')
@@ -82,7 +78,7 @@ export const FollowButton = ({ userId, currentUserId, onFollowChange }: FollowBu
                     .single();
 
                 const actorName = currentUserProfile?.full_name || currentUserProfile?.username || "Someone";
-                await sendPushNotification(userId, `${actorName} started following you`);
+                sendPushNotification(userId, `${actorName} started following you`).catch(() => {});
 
                 setIsFollowing(true);
                 toast({

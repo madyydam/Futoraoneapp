@@ -4,8 +4,7 @@ SECTION 07: GAMIFICATION — XP, Levels, Achievements, Streaks, User Roles
 ================================================================================
 Tables: achievements, user_achievements, user_roles
 Functions: calculate_level, give_xp, update_user_streak,
-           check_achievements, award_xp, handle_new_post_xp,
-           handle_new_comment_xp, trigger_xp_on_activity
+           check_achievements, trigger_xp_on_activity
 ================================================================================
 */
 
@@ -35,10 +34,17 @@ CREATE TABLE IF NOT EXISTS public.user_achievements (
 
 CREATE INDEX IF NOT EXISTS idx_user_achievements_user_id ON public.user_achievements(user_id);
 
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'app_role') THEN
+    CREATE TYPE public.app_role AS ENUM ('admin', 'moderator', 'user');
+  END IF;
+END $$;
+
 CREATE TABLE IF NOT EXISTS public.user_roles (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  role app_role NOT NULL,
+  role public.app_role NOT NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   UNIQUE(user_id, role)
 );
@@ -49,16 +55,24 @@ CREATE TABLE IF NOT EXISTS public.user_roles (
 
 -- Level calculation (sqrt-based curve)
 CREATE OR REPLACE FUNCTION public.calculate_level(xp INTEGER)
-RETURNS INTEGER AS $$
+RETURNS INTEGER
+LANGUAGE plpgsql
+IMMUTABLE
+SET search_path = public
+AS $$
 BEGIN
   IF xp < 100 THEN RETURN 1; END IF;
   RETURN floor(sqrt(xp::float / 100)) + 1;
 END;
-$$ LANGUAGE plpgsql IMMUTABLE;
+$$;
 
--- Give XP and recalculate level
+-- Give XP and recalculate level (internal-only: execute revoked from clients)
 CREATE OR REPLACE FUNCTION public.give_xp(user_id UUID, amount INTEGER)
-RETURNS VOID AS $$
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
 DECLARE
   current_xp INTEGER;
   new_xp INTEGER;
@@ -72,11 +86,15 @@ BEGIN
   SET xp = new_xp, level = new_level, last_activity_date = NOW()
   WHERE id = user_id;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$;
 
--- Streak updater
+-- Streak updater (internal-only)
 CREATE OR REPLACE FUNCTION public.update_user_streak(target_user_id UUID)
-RETURNS VOID AS $$
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
 DECLARE
   last_active TIMESTAMPTZ;
   current_s INTEGER;
@@ -98,38 +116,46 @@ BEGIN
   SET current_streak = current_s, longest_streak = longest_s, last_activity_date = NOW()
   WHERE id = target_user_id;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$;
 
--- Check and unlock achievements
+-- Check and unlock achievements (internal-only)
 CREATE OR REPLACE FUNCTION public.check_achievements(target_user_id UUID, condition_type_to_check TEXT)
-RETURNS VOID AS $$
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
 DECLARE
   current_val INTEGER;
   ach RECORD;
 BEGIN
   IF condition_type_to_check = 'posts_count' THEN
-    SELECT COUNT(*) INTO current_val FROM posts WHERE user_id = target_user_id;
+    SELECT COUNT(*) INTO current_val FROM public.posts WHERE user_id = target_user_id;
   ELSIF condition_type_to_check = 'likes_received' THEN
-    SELECT COUNT(*) INTO current_val FROM likes l JOIN posts p ON l.post_id = p.id WHERE p.user_id = target_user_id;
+    SELECT COUNT(*) INTO current_val FROM public.likes l JOIN public.posts p ON l.post_id = p.id WHERE p.user_id = target_user_id;
   ELSIF condition_type_to_check = 'code_posts' THEN
-    SELECT COUNT(*) INTO current_val FROM posts WHERE user_id = target_user_id AND (content ILIKE '%```%' OR content ILIKE '%code%');
+    SELECT COUNT(*) INTO current_val FROM public.posts WHERE user_id = target_user_id AND (content ILIKE '%```%' OR content ILIKE '%code%');
   ELSE
     RETURN;
   END IF;
 
-  FOR ach IN SELECT * FROM achievements WHERE condition_type = condition_type_to_check LOOP
+  FOR ach IN SELECT * FROM public.achievements WHERE condition_type = condition_type_to_check LOOP
     IF current_val >= ach.condition_value THEN
-      INSERT INTO user_achievements (user_id, achievement_id)
+      INSERT INTO public.user_achievements (user_id, achievement_id)
       VALUES (target_user_id, ach.id)
       ON CONFLICT (user_id, achievement_id) DO NOTHING;
     END IF;
   END LOOP;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$;
 
 -- XP trigger on posts & comments
 CREATE OR REPLACE FUNCTION public.trigger_xp_on_activity()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
 BEGIN
   IF TG_TABLE_NAME = 'posts' THEN
     PERFORM public.give_xp(NEW.user_id, 50);
@@ -143,7 +169,7 @@ BEGIN
   END IF;
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$;
 
 DROP TRIGGER IF EXISTS on_post_created_xp ON public.posts;
 CREATE TRIGGER on_post_created_xp
@@ -152,6 +178,34 @@ CREATE TRIGGER on_post_created_xp
 DROP TRIGGER IF EXISTS on_comment_created_xp ON public.comments;
 CREATE TRIGGER on_comment_created_xp
   AFTER INSERT ON public.comments FOR EACH ROW EXECUTE FUNCTION public.trigger_xp_on_activity();
+
+-- Prevent clients from directly invoking internal XP, streak, achievement, or trigger RPCs
+REVOKE ALL ON FUNCTION public.give_xp(UUID, INTEGER) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.update_user_streak(UUID) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.check_achievements(UUID, TEXT) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.trigger_xp_on_activity() FROM PUBLIC, anon, authenticated;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- RLS
+-- ─────────────────────────────────────────────────────────────────────────────
+
+ALTER TABLE public.achievements ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_achievements ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_roles ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Achievements readable" ON public.achievements;
+CREATE POLICY "Achievements readable" ON public.achievements
+  FOR SELECT TO authenticated USING (true);
+
+DROP POLICY IF EXISTS "User achievements readable" ON public.user_achievements;
+CREATE POLICY "User achievements readable" ON public.user_achievements
+  FOR SELECT TO authenticated USING (true);
+
+DROP POLICY IF EXISTS "Users view own roles" ON public.user_roles;
+DROP POLICY IF EXISTS "Users view own roles or admin" ON public.user_roles;
+CREATE POLICY "Users view own roles or admin" ON public.user_roles
+  FOR SELECT TO authenticated
+  USING (auth.uid() = user_id OR public.has_role(auth.uid(), 'admin'));
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- SEED DATA

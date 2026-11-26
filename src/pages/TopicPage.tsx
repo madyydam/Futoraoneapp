@@ -204,7 +204,7 @@ const TopicPage = () => {
                             <p className="text-muted-foreground mb-4">
                                 Be the first to post about #{tag}!
                             </p>
-                            <Button onClick={() => navigate('/create')}>
+                            <Button onClick={() => navigate('/create-post')}>
                                 Create Post
                             </Button>
                         </CardContent>

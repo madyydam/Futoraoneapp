@@ -125,6 +125,11 @@ const AdminPopups = () => {
                 .eq('id', id);
 
             if (error) throw error;
+            await (supabase.rpc as any)("log_admin_action", {
+                p_action: !currentStatus ? "ACTIVATE_BROADCAST" : "DEACTIVATE_BROADCAST",
+                p_target_type: "broadcast_messages",
+                p_target_id: id,
+            });
             toast.success(`Broadcast ${!currentStatus ? 'activated' : 'deactivated'}`);
             fetchBroadcasts();
         } catch (error) {
@@ -142,6 +147,11 @@ const AdminPopups = () => {
                 .eq('id', id);
 
             if (error) throw error;
+            await (supabase.rpc as any)("log_admin_action", {
+                p_action: "DELETE_BROADCAST",
+                p_target_type: "broadcast_messages",
+                p_target_id: id,
+            });
             toast.success("Broadcast deleted");
             fetchBroadcasts();
         } catch (error) {
@@ -154,7 +164,7 @@ const AdminPopups = () => {
         if (!formData.message) return toast.error("Message is required");
 
         try {
-            const { error } = await supabase
+            const { data: created, error } = await supabase
                 .from('broadcast_messages')
                 .insert([{
                     title: formData.title || null,
@@ -163,9 +173,18 @@ const AdminPopups = () => {
                     audience: formData.audience,
                     expires_at: formData.expires_at || null,
                     is_active: true
-                }]);
+                }])
+                .select('id')
+                .single();
 
             if (error) throw error;
+
+            await (supabase.rpc as any)("log_admin_action", {
+                p_action: "CREATE_BROADCAST",
+                p_target_type: "broadcast_messages",
+                p_target_id: created?.id ?? null,
+                p_details: { type: formData.type, audience: formData.audience },
+            });
 
             toast.success("Broadcast created successfully! 🚀");
             setIsCreating(false);

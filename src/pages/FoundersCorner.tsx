@@ -14,6 +14,7 @@ import { BottomNav } from "@/components/BottomNav";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { motion, AnimatePresence } from "framer-motion";
 import { useDebounce } from "../hooks/use-debounce";
+import { sanitizePostgrestSearch } from "@/lib/security";
 
 const FoundersCorner = () => {
     const [searchParams, setSearchParams] = useSearchParams();
@@ -51,9 +52,12 @@ const FoundersCorner = () => {
                 query = query.in('equity_range', filters.equity);
             }
 
-            // Search (case-insensitive)
+            // Search (case-insensitive, PostgREST-escaped)
             if (debouncedSearch) {
-                query = query.or(`role_needed.ilike.%${debouncedSearch}%,idea_description.ilike.%${debouncedSearch}%,industry.ilike.%${debouncedSearch}%`);
+                const cleanSearch = sanitizePostgrestSearch(debouncedSearch);
+                if (cleanSearch) {
+                    query = query.or(`role_needed.ilike.%${cleanSearch}%,idea_description.ilike.%${cleanSearch}%,industry.ilike.%${cleanSearch}%`);
+                }
             }
 
             const { data: listingsData, error: listingsError } = await query.order('created_at', { ascending: false });

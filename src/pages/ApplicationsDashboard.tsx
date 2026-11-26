@@ -41,10 +41,12 @@ const ApplicationsDashboard = () => {
                 .eq('user_id', user.id);
 
             const myGigIds = myGigs?.map(g => g.id) || [];
-            const { data: receivedGigs } = await supabase
-                .from('gig_applications' as any)
-                .select('*, gig_listings(title), profiles:applicant_id(full_name, avatar_url)')
-                .in('gig_id', myGigIds);
+            const { data: receivedGigs } = myGigIds.length > 0
+                ? await supabase
+                    .from('gig_applications' as any)
+                    .select('*, gig_listings(title), profiles:applicant_id(full_name, avatar_url)')
+                    .in('gig_id', myGigIds)
+                : { data: [] };
 
             // Founder listings owned by me
             const { data: myListings } = await supabase
@@ -53,10 +55,12 @@ const ApplicationsDashboard = () => {
                 .eq('user_id', user.id);
 
             const myListIds = myListings?.map(l => l.id) || [];
-            const { data: receivedFounders } = await supabase
-                .from('founder_applications' as any)
-                .select('*, founder_listings(role_needed), profiles:applicant_id(full_name, avatar_url)')
-                .in('listing_id', myListIds);
+            const { data: receivedFounders } = myListIds.length > 0
+                ? await supabase
+                    .from('founder_applications' as any)
+                    .select('*, founder_listings(role_needed), profiles:applicant_id(full_name, avatar_url)')
+                    .in('listing_id', myListIds)
+                : { data: [] };
 
             setSentApps({ gigs: sentGigs || [], founders: sentFounders || [] });
             setReceivedApps({ gigs: receivedGigs || [], founders: receivedFounders || [] });
@@ -163,7 +167,7 @@ const ApplicationsDashboard = () => {
                                                             </CardHeader>
                                                             <CardFooter className="pt-0 pb-4 px-6 flex justify-between items-center">
                                                                 <span className="text-[9px] font-bold text-muted-foreground uppercase opacity-50">{new Date(app.created_at).toLocaleDateString()}</span>
-                                                                <Button variant="ghost" size="sm" className="h-7 text-[10px] uppercase font-black tracking-widest hover:text-yellow-600" onClick={() => navigate('/gigs')}>View Gig ↗</Button>
+                                                                <Button variant="ghost" size="sm" className="h-7 text-[10px] uppercase font-black tracking-widest hover:text-yellow-600" onClick={() => navigate('/gig-marketplace')}>View Gig ↗</Button>
                                                             </CardFooter>
                                                         </Card>
                                                     ))}
@@ -196,7 +200,7 @@ const ApplicationsDashboard = () => {
                                                             </CardHeader>
                                                             <CardFooter className="pt-0 pb-4 px-6 flex justify-between items-center">
                                                                 <span className="text-[9px] font-bold text-muted-foreground uppercase opacity-50">{new Date(app.created_at).toLocaleDateString()}</span>
-                                                                <Button variant="ghost" size="sm" className="h-7 text-[10px] uppercase font-black tracking-widest hover:text-primary" onClick={() => navigate('/co-founder')}>Manage ↗</Button>
+                                                                <Button variant="ghost" size="sm" className="h-7 text-[10px] uppercase font-black tracking-widest hover:text-primary" onClick={() => navigate('/founders-corner')}>Manage ↗</Button>
                                                             </CardFooter>
                                                         </Card>
                                                     ))}

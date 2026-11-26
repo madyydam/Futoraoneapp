@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,7 @@ interface Story {
     username: string;
     avatar_url: string | null;
     verification_category: string | null;
-  };
+  } | null;
 }
 
 interface StoriesBarProps {
@@ -26,31 +26,7 @@ export const StoriesBar = ({ currentUserId }: StoriesBarProps) => {
   const [stories, setStories] = useState<Story[]>([]);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    fetchStories();
-
-    // Subscribe to new stories
-    const channel = supabase
-      .channel("stories-changes")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "stories",
-        },
-        () => {
-          fetchStories();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [currentUserId]);
-
-  const fetchStories = async () => {
+  const fetchStories = useCallback(async () => {
     if (!currentUserId) return;
 
     const { data } = await supabase
@@ -64,12 +40,14 @@ export const StoriesBar = ({ currentUserId }: StoriesBarProps) => {
         profiles!stories_user_id_fkey(username, avatar_url, verification_category)
       `
       )
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .limit(60);
 
     if (data) {
       // Group stories by user, only show latest
       const uniqueUsers = new Map();
       data.forEach((story: any) => {
+        if (!story.profiles) return;
         if (story.profiles.username?.toLowerCase() === 'sanu') {
           story.profiles.verification_category = 'creator';
         }
@@ -79,7 +57,38 @@ export const StoriesBar = ({ currentUserId }: StoriesBarProps) => {
       });
       setStories(Array.from(uniqueUsers.values()));
     }
-  };
+  }, [currentUserId]);
+
+  useEffect(() => {
+    fetchStories();
+
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    const debouncedFetch = () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        fetchStories();
+      }, 400);
+    };
+
+    // Subscribe to new stories
+    const channel = supabase
+      .channel("stories-changes")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "stories",
+        },
+        debouncedFetch
+      )
+      .subscribe();
+
+    return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      supabase.removeChannel(channel);
+    };
+  }, [currentUserId, fetchStories]);
 
   return (
     <div className="flex gap-4 overflow-x-auto pb-4 px-4 hide-scrollbar">
@@ -98,6 +107,7 @@ export const StoriesBar = ({ currentUserId }: StoriesBarProps) => {
 
       {/* Stories from followed users */}
       {stories.map((story) => {
+        if (!story.profiles) return null;
         const isCreator = story.profiles.verification_category === 'creator';
 
         return (
@@ -113,7 +123,7 @@ export const StoriesBar = ({ currentUserId }: StoriesBarProps) => {
                 }`}>
                 <Avatar className="w-full h-full border-2 border-background">
                   <AvatarImage src={story.profiles.avatar_url || undefined} />
-                  <AvatarFallback>{story.profiles.username[0]?.toUpperCase()}</AvatarFallback>
+                  <AvatarFallback>{story.profiles.username?.[0]?.toUpperCase() || "U"}</AvatarFallback>
                 </Avatar>
               </div>
 

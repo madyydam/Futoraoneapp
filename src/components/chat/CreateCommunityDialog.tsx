@@ -51,6 +51,8 @@ export function CreateCommunityDialog({ onCommunityCreated, trigger }: CreateCom
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
+        let uploadedPath: string | null = null;
+        let createdCommunityId: string | null = null;
         try {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) throw new Error("Not authenticated");
@@ -58,6 +60,13 @@ export function CreateCommunityDialog({ onCommunityCreated, trigger }: CreateCom
             // 1. Upload Icon if selected
             let avatarUrl = null;
             if (iconFile) {
+                const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+                if (!allowedTypes.includes(iconFile.type) || iconFile.size > 5 * 1024 * 1024) {
+                    toast.error("Please select a valid image under 5 MB");
+                    setLoading(false);
+                    return;
+                }
+
                 const options = {
                     maxSizeMB: 0.5,
                     maxWidthOrHeight: 500,
@@ -75,16 +84,17 @@ export function CreateCommunityDialog({ onCommunityCreated, trigger }: CreateCom
                 const fileName = `${user.id}/community_${Date.now()}.${fileExt}`;
 
                 const { error: uploadError } = await supabase.storage
-                    .from('post_images')
+                    .from('community-avatars')
                     .upload(fileName, compressedFile, {
                         upsert: true,
                         contentType: compressedFile.type
                     });
 
                 if (uploadError) throw uploadError;
+                uploadedPath = fileName;
 
                 const { data: { publicUrl } } = supabase.storage
-                    .from('post_images')
+                    .from('community-avatars')
                     .getPublicUrl(fileName);
 
                 avatarUrl = publicUrl;
@@ -108,6 +118,7 @@ export function CreateCommunityDialog({ onCommunityCreated, trigger }: CreateCom
             if (communityError) throw communityError;
 
             const communityId = (community as any).id;
+            createdCommunityId = communityId;
 
             // 2. Add Creator as Admin
             const { error: memberError } = await supabase
@@ -142,6 +153,12 @@ export function CreateCommunityDialog({ onCommunityCreated, trigger }: CreateCom
             setIconFile(null);
             setIconPreview(null);
         } catch (error) {
+            if (createdCommunityId) {
+                await supabase.from('communities' as any).delete().eq('id', createdCommunityId);
+            }
+            if (uploadedPath) {
+                await supabase.storage.from('community-avatars').remove([uploadedPath]);
+            }
             console.error('Error creating community:', error);
             toast.error("Failed to create community");
         } finally {

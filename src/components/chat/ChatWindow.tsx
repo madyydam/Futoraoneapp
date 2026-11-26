@@ -35,6 +35,7 @@ export const ChatWindow = memo(({ conversationId, currentUserId }: { conversatio
     const [otherUser, setOtherUser] = useState<Profile | null>(null);
     const [isTyping, setIsTyping] = useState(false);
     const scrollRef = useRef<HTMLDivElement>(null);
+    const visualChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
     const navigate = useNavigate();
     const { toast } = useToast();
 
@@ -146,7 +147,7 @@ export const ChatWindow = memo(({ conversationId, currentUserId }: { conversatio
                 { event: 'INSERT', schema: 'public', table: 'messages', filter: `conversation_id=eq.${conversationId}` },
                 (payload) => {
                     const newMsg = payload.new as Message;
-                    setMessages((prev) => [...prev, newMsg]);
+                    setMessages((prev) => prev.some(m => m.id === newMsg.id) ? prev : [...prev, newMsg]);
                     if (newMsg.sender_id !== currentUserId) markAsRead(newMsg.id);
                     scrollToBottom();
                 }
@@ -176,7 +177,10 @@ export const ChatWindow = memo(({ conversationId, currentUserId }: { conversatio
             })
             .subscribe();
 
+        visualChannelRef.current = visualChannel;
+
         return () => {
+            visualChannelRef.current = null;
             supabase.removeChannel(channel);
             supabase.removeChannel(visualChannel);
         };
@@ -207,7 +211,7 @@ export const ChatWindow = memo(({ conversationId, currentUserId }: { conversatio
     const handlePromote = useCallback(async (id: string, type: MessageType) => {
         setMessages(prev => prev.map(m => m.id === id ? { ...m, message_type: type } : m));
         await supabase.from('messages').update({ message_type: type }).eq('id', id);
-        supabase.channel(`visual-sync-${conversationId}`).send({
+        visualChannelRef.current?.send({
             type: 'broadcast',
             event: 'type_update',
             payload: { id, type }
@@ -216,7 +220,7 @@ export const ChatWindow = memo(({ conversationId, currentUserId }: { conversatio
             title: type === 'normal' ? "Reverted to Chat" : "Insight Logged!",
             description: type !== 'normal' ? `Message promoted to ${type}` : undefined
         });
-    }, [conversationId, toast]);
+    }, [toast]);
 
     const renderedMessages = useMemo(() => (
         messages.map((msg) => (
@@ -237,7 +241,7 @@ export const ChatWindow = memo(({ conversationId, currentUserId }: { conversatio
     const saveWallpaper = (w: string) => {
         setWallpaper(w);
         localStorage.setItem(`futora_chat_wallpaper_${conversationId}`, w);
-        supabase.channel(`visual-sync-${conversationId}`).send({
+        visualChannelRef.current?.send({
             type: 'broadcast',
             event: 'visual_update',
             payload: { wallpaper: w }
@@ -250,7 +254,7 @@ export const ChatWindow = memo(({ conversationId, currentUserId }: { conversatio
     const saveBubbleColor = (c: string) => {
         setBubbleColor(c);
         localStorage.setItem(`futora_chat_bubble_color_${conversationId}`, c);
-        supabase.channel(`visual-sync-${conversationId}`).send({
+        visualChannelRef.current?.send({
             type: 'broadcast',
             event: 'visual_update',
             payload: { bubbleColor: c }
@@ -283,7 +287,7 @@ export const ChatWindow = memo(({ conversationId, currentUserId }: { conversatio
                                         setRoomName(newName);
                                         setIsEditingName(false);
                                         supabase.from('conversations').update({ name: newName }).eq('id', conversationId);
-                                        supabase.channel(`visual-sync-${conversationId}`).send({
+                                        visualChannelRef.current?.send({
                                             type: 'broadcast',
                                             event: 'room_update',
                                             payload: { name: newName }

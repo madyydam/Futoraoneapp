@@ -1,4 +1,3 @@
-import { useState, useEffect, lazy, Suspense } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -6,9 +5,9 @@ import { QueryClient } from "@tanstack/react-query";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persister";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-// import { useFCM } from "@/hooks/useFCM";
-import { supabase } from "@/integrations/supabase/client";
-import type { User } from "@supabase/supabase-js";
+import { AuthProvider } from "@/contexts/AuthContext";
+import { AppLifecycleManager } from "@/components/lifecycle/AppLifecycleManager";
+import { OfflineIndicator } from "@/components/pwa/OfflineIndicator";
 
 import { ThemeProvider } from "@/components/theme-provider";
 import ScrollToTop from "@/components/ScrollToTop";
@@ -120,23 +119,35 @@ const App = () => {
   return (
     <PersistQueryClientProvider
       client={queryClient}
-      persistOptions={{ persister }}
+      persistOptions={{
+        persister,
+        dehydrateOptions: {
+          shouldDehydrateQuery: (query) => {
+            const key = String(query.queryKey[0] ?? "");
+            // Never persist auth/admin/wallet/private messages in localStorage
+            return !["auth_user", "is_admin", "native_wallet_v2", "native_transactions"].includes(key);
+          },
+        },
+      }}
     >
-      <ThemeProvider defaultTheme="light" storageKey="vite-ui-theme">
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <PWAUpdateHandler />
-          <InstallPrompt />
-          <AchievementListener />
-          <HelpTourProvider>
-            <GlobalErrorBoundary>
-              <BrowserRouter>
-                <ScrollToTop />
-                <BroadcastPopup />
-                <GlobalTourSystem />
-                <Suspense fallback={<CartoonLoader />}>
-                  <Routes>
+      <AuthProvider>
+        <ThemeProvider defaultTheme="light" storageKey="vite-ui-theme">
+          <TooltipProvider>
+            <Toaster />
+            <Sonner />
+            <OfflineIndicator />
+            <PWAUpdateHandler />
+            <InstallPrompt />
+            <AchievementListener />
+            <HelpTourProvider>
+              <GlobalErrorBoundary>
+                <BrowserRouter>
+                  <AppLifecycleManager>
+                    <ScrollToTop />
+                    <BroadcastPopup />
+                    <GlobalTourSystem />
+                    <Suspense fallback={<CartoonLoader />}>
+                      <Routes>
                     <Route path="/" element={<Welcome />} />
                     <Route path="/auth" element={<Auth />} />
                     <Route path="/feed" element={<Feed />} />
@@ -349,12 +360,14 @@ const App = () => {
                     {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                     <Route path="*" element={<NotFound />} />
                   </Routes>
-                </Suspense>
-              </BrowserRouter>
-            </GlobalErrorBoundary>
-          </HelpTourProvider>
-        </TooltipProvider>
-      </ThemeProvider>
+                    </Suspense>
+                  </AppLifecycleManager>
+                </BrowserRouter>
+              </GlobalErrorBoundary>
+            </HelpTourProvider>
+          </TooltipProvider>
+        </ThemeProvider>
+      </AuthProvider>
     </PersistQueryClientProvider>
   );
 };

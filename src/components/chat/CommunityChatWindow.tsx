@@ -176,7 +176,7 @@ export function CommunityChatWindow({
             }
 
             const senderIds = [...new Set(data.map((m: any) => m.sender_id))];
-            let profilesMap: Record<string, any> = {};
+            const profilesMap: Record<string, any> = {};
             if (senderIds.length) {
                 const { data: profiles } = await supabase
                     .from("profiles").select("id, full_name, username, avatar_url").in("id", senderIds);
@@ -198,9 +198,12 @@ export function CommunityChatWindow({
     useEffect(() => { fetchMessages(); }, [fetchMessages]);
     useEffect(() => { scrollToBottom("instant"); }, [messages, scrollToBottom]);
 
-    // Realtime subscription
+    // Realtime subscription + reconnect sync
     useEffect(() => {
         if (!effectiveChannelId) return;
+        const handleReconnect = () => fetchMessages();
+        window.addEventListener("futora:reconnected", handleReconnect);
+
         const channel = supabase
             .channel(`community-channel-${effectiveChannelId}`)
             .on("postgres_changes", {
@@ -212,15 +215,19 @@ export function CommunityChatWindow({
                 const msg = payload.new as any;
                 const { data: profile } = await supabase
                     .from("profiles").select("id, full_name, username, avatar_url").eq("id", msg.sender_id).single();
-                setMessages(prev => [
-                    ...prev,
-                    { ...msg, profiles: profile || { full_name: "Unknown", username: "", avatar_url: "" } }
-                ]);
+                setMessages(prev =>
+                    prev.some(m => m.id === msg.id)
+                        ? prev
+                        : [...prev, { ...msg, profiles: profile || { full_name: "Unknown", username: "", avatar_url: "" } }]
+                );
                 scrollToBottom();
             })
             .subscribe();
-        return () => { supabase.removeChannel(channel); };
-    }, [effectiveChannelId, scrollToBottom]);
+        return () => {
+            window.removeEventListener("futora:reconnected", handleReconnect);
+            supabase.removeChannel(channel);
+        };
+    }, [effectiveChannelId, fetchMessages, scrollToBottom]);
 
     const handleSend = useCallback(async () => {
         const content = newMessage.trim();

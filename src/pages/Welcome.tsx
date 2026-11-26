@@ -5,6 +5,9 @@ import { motion, Variants, Easing } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { ArrowRight, Code, Cpu, Globe, Zap, Download } from "lucide-react";
 import { useState, useEffect } from "react";
+import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 const containerVariants: Variants = {
   hidden: { opacity: 0 },
@@ -23,12 +26,46 @@ const itemVariants: Variants = {
 
 const Welcome = () => {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [isStandalone, setIsStandalone] = useState(false);
 
   useEffect(() => {
     const checkStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
     setIsStandalone(!!checkStandalone);
-  }, []);
+
+    const searchParams = new URLSearchParams(window.location.search);
+    const oauthError = searchParams.get("error_description") || searchParams.get("error");
+    if (oauthError) {
+      toast({
+        title: "Google Sign-In Cancelled",
+        description: oauthError,
+        variant: "destructive",
+      });
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+
+    const hasOAuthParams =
+      searchParams.has("code") ||
+      window.location.hash.includes("access_token=");
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user && hasOAuthParams) {
+        navigate("/feed", { replace: true });
+      }
+    });
+
+    if (hasOAuthParams) {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session?.user) {
+          navigate("/feed", { replace: true });
+        }
+      });
+    }
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [navigate, toast]);
 
   return (
     <div className="dark min-h-screen bg-background text-foreground relative overflow-hidden flex flex-col justify-center">
@@ -119,6 +156,14 @@ const Welcome = () => {
                 Sign In
               </Button>
             )}
+          </motion.div>
+
+          <motion.div variants={itemVariants} className="flex justify-center px-6">
+            <GoogleSignInButton
+              label="Continue with Google"
+              redirectPath="/auth"
+              className="h-12 px-8 text-sm sm:text-base rounded-full w-full sm:w-auto hover:scale-105"
+            />
           </motion.div>
 
           <motion.div variants={itemVariants} className="pt-2">

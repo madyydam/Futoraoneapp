@@ -4,212 +4,140 @@ import { Rocket, Zap, Heart, Gamepad2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { OpportunityCard } from "./OpportunityCard";
+import { useAuth } from "@/hooks/useAuth";
 
 interface OpportunitySectionProps {
-    onNavigate: (path: string) => void;
+  onNavigate: (path: string) => void;
 }
 
 export const OpportunitySection = memo(({ onNavigate }: OpportunitySectionProps) => {
-    const { data: isTechMatchUnlocked = false, refetch } = useQuery({
-        queryKey: ['techMatchUnlockStatus'],
-        queryFn: async () => {
-            // Priority 1: Instant Local Storage check
-            const localStatus = localStorage.getItem('techMatchUnlocked');
-            if (localStatus === 'true') return true;
+  const queryClient = useQueryClient();
+  const { userId } = useAuth();
 
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) return false;
+  const { data: isTechMatchUnlocked = false, refetch } = useQuery({
+    queryKey: ["techMatchUnlockStatus", userId],
+    queryFn: async () => {
+      if (!userId) return false;
 
-            // Priority 2: Check all possible unlock vectors in parallel
-            const [profileRes, walletRes] = await Promise.all([
-                supabase
-                    .from('profiles')
-                    .select('is_tech_match_unlocked')
-                    .eq('id', user.id)
-                    .single(),
-                supabase
-                    .from('native_wallets')
-                    .select('id')
-                    .eq('user_id', user.id)
-                    .maybeSingle()
-            ]);
+      const [profileRes, unlockRes] = await Promise.all([
+        supabase
+          .from("profiles")
+          .select("is_tech_match_unlocked")
+          .eq("id", userId)
+          .maybeSingle(),
+        supabase
+          .from("user_feature_unlocks" as never)
+          .select("id")
+          .eq("user_id", userId)
+          .eq("feature_name", "tech_match")
+          .maybeSingle(),
+      ]);
 
-            // If profile says it's unlocked, we're done
-            if (profileRes.data?.is_tech_match_unlocked) {
-                localStorage.setItem('techMatchUnlocked', 'true');
-                return true;
-            }
+      return Boolean(
+        (profileRes.data as { is_tech_match_unlocked?: boolean } | null)?.is_tech_match_unlocked ||
+          unlockRes.data
+      );
+    },
+    enabled: Boolean(userId),
+    staleTime: 1000 * 60 * 5,
+  });
 
-            // Fallback: Check for existing transaction if profile sync lagged
-            if (walletRes.data?.id) {
-                const { data: tx } = await supabase
-                    .from('native_transactions')
-                    .select('id')
-                    .eq('wallet_id', walletRes.data.id)
-                    .ilike('description', '%Unlocked Tech Match%')
-                    .limit(1)
-                    .maybeSingle();
+  const handleTechMatchClick = async () => {
+    if (isTechMatchUnlocked) {
+      onNavigate("/tech-match");
+      return;
+    }
 
-                if (tx) {
-                    // Self-healing: Update profile if transaction found
-                    await supabase.from('profiles').update({ is_tech_match_unlocked: true }).eq('id', user.id);
-                    localStorage.setItem('techMatchUnlocked', 'true');
-                    return true;
-                }
-            }
+    if (!userId) {
+      toast.error("Please log in first.");
+      onNavigate("/auth");
+      return;
+    }
 
-            return false;
-        },
-        staleTime: 1000 * 60 * 10, // 10 minutes cache
-        initialData: () => localStorage.getItem('techMatchUnlocked') === 'true',
-    });
+    const confirm = window.confirm("Unlock Tech Match for 1,000 Coins?");
+    if (!confirm) return;
 
-    const queryClient = useQueryClient();
+    try {
+      const { error } = await (supabase.rpc as any)("unlock_feature", {
+        p_feature_name: "tech_match",
+        p_idempotency_key: crypto.randomUUID(),
+      });
 
-    const handleTechMatchClick = async () => {
-        if (isTechMatchUnlocked) {
-            onNavigate('/tech-match');
-            return;
-        }
+      if (error) throw error;
 
-        const confirm = window.confirm("Unlock Tech Match for 1000 Coins?");
-        if (!confirm) return;
+      await Promise.all([
+        refetch(),
+        queryClient.invalidateQueries({ queryKey: ["native_wallet_v2", userId] }),
+        queryClient.invalidateQueries({ queryKey: ["native_transactions"] }),
+        queryClient.invalidateQueries({ queryKey: ["userProfile", userId] }),
+      ]);
 
-        try {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) {
-                toast.error("Please log in.");
-                return;
-            }
+      toast.success("Tech Match Unlocked! 🔓");
+      onNavigate("/tech-match");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unlock failed");
+    }
+  };
 
-            const { data: wallet, error: walletError } = await supabase
-                .from("native_wallets")
-                .select("id, balance")
-                .eq("user_id", user.id)
-                .order('created_at', { ascending: false })
-                .limit(1)
-                .maybeSingle();
-
-            if (walletError || !wallet) {
-                toast.error("Could not access wallet. Please contact support.");
-                return;
-            }
-
-            if ((wallet.balance || 0) < 1000) {
-                const { data: tx } = await supabase
-                    .from("native_transactions")
-                    .select("id")
-                    .eq("wallet_id", wallet.id)
-                    .ilike("description", "%Unlocked Tech Match%")
-                    .limit(1);
-
-                if (tx && tx.length > 0) {
-                    await supabase.from('profiles').update({ is_tech_match_unlocked: true }).eq('id', user.id);
-                    localStorage.setItem('techMatchUnlocked', 'true');
-                    await refetch();
-                    toast.success("Purchase Verified & Restored! 🔄");
-                    return;
-                }
-
-                toast.error(`Insufficient Balance. You have ${wallet.balance || 0} coins, need 1000.`);
-                return;
-            }
-
-            const { error: updateError } = await supabase
-                .from("native_wallets")
-                .update({ balance: (wallet.balance || 0) - 1000 })
-                .eq("id", wallet.id);
-
-            if (updateError) throw updateError;
-
-            await supabase
-                .from("native_transactions")
-                .insert({
-                    wallet_id: wallet.id,
-                    amount: -1000,
-                    description: "Unlocked Tech Match 🔓",
-                    type: "payment",
-                    status: "completed"
-                });
-
-            await supabase
-                .from('profiles')
-                .update({ is_tech_match_unlocked: true })
-                .eq('id', user.id);
-
-            localStorage.setItem('techMatchUnlocked', 'true');
-
-            await Promise.all([
-                refetch(),
-                queryClient.invalidateQueries({ queryKey: ["native_wallet_v2"] }),
-                queryClient.invalidateQueries({ queryKey: ["userProfile"] })
-            ]);
-
-            toast.success("Tech Match Unlocked! 🔓");
-        } catch (error: any) {
-            toast.error(`Unlock failed: ${error.message || error.details || "Unknown error"}`);
-        }
-    };
-
-    return (
-        <section>
-            <div className="flex items-center gap-2 mb-4">
-                <h2 className="text-xl font-bold bg-gradient-to-r from-orange-500 to-green-600 bg-clip-text text-transparent">
-                    Opportunities Hub
-                </h2>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-                <OpportunityCard
-                    title="Founders Corner"
-                    description="Find your perfect co-founder or join the next unicorn."
-                    icon={Rocket}
-                    gradient="bg-gradient-to-r from-orange-500 to-pink-600 text-white"
-                    onClick={() => onNavigate('/founders-corner')}
-                    buttonText="Find Matches"
-                    buttonVariant="secondary"
-                    buttonClassName="font-semibold text-pink-600 hover:text-pink-700"
-                    delay={0.1}
-                    id="opportunity-section"
-                />
-                <OpportunityCard
-                    title="Gig Market"
-                    description="Find micro-gigs, freelance tasks, and earn while you learn."
-                    icon={Zap}
-                    gradient="bg-gradient-to-r from-yellow-400 to-green-500 text-black"
-                    onClick={() => onNavigate('/gig-marketplace')}
-                    buttonText="Find Gigs"
-                    buttonClassName="font-bold bg-white text-green-700 hover:bg-white/90 border-0"
-                    delay={0.2}
-                    id="gigs-section"
-                />
-                <OpportunityCard
-                    title="Tech Match"
-                    description="Find your player 2. Date other devs."
-                    icon={Heart}
-                    gradient="bg-gradient-to-r from-pink-500 to-rose-500 text-white"
-                    onClick={handleTechMatchClick}
-                    buttonText={isTechMatchUnlocked ? "Connect" : "Unlock"}
-                    buttonVariant="secondary"
-                    buttonClassName="font-bold text-rose-600 hover:text-rose-700"
-                    delay={0.3}
-                    isLocked={!isTechMatchUnlocked}
-                    id="tech-match-card"
-                />
-                <OpportunityCard
-                    title="Game Zone"
-                    description="Play multiplayer games with friends."
-                    icon={Gamepad2}
-                    gradient="bg-gradient-to-r from-violet-600 to-indigo-600 text-white"
-                    onClick={() => onNavigate('/games')}
-                    buttonText="Play Now"
-                    buttonVariant="secondary"
-                    buttonClassName="font-bold text-indigo-600 hover:text-indigo-700"
-                    delay={0.4}
-                    id="game-zone-card"
-                />
-            </div>
-        </section>
-    );
+  return (
+    <section>
+      <div className="flex items-center gap-2 mb-4">
+        <h2 className="text-xl font-bold bg-gradient-to-r from-orange-500 to-green-600 bg-clip-text text-transparent">
+          Opportunities Hub
+        </h2>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <OpportunityCard
+          title="Founders Corner"
+          description="Find your perfect co-founder or join the next unicorn."
+          icon={Rocket}
+          gradient="bg-gradient-to-r from-orange-500 to-pink-600 text-white"
+          onClick={() => onNavigate("/founders-corner")}
+          buttonText="Find Matches"
+          buttonVariant="secondary"
+          buttonClassName="font-semibold text-pink-600 hover:text-pink-700"
+          delay={0.1}
+          id="opportunity-section"
+        />
+        <OpportunityCard
+          title="Gig Market"
+          description="Find micro-gigs, freelance tasks, and earn while you learn."
+          icon={Zap}
+          gradient="bg-gradient-to-r from-yellow-400 to-green-500 text-black"
+          onClick={() => onNavigate("/gig-marketplace")}
+          buttonText="Find Gigs"
+          buttonClassName="font-bold bg-white text-green-700 hover:bg-white/90 border-0"
+          delay={0.2}
+          id="gigs-section"
+        />
+        <OpportunityCard
+          title="Tech Match"
+          description="Find your player 2. Date other devs."
+          icon={Heart}
+          gradient="bg-gradient-to-r from-pink-500 to-rose-500 text-white"
+          onClick={handleTechMatchClick}
+          buttonText={isTechMatchUnlocked ? "Connect" : "Unlock"}
+          buttonVariant="secondary"
+          buttonClassName="font-bold text-rose-600 hover:text-rose-700"
+          delay={0.3}
+          isLocked={!isTechMatchUnlocked}
+          id="tech-match-card"
+        />
+        <OpportunityCard
+          title="Game Zone"
+          description="Play multiplayer games with friends."
+          icon={Gamepad2}
+          gradient="bg-gradient-to-r from-violet-600 to-indigo-600 text-white"
+          onClick={() => onNavigate("/games")}
+          buttonText="Play Now"
+          buttonVariant="secondary"
+          buttonClassName="font-bold text-indigo-600 hover:text-indigo-700"
+          delay={0.4}
+          id="game-zone-card"
+        />
+      </div>
+    </section>
+  );
 });
 
 OpportunitySection.displayName = "OpportunitySection";

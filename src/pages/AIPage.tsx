@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ArrowLeft, Bot, Sparkles, Code, FileText, Lightbulb, Zap, Cpu, Globe, Network, MessageSquare, BookOpen, ShieldAlert, Layers } from "lucide-react";
@@ -9,16 +9,26 @@ const AIPage = () => {
     const navigate = useNavigate();
     const [hoveredCard, setHoveredCard] = useState<string | null>(null);
     const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+    const rafRef = useRef<number | null>(null);
 
     useEffect(() => {
         const handleMouseMove = (e: MouseEvent) => {
-            setMousePosition({
-                x: (e.clientX / window.innerWidth) * 2 - 1,
-                y: (e.clientY / window.innerHeight) * 2 - 1,
+            if (rafRef.current !== null) return;
+            const clientX = e.clientX;
+            const clientY = e.clientY;
+            rafRef.current = requestAnimationFrame(() => {
+                rafRef.current = null;
+                setMousePosition({
+                    x: (clientX / window.innerWidth) * 2 - 1,
+                    y: (clientY / window.innerHeight) * 2 - 1,
+                });
             });
         };
-        window.addEventListener("mousemove", handleMouseMove);
-        return () => window.removeEventListener("mousemove", handleMouseMove);
+        window.addEventListener("mousemove", handleMouseMove, { passive: true });
+        return () => {
+            window.removeEventListener("mousemove", handleMouseMove);
+            if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+        };
     }, []);
 
     const tools = [

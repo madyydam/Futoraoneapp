@@ -906,6 +906,7 @@ export type Database = {
           longest_streak: number | null
           one_signal_player_id: string | null
           portfolio_url: string | null
+          settings: Json | null
           tech_skills: string[] | null
           updated_at: string
           username: string
@@ -937,6 +938,7 @@ export type Database = {
           longest_streak?: number | null
           one_signal_player_id?: string | null
           portfolio_url?: string | null
+          settings?: Json | null
           tech_skills?: string[] | null
           updated_at?: string
           username: string
@@ -968,6 +970,7 @@ export type Database = {
           longest_streak?: number | null
           one_signal_player_id?: string | null
           portfolio_url?: string | null
+          settings?: Json | null
           tech_skills?: string[] | null
           updated_at?: string
           username?: string

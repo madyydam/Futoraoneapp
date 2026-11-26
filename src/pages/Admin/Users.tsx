@@ -74,32 +74,24 @@ const UsersPage = () => {
     });
     const { toast } = useToast();
 
+    const [page, setPage] = useState(0);
+    const PAGE_SIZE = 50;
+
     useEffect(() => {
         fetchUsers();
-    }, []);
+    }, [page]);
 
     const fetchUsers = async () => {
         try {
             setLoading(true);
-            const { data: profiles, error } = await supabase
-                .from("profiles")
-                .select("*")
-                .order("created_at", { ascending: false });
+            const { data, error } = await (supabase.rpc as any)("get_admin_users_page", {
+                p_offset: page * PAGE_SIZE,
+                p_limit: PAGE_SIZE,
+            });
 
             if (error) throw error;
 
-            // Fetch native wallets for all users
-            const { data: wallets } = await supabase
-                .from("native_wallets")
-                .select("user_id, balance");
-
-            // Map balances to users
-            const usersWithBalance = profiles?.map(profile => {
-                const wallet = wallets?.find(w => w.user_id === profile.id);
-                return { ...profile, balance: wallet?.balance || 0 };
-            });
-
-            setUsers(usersWithBalance || []);
+            setUsers((data as any[]) || []);
         } catch (error) {
             console.error("Error fetching users:", error);
             toast({
@@ -147,6 +139,16 @@ const UsersPage = () => {
 
             if (error) throw error;
 
+            await (supabase.rpc as any)("log_admin_action", {
+                p_action: "UPDATE_USER_PROFILE",
+                p_target_type: "profile",
+                p_target_id: selectedUser.id,
+                p_details: {
+                    is_verified: editForm.is_verified,
+                    is_banned: editForm.is_banned,
+                },
+            });
+
             toast({
                 title: "User Updated",
                 description: "User profile has been updated successfully.",
@@ -174,6 +176,12 @@ const UsersPage = () => {
 
             if (error) throw error;
 
+            await (supabase.rpc as any)("log_admin_action", {
+                p_action: "DELETE_USER_PROFILE",
+                p_target_type: "profile",
+                p_target_id: selectedUser.id,
+            });
+
             toast({
                 title: "User Deleted",
                 description: "User profile has been deleted from the database.",
@@ -199,6 +207,11 @@ const UsersPage = () => {
                 .eq("is_verified", false);
 
             if (error) throw error;
+
+            await (supabase.rpc as any)("log_admin_action", {
+                p_action: "VERIFY_ALL_USERS",
+                p_target_type: "profile",
+            });
 
             toast({
                 title: "Action Successful",
@@ -226,6 +239,12 @@ const UsersPage = () => {
 
             if (error) throw error;
 
+            await (supabase.rpc as any)("log_admin_action", {
+                p_action: currentStatus ? "UNVERIFY_USER" : "VERIFY_USER",
+                p_target_type: "profile",
+                p_target_id: userId,
+            });
+
             // Update local state
             setUsers(users.map(user =>
                 user.id === userId ? { ...user, is_verified: !currentStatus } : user
@@ -246,6 +265,25 @@ const UsersPage = () => {
         }
     };
 
+    const handleExportCSV = () => {
+        const escapeCell = (val: unknown) => {
+            const s = String(val ?? "");
+            // Prevent CSV formula injection in Excel/Sheets
+            const safe = /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
+            return `"${safe.replace(/"/g, '""')}"`;
+        };
+        const headers = ["id", "username", "full_name", "is_verified", "is_banned", "balance", "created_at"];
+        const rows = filteredUsers.map(u => headers.map(h => escapeCell(u[h])).join(","));
+        const csv = [headers.join(","), ...rows].join("\n");
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `futoraone-users-page-${page + 1}.csv`;
+        link.click();
+        URL.revokeObjectURL(url);
+    };
+
     const toggleBan = async (userId: string, currentStatus: boolean) => {
         try {
             const { error } = await supabase
@@ -254,6 +292,12 @@ const UsersPage = () => {
                 .eq("id", userId);
 
             if (error) throw error;
+
+            await (supabase.rpc as any)("log_admin_action", {
+                p_action: currentStatus ? "UNBAN_USER" : "BAN_USER",
+                p_target_type: "profile",
+                p_target_id: userId,
+            });
 
             // Update local state
             setUsers(users.map(user =>
@@ -271,6 +315,43 @@ const UsersPage = () => {
             toast({
                 title: "Error",
                 description: "Failed to update ban status",
+                variant: "destructive",
+            });
+        }
+    };
+
+    const handleToggleAdminRole = async (userId: string, currentlyAdmin: boolean) => {
+        try {
+            if (currentlyAdmin) {
+                const { error } = await supabase
+                    .from("user_roles")
+                    .delete()
+                    .eq("user_id", userId)
+                    .eq("role", "admin");
+                if (error) throw error;
+            } else {
+                const { error } = await supabase
+                    .from("user_roles")
+                    .upsert({ user_id: userId, role: "admin" }, { onConflict: "user_id,role" });
+                if (error) throw error;
+            }
+
+            await (supabase.rpc as any)("log_admin_action", {
+                p_action: currentlyAdmin ? "REVOKE_ADMIN_ROLE" : "GRANT_ADMIN_ROLE",
+                p_target_type: "user_roles",
+                p_target_id: userId,
+            });
+
+            setUsers(users.map(u => u.id === userId ? { ...u, is_admin: !currentlyAdmin } : u));
+            toast({
+                title: currentlyAdmin ? "Admin Role Revoked" : "Admin Role Granted",
+                description: `User role updated to ${currentlyAdmin ? "User" : "Admin"}.`,
+            });
+        } catch (error) {
+            console.error("Error updating user role:", error);
+            toast({
+                title: "Error",
+                description: "Failed to update user role",
                 variant: "destructive",
             });
         }
@@ -301,7 +382,7 @@ const UsersPage = () => {
                             <Shield className="w-5 h-5" />
                             Verify All
                         </Button>
-                        <Button variant="outline" className="gap-3 h-12 px-8 border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-xl font-bold shadow-sm">
+                        <Button onClick={handleExportCSV} variant="outline" className="gap-3 h-12 px-8 border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-xl font-bold shadow-sm">
                             <Download className="w-5 h-5" />
                             Export
                         </Button>
@@ -338,7 +419,7 @@ const UsersPage = () => {
                         <TableBody>
                             {loading ? (
                                 <TableRow>
-                                    <TableCell colSpan={5} className="text-center py-8">Loading users...</TableCell>
+                                    <TableCell colSpan={6} className="text-center py-8">Loading users...</TableCell>
                                 </TableRow>
                             ) : filteredUsers.map((user) => (
                                 <TableRow key={user.id} className="border-slate-100 hover:bg-slate-50/50 transition-colors">
@@ -409,8 +490,8 @@ const UsersPage = () => {
                                                 <DropdownMenuItem onClick={() => toggleBan(user.id, user.is_banned)}>
                                                     <AlertTriangle className="mr-2 h-4 w-4" /> {user.is_banned ? "Unban" : "Ban"}
                                                 </DropdownMenuItem>
-                                                <DropdownMenuItem>
-                                                    <Shield className="mr-2 h-4 w-4" /> Change Role
+                                                <DropdownMenuItem onClick={() => handleToggleAdminRole(user.id, Boolean(user.is_admin))}>
+                                                    <Shield className="mr-2 h-4 w-4" /> {user.is_admin ? "Revoke Admin" : "Make Admin"}
                                                 </DropdownMenuItem>
                                                 <DropdownMenuSeparator />
                                                 <DropdownMenuItem className="text-destructive" onClick={() => handleDeleteClick(user)}>
@@ -423,6 +504,32 @@ const UsersPage = () => {
                             ))}
                         </TableBody>
                     </Table>
+                </div>
+
+                <div className="flex items-center justify-between px-2">
+                    <p className="text-xs font-bold text-slate-500">
+                        Page {page + 1} &middot; Showing {filteredUsers.length} users
+                    </p>
+                    <div className="flex items-center gap-2">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={page === 0 || loading}
+                            onClick={() => setPage((p) => Math.max(0, p - 1))}
+                            className="rounded-xl font-bold"
+                        >
+                            Previous
+                        </Button>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={users.length < PAGE_SIZE || loading}
+                            onClick={() => setPage((p) => p + 1)}
+                            className="rounded-xl font-bold"
+                        >
+                            Next
+                        </Button>
+                    </div>
                 </div>
 
                 {/* Edit Dialog */}

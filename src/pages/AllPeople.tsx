@@ -8,6 +8,7 @@ import { BottomNav } from "@/components/BottomNav";
 import { supabase } from "@/integrations/supabase/client";
 import type { User } from "@supabase/supabase-js";
 import { UserCard } from "@/components/UserCard";
+import { sanitizePostgrestSearch } from "@/lib/security";
 
 interface UserProfile {
     id: string;
@@ -76,8 +77,9 @@ const AllPeople = () => {
                 .order("created_at", { ascending: false })
                 .range(start, end);
 
-            if (query.trim()) {
-                supabaseQuery = supabaseQuery.or(`username.ilike.%${query}%,full_name.ilike.%${query}%`);
+            const cleanQuery = sanitizePostgrestSearch(query);
+            if (cleanQuery) {
+                supabaseQuery = supabaseQuery.or(`username.ilike.%${cleanQuery}%,full_name.ilike.%${cleanQuery}%`);
             }
 
             const { data, error } = await supabaseQuery;

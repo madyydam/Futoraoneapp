@@ -114,22 +114,15 @@ export default defineConfig(({ mode }) => {
               },
             },
             {
-              urlPattern: /^https:\/\/vunrtqpxoqwuvofkqvuz\.supabase\.co\/rest\/v1\/.*/i,
-              handler: "StaleWhileRevalidate",
-              options: {
-                cacheName: "supabase-api-cache",
-                expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 }, // 24 hours
-                cacheableResponse: { statuses: [0, 200] },
-              },
+              urlPattern: /^https:\/\/sbzsgeokspmkewrmuqgi\.supabase\.co\/(?:rest|auth|functions)\/v1\/.*/i,
+              handler: "NetworkOnly",
             },
           ],
           navigateFallback: "index.html",
           navigateFallbackDenylist: [/^\/api/, /^\/functions/],
         },
         devOptions: {
-          enabled: true,
-          type: 'module',
-          navigateFallback: 'index.html',
+          enabled: false,
         },
       }),
     ].filter(Boolean),
@@ -137,6 +130,19 @@ export default defineConfig(({ mode }) => {
       minify: "esbuild",
       target: "esnext",
       chunkSizeWarningLimit: 1200,
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            "react-vendor": ["react", "react-dom", "react-router-dom"],
+            "query-vendor": ["@tanstack/react-query", "@tanstack/react-query-persist-client", "@tanstack/query-sync-storage-persister"],
+            "supabase-vendor": ["@supabase/supabase-js"],
+            "ui-vendor": ["lucide-react", "sonner", "class-variance-authority", "clsx", "tailwind-merge"],
+            "motion-vendor": ["framer-motion"],
+            "charts-vendor": ["recharts"],
+            "firebase-vendor": ["firebase/app", "firebase/auth", "firebase/messaging"],
+          },
+        },
+      },
     },
     resolve: {
       alias: {

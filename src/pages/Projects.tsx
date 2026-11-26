@@ -14,6 +14,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { BottomNav } from "@/components/BottomNav";
 import type { User } from "@supabase/supabase-js";
 import { CartoonLoader } from "@/components/CartoonLoader";
+import { sanitizeExternalUrl } from "@/lib/security";
 
 interface Project {
   id: string;
@@ -116,13 +117,22 @@ const Projects = () => {
     if (!user) return;
 
     try {
+      const safeGithub = sanitizeExternalUrl(formData.github_url);
+      const safeLive = sanitizeExternalUrl(formData.live_url);
+      if (formData.github_url.trim() && !safeGithub) {
+        throw new Error("GitHub URL must start with https:// or http://");
+      }
+      if (formData.live_url.trim() && !safeLive) {
+        throw new Error("Live URL must start with https:// or http://");
+      }
+
       const { error } = await supabase.from('projects').insert({
         user_id: user.id,
-        title: formData.title,
-        description: formData.description,
+        title: formData.title.trim(),
+        description: formData.description.trim(),
         tech_stack: formData.tech_stack.split(',').map(s => s.trim()).filter(Boolean),
-        github_url: formData.github_url,
-        live_url: formData.live_url,
+        github_url: safeGithub || null,
+        live_url: safeLive || null,
       });
 
       if (error) throw error;
@@ -224,9 +234,9 @@ const Projects = () => {
                 </div>
 
                 <div className="flex items-center gap-4 mb-4">
-                  {project.github_url && (
+                  {sanitizeExternalUrl(project.github_url) && (
                     <a
-                      href={project.github_url}
+                      href={sanitizeExternalUrl(project.github_url)!}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex items-center gap-2 text-sm text-primary hover:underline"
@@ -235,9 +245,9 @@ const Projects = () => {
                       GitHub
                     </a>
                   )}
-                  {project.live_url && (
+                  {sanitizeExternalUrl(project.live_url) && (
                     <a
-                      href={project.live_url}
+                      href={sanitizeExternalUrl(project.live_url)!}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex items-center gap-2 text-sm text-primary hover:underline"

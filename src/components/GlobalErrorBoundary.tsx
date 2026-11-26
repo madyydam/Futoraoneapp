@@ -77,78 +77,58 @@ export class GlobalErrorBoundary extends Component<Props, State> {
         }
     }
 
-    private handleReset = () => {
-        // Safe recovery: Reload without stripping auth
+    private handleReset = async () => {
         try {
-            // Clear session storage which is ephemeral anyway
             sessionStorage.clear();
 
-            // Clear service worker caches if available to fix corrupted assets
             if ('caches' in window) {
-                caches.keys().then(names => {
-                    names.forEach(name => caches.delete(name));
-                });
+                const names = await caches.keys();
+                await Promise.all(names.map((name) => caches.delete(name)));
             }
-
-            // Just reload the page or go to landing to reset the app state
-            window.location.reload();
         } catch (e) {
             console.error("Error during reset:", e);
+        } finally {
             window.location.reload();
         }
     };
 
     private getErrorMessage() {
-        const { errorType, retryCount, cachedMessage } = this.state;
-
-        // Return cached message if errorType and retryCount haven't changed
-        if (cachedMessage) {
-            return cachedMessage;
-        }
-
-        let message;
+        const { errorType, retryCount } = this.state;
 
         if (retryCount > 0) {
-            message = {
+            return {
                 title: "Phir se koshish kar rahe hain...",
                 description: "Ruko zara, sab theek ho jayega! 🔄",
                 subtitle: `Koshish ${retryCount}/${this.maxRetries}`,
             };
-        } else {
-            switch (errorType) {
-                case 'chunk':
-                    message = {
-                        title: "Kuch galat ho gaya!",
-                        description: "App update ho gayi hogi, bas refresh karna padega 🔄",
-                        subtitle: "Ek click mein sab theek!",
-                    };
-                    break;
-                case 'network':
-                    message = {
-                        title: "Internet ka jhamela!",
-                        description: "Connection check karo aur refresh maaro 📶",
-                        subtitle: "Network theek karke phir se try karo!",
-                    };
-                    break;
-                case 'render':
-                    message = {
-                        title: "कुछ गलत हो गया!",
-                        description: "Badi mushkil se bani hoon, time lagega na 😄",
-                        subtitle: "Ek refresh aur ho jaaye!",
-                    };
-                    break;
-                default:
-                    message = {
-                        title: "Arre, kuch gadbad hai!",
-                        description: "Tension mat lo, refresh se sab theek ho jayega 🚀",
-                        subtitle: "Bas ek baar refresh kar do!",
-                    };
-            }
         }
 
-        // Cache the message for future renders
-        this.state.cachedMessage = message;
-        return message;
+        switch (errorType) {
+            case 'chunk':
+                return {
+                    title: "Kuch galat ho gaya!",
+                    description: "App update ho gayi hogi, bas refresh karna padega 🔄",
+                    subtitle: "Ek click mein sab theek!",
+                };
+            case 'network':
+                return {
+                    title: "Internet ka jhamela!",
+                    description: "Connection check karo aur refresh maaro 📶",
+                    subtitle: "Network theek karke phir se try karo!",
+                };
+            case 'render':
+                return {
+                    title: "कुछ गलत हो गया!",
+                    description: "Badi mushkil se bani hoon, time lagega na 😄",
+                    subtitle: "Ek refresh aur ho jaaye!",
+                };
+            default:
+                return {
+                    title: "Arre, kuch gadbad hai!",
+                    description: "Tension mat lo, refresh se sab theek ho jayega 🚀",
+                    subtitle: "Bas ek baar refresh kar do!",
+                };
+        }
     }
 
     public render() {

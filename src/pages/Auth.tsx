@@ -19,6 +19,8 @@ import {
 import { cn } from "@/lib/utils";
 import { getRandomAvatar } from "@/utils/avatars";
 import { Turnstile } from '@marsidev/react-turnstile';
+import { triggerAuthEmail } from "@/services/email.service";
+import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
 
 const Auth = () => {
   const [searchParams] = useSearchParams();
@@ -33,28 +35,43 @@ const Auth = () => {
 
   const [loading, setLoading] = useState(false);
   const [showLoginErrorDialog, setShowLoginErrorDialog] = useState(false);
+  const [showResetDialog, setShowResetDialog] = useState(false);
+  const [resetEmail, setResetEmail] = useState("");
+  const [resetSending, setResetSending] = useState(false);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  // Persistent authentication check
+  // Persistent authentication & OAuth callback check
   useEffect(() => {
-    // Set up auth state listener FIRST
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (session?.user && window.location.pathname === "/auth") {
-        navigate("/feed");
+    let active = true;
+
+    const oauthError = searchParams.get("error_description") || searchParams.get("error");
+    if (oauthError) {
+      toast({
+        title: "Google Sign-In Failed",
+        description: oauthError,
+        variant: "destructive",
+      });
+    }
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (active && session?.user && window.location.pathname === "/auth") {
+        navigate("/feed", { replace: true });
       }
     });
 
-    // THEN check for existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user && window.location.pathname === "/auth") {
-        navigate("/feed");
+      if (active && session?.user && window.location.pathname === "/auth") {
+        navigate("/feed", { replace: true });
       }
     });
 
-    return () => subscription.unsubscribe();
-  }, [navigate]);
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
+  }, [navigate, searchParams, toast]);
 
   // Update toggle state if URL param changes
   useEffect(() => {
@@ -71,6 +88,14 @@ const Auth = () => {
   const handlePhotoChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      if (!file.type.startsWith("image/") || file.size > 5 * 1024 * 1024) {
+        toast({
+          title: "Invalid Image",
+          description: "Please select an image file under 5MB.",
+          variant: "destructive",
+        });
+        return;
+      }
       setProfilePhoto(file);
       const reader = new FileReader();
       reader.onloadend = () => {
@@ -78,19 +103,19 @@ const Auth = () => {
       };
       reader.readAsDataURL(file);
     }
-  }, []);
+  }, [toast]);
 
   const uploadProfilePhoto = useCallback(async (userId: string): Promise<string | null> => {
     if (!profilePhoto) return null;
 
     try {
-      const fileExt = profilePhoto.name.split('.').pop();
-      const fileName = `${userId}-${Math.random()}.${fileExt}`;
-      const filePath = `${fileName}`;
+      const fileExt = profilePhoto.name.split('.').pop() || 'png';
+      // Match storage RLS folder policy: [userId]/[filename]
+      const filePath = `${userId}/avatar_${Date.now()}.${fileExt}`;
 
       const { error: uploadError } = await supabase.storage
         .from('avatars')
-        .upload(filePath, profilePhoto);
+        .upload(filePath, profilePhoto, { upsert: true });
 
       if (uploadError) throw uploadError;
 
@@ -105,19 +130,46 @@ const Auth = () => {
     }
   }, [profilePhoto]);
 
+  const handlePasswordReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetEmail.trim()) return;
+    setResetSending(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(resetEmail.trim(), {
+        redirectTo: `${window.location.origin}/settings`,
+      });
+      if (error) throw error;
+      toast({
+        title: "Reset Link Sent",
+        description: "Check your email inbox for password recovery instructions.",
+      });
+      setShowResetDialog(false);
+    } catch (error) {
+      toast({
+        title: "Reset Failed",
+        description: error instanceof Error ? error.message : "Could not send reset email",
+        variant: "destructive",
+      });
+    } finally {
+      setResetSending(false);
+    }
+  };
+
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
       if (isLogin) {
-        const { error } = await supabase.auth.signInWithPassword({
+        const { data, error } = await supabase.auth.signInWithPassword({
           email,
           password,
           options: { captchaToken: captchaToken || undefined }
         });
 
         if (error) throw error;
+
+        void triggerAuthEmail(data.user?.id, "login");
 
         toast({
           title: "Welcome back!",
@@ -133,6 +185,7 @@ const Auth = () => {
             data: {
               full_name: fullName,
               username: username,
+              avatar_url: selectedAvatar,
             },
             emailRedirectTo: `${window.location.origin}/feed`,
           },
@@ -140,25 +193,34 @@ const Auth = () => {
 
         if (error) throw error;
 
-        // Upload profile photo if provided
-        let avatarUrl = selectedAvatar;
-        if (data.user && profilePhoto) {
-          avatarUrl = await uploadProfilePhoto(data.user.id);
-        }
+        if (data.session && data.user) {
+          void triggerAuthEmail(data.user.id, "welcome");
 
-        // Set avatar to profile
-        if (data.user && avatarUrl) {
-          await supabase
-            .from('profiles')
-            .update({ avatar_url: avatarUrl })
-            .eq('id', data.user.id);
-        }
+          // Upload custom profile photo only when an authenticated session is active
+          let avatarUrl = selectedAvatar;
+          if (profilePhoto) {
+            avatarUrl = await uploadProfilePhoto(data.user.id);
+          }
 
-        toast({
-          title: "Account created!",
-          description: "Welcome to FutoraOne Tech Community!",
-        });
-        navigate("/feed");
+          if (avatarUrl) {
+            await supabase
+              .from('profiles')
+              .update({ avatar_url: avatarUrl })
+              .eq('id', data.user.id);
+          }
+
+          toast({
+            title: "Account created!",
+            description: "Welcome to FutoraOne Tech Community!",
+          });
+          navigate("/feed");
+        } else {
+          toast({
+            title: "Check your email",
+            description: "We sent a confirmation link to activate your account.",
+          });
+          setIsLogin(true);
+        }
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred";
@@ -217,13 +279,29 @@ const Auth = () => {
           </div>
 
           <div className="p-8 pt-6">
-            <div className="text-center mb-6">
+            <div className="text-center mb-5">
               <h2 className="text-2xl font-black tracking-tight text-white mb-1">
                 {isLogin ? "Welcome Back!" : "New Account"}
               </h2>
               <p className="text-[11px] text-muted-foreground font-bold uppercase tracking-wider">
                 {isLogin ? "Sign in to your tech portal" : "Join the future of networking"}
               </p>
+            </div>
+
+            <div className="space-y-4 mb-5">
+              <GoogleSignInButton
+                label="Continue with Google"
+                redirectPath="/auth"
+                disabled={loading}
+                className="w-full h-11 rounded-2xl text-sm font-bold"
+              />
+              <div className="relative flex items-center justify-center">
+                <div className="border-t border-white/10 w-full" />
+                <span className="px-3 text-[10px] font-bold uppercase tracking-widest text-muted-foreground bg-transparent whitespace-nowrap">
+                  or continue with email
+                </span>
+                <div className="border-t border-white/10 w-full" />
+              </div>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -288,7 +366,18 @@ const Auth = () => {
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
                     <Label htmlFor="password" className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">Password</Label>
-                    {isLogin && <a href="#" className="text-[10px] text-primary hover:underline font-bold">Forgot?</a>}
+                    {isLogin && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setResetEmail(email);
+                          setShowResetDialog(true);
+                        }}
+                        className="text-[10px] text-primary hover:underline font-bold"
+                      >
+                        Forgot?
+                      </button>
+                    )}
                   </div>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -352,6 +441,32 @@ const Auth = () => {
               Create Account
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showResetDialog} onOpenChange={setShowResetDialog}>
+        <DialogContent className="sm:max-w-md bg-card/95 backdrop-blur-xl border-white/10">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold">Reset Password</DialogTitle>
+            <DialogDescription>
+              Enter your account email and we&apos;ll send a secure password recovery link.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handlePasswordReset} className="space-y-4">
+            <Input
+              type="email"
+              placeholder="name@domain.com"
+              value={resetEmail}
+              onChange={(e) => setResetEmail(e.target.value)}
+              required
+            />
+            <DialogFooter>
+              <Button type="button" variant="ghost" onClick={() => setShowResetDialog(false)}>Cancel</Button>
+              <Button type="submit" disabled={resetSending}>
+                {resetSending ? "Sending..." : "Send Reset Link"}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

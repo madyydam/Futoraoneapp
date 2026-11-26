@@ -172,7 +172,7 @@ export default function CommunityChat() {
     const handleChannelClick = (id: string) => {
         setCurrChannelId(id);
         setIsMobileChannelsOpen(false); // Close mobile drawer
-        navigate(`/messages/community/${communityId}/${id}`);
+        navigate(`/messages/community/${communityId}/channel/${id}`);
     };
 
     const handleCreateChannel = () => {

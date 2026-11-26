@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { 
   ArrowLeft, 
@@ -15,6 +15,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useNavigate } from 'react-router-dom';
 import { toast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 const AIEnhancer = () => {
   const navigate = useNavigate();
@@ -25,8 +26,6 @@ const AIEnhancer = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-mentor`;
-
   const enhanceContent = async () => {
     if (!content.trim()) return;
     
@@ -36,63 +35,23 @@ const AIEnhancer = () => {
     setSuggestions('');
 
     try {
-      const resp = await fetch(CHAT_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-        },
-        body: JSON.stringify({
-          messages: [{ role: 'user', content }],
+      const { data, error } = await supabase.functions.invoke('ai-mentor', {
+        body: {
+          messages: [{ role: 'user', content: content.trim() }],
           mode: 'enhance'
-        }),
+        },
       });
 
-      if (!resp.ok) throw new Error('Failed to enhance content');
-      if (!resp.body) throw new Error('No response body');
+      if (error) throw new Error(error.message || 'Failed to enhance content');
+      const fullResponse: string = data?.generatedText || '';
+      if (!fullResponse) throw new Error(data?.error || 'Empty response from AI');
 
-      const reader = resp.body.getReader();
-      const decoder = new TextDecoder();
-      let fullResponse = '';
-      let textBuffer = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        
-        textBuffer += decoder.decode(value, { stream: true });
-
-        let newlineIndex: number;
-        while ((newlineIndex = textBuffer.indexOf('\n')) !== -1) {
-          let line = textBuffer.slice(0, newlineIndex);
-          textBuffer = textBuffer.slice(newlineIndex + 1);
-
-          if (line.endsWith('\r')) line = line.slice(0, -1);
-          if (line.startsWith(':') || line.trim() === '') continue;
-          if (!line.startsWith('data: ')) continue;
-
-          const jsonStr = line.slice(6).trim();
-          if (jsonStr === '[DONE]') break;
-
-          try {
-            const parsed = JSON.parse(jsonStr);
-            const chunk = parsed.choices?.[0]?.delta?.content;
-            if (chunk) fullResponse += chunk;
-          } catch {
-            textBuffer = line + '\n' + textBuffer;
-            break;
-          }
-        }
-      }
-
-      // Try to parse the JSON response
       try {
-        // Find JSON in the response
         const jsonMatch = fullResponse.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
           const parsed = JSON.parse(jsonMatch[0]);
           setEnhancedContent(parsed.enhanced_content || content);
-          setHashtags(parsed.hashtags || []);
+          setHashtags(Array.isArray(parsed.hashtags) ? parsed.hashtags : []);
           setSuggestions(parsed.suggestions || '');
         } else {
           setEnhancedContent(fullResponse);

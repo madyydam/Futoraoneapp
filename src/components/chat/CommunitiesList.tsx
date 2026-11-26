@@ -185,11 +185,22 @@ export function CommunitiesList({
     });
 
     useEffect(() => {
+        let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+        const debouncedRefetch = () => {
+            if (debounceTimer) clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+                refetch();
+            }, 400);
+        };
+
         const channel = supabase.channel("discovery_realtime")
-            .on("postgres_changes", { event: "*", schema: "public", table: "communities" }, () => refetch())
-            .on("postgres_changes", { event: "*", schema: "public", table: "community_members" }, () => refetch())
+            .on("postgres_changes", { event: "*", schema: "public", table: "communities" }, debouncedRefetch)
+            .on("postgres_changes", { event: "*", schema: "public", table: "community_members" }, debouncedRefetch)
             .subscribe();
-        return () => { supabase.removeChannel(channel); };
+        return () => {
+            if (debounceTimer) clearTimeout(debounceTimer);
+            supabase.removeChannel(channel);
+        };
     }, [refetch]);
 
     const handleJoin = useCallback(async (communityId: string, communityName: string) => {

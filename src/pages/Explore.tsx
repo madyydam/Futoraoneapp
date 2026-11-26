@@ -11,7 +11,7 @@ import { UserGrid } from "@/components/explore/UserGrid";
 import { CategoryGrid } from "@/components/explore/CategoryGrid";
 import { TrendingSection } from "@/components/explore/TrendingSection";
 import { TRENDING_TOPICS, TRENDING_PROJECTS } from "@/components/explore/exploreConstants";
-import type { User } from "@supabase/supabase-js";
+import { sanitizePostgrestSearch } from "@/lib/security";
 import { useAuth } from "@/hooks/useAuth";
 
 const Explore = () => {
@@ -64,16 +64,17 @@ const Explore = () => {
   }, [currentUser, authLoading]);
 
   const performSearch = useCallback(async (query: string) => {
-    if (!query.trim()) return;
+    const cleanQuery = sanitizePostgrestSearch(query);
+    if (!cleanQuery) return;
     setSearchLoading(true);
     setShowResults(true);
 
     try {
       // 1. Search People (Supabase)
-      const { data: profiles, error } = await supabase
+      const { data: profiles } = await supabase
         .from("profiles")
         .select("id, username, full_name, avatar_url, is_verified")
-        .or(`username.ilike.%${query}%,full_name.ilike.%${query}%`)
+        .or(`username.ilike.%${cleanQuery}%,full_name.ilike.%${cleanQuery}%`)
         .limit(3);
 
       const peopleResults: SearchResult[] = (profiles || []).map(p => ({

@@ -210,7 +210,7 @@ export function GroupChatWindow({ groupId, currentUserId }: { groupId: string; c
             if (messagesError) throw messagesError;
 
             const senderIds = [...new Set((messagesData || []).map(m => m.sender_id))];
-            let profilesMap: Record<string, { full_name: string; avatar_url: string | null }> = {};
+            const profilesMap: Record<string, { full_name: string; avatar_url: string | null }> = {};
             if (senderIds.length > 0) {
                 const { data: profilesData } = await supabase
                     .from('profiles').select('id, full_name, avatar_url').in('id', senderIds);
@@ -268,29 +268,36 @@ export function GroupChatWindow({ groupId, currentUserId }: { groupId: string; c
 
     useEffect(() => {
         fetchGroupData();
+        const handleReconnect = () => fetchGroupData();
+        window.addEventListener('futora:reconnected', handleReconnect);
+
         const channel = supabase
             .channel(`group-chat-${groupId}`)
             .on('postgres_changes', {
                 event: 'INSERT', schema: 'public', table: 'messages',
                 filter: `group_id=eq.${groupId}`
             }, async (payload) => {
+                const incoming = payload.new as any;
                 const { data: profile } = await supabase
                     .from('profiles').select('full_name, avatar_url')
-                    .eq('id', payload.new.sender_id).single();
+                    .eq('id', incoming.sender_id).single();
 
-                setMessages(prev => [...prev, {
-                    ...(payload.new as any),
+                setMessages(prev => prev.some(m => m.id === incoming.id) ? prev : [...prev, {
+                    ...incoming,
                     profiles: profile || { full_name: 'Unknown', avatar_url: null }
                 }]);
 
-                if (payload.new.sender_id !== currentUserId) {
+                if (incoming.sender_id !== currentUserId) {
                     markMessagesAsRead();
                     scrollToBottom();
                 }
             })
             .subscribe();
 
-        return () => { supabase.removeChannel(channel); };
+        return () => {
+            window.removeEventListener('futora:reconnected', handleReconnect);
+            supabase.removeChannel(channel);
+        };
     }, [groupId, fetchGroupData, currentUserId, markMessagesAsRead, scrollToBottom]);
 
     useEffect(() => { scrollToBottom(); }, [messages.length, scrollToBottom]);

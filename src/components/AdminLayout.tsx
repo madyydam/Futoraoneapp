@@ -27,6 +27,7 @@ import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 
 interface AdminLayoutProps {
     children: React.ReactNode;
@@ -38,6 +39,7 @@ export const AdminLayout = ({ children }: AdminLayoutProps) => {
     const location = useLocation();
     const navigate = useNavigate();
     const { toast } = useToast();
+    const { signOut } = useAuth();
 
     useEffect(() => {
         const getProfile = async () => {
@@ -45,7 +47,7 @@ export const AdminLayout = ({ children }: AdminLayoutProps) => {
             if (user) {
                 const { data } = await supabase
                     .from('profiles')
-                    .select('*')
+                    .select('id, username, full_name, avatar_url, bio, is_admin')
                     .eq('id', user.id)
                     .single();
                 setAdminProfile(data);
@@ -55,7 +57,7 @@ export const AdminLayout = ({ children }: AdminLayoutProps) => {
     }, []);
 
     const handleLogout = async () => {
-        await supabase.auth.signOut();
+        await signOut();
         navigate("/auth");
         toast({
             title: "Logged out",

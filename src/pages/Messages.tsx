@@ -184,100 +184,28 @@ const Messages = () => {
   const fetchConversations = useCallback(async () => {
     if (!user) return;
     try {
-      // 1. Fetch conversations where user is a participant
-      const { data: conversationsData, error } = await supabase
-        .from('conversation_participants')
-        .select(`
-          conversation_id,
-          conversations (
-            updated_at
-          )
-        `)
-        .eq('user_id', user.id)
-        .limit(50);
-
+      const { data, error } = await (supabase.rpc as any)('get_my_conversations_summary');
       if (error) throw error;
-      if (!conversationsData || conversationsData.length === 0) {
-        setConversations([]);
-        setLoading(false);
-        return;
-      }
 
-      const convIds = conversationsData.map(cp => cp.conversation_id);
+      const userConversations: ConversationWithDetails[] = (data || []).map((row: any) => ({
+        id: row.conversation_id,
+        updated_at: row.updated_at,
+        is_pinned: Boolean(row.is_pinned),
+        is_archived: Boolean(row.is_archived),
+        otherUser: {
+          id: row.other_user_id,
+          username: row.other_username,
+          full_name: row.other_full_name,
+          avatar_url: row.other_avatar_url,
+        },
+        lastMessage: row.last_message_content
+          ? { content: row.last_message_content, created_at: row.last_message_created_at }
+          : null,
+        unreadCount: Number(row.unread_count || 0),
+        is_tech_match: false,
+      }));
 
-      // 2. Fetch other participants
-      const { data: participantsList } = await supabase
-        .from('conversation_participants')
-        .select('conversation_id, user_id')
-        .in('conversation_id', convIds)
-        .neq('user_id', user.id);
-
-      let allParticipants: any[] = [];
-      if (participantsList && participantsList.length > 0) {
-        const userIds = participantsList.map(p => p.user_id);
-        const { data: profilesData } = await supabase
-          .from('profiles')
-          .select('id, username, full_name, avatar_url')
-          .in('id', userIds);
-
-        allParticipants = participantsList.map(p => ({
-          conversation_id: p.conversation_id,
-          profiles: profilesData?.find(prof => prof.id === p.user_id)
-        }));
-      }
-
-      // 3. Fetch last messages & unread counts
-      const lastMessagesPromises = convIds.map(convId =>
-        supabase
-          .from('messages')
-          .select('conversation_id, content, created_at, is_read, sender_id')
-          .eq('conversation_id', convId)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle()
-      );
-      const lastMessagesResults = await Promise.all(lastMessagesPromises);
-
-      const unreadCountsPromises = convIds.map(convId =>
-        supabase
-          .from('messages')
-          .select('*', { count: 'exact', head: true })
-          .eq('conversation_id', convId)
-          .eq('is_read', false)
-          .neq('sender_id', user.id)
-      );
-      const unreadCountsResults = await Promise.all(unreadCountsPromises);
-
-      // Combine data
-      const userConversations = conversationsData.map((cp, idx) => {
-        const participant = allParticipants?.find((p) => p.conversation_id === cp.conversation_id);
-        const lastMsg = lastMessagesResults[idx]?.data;
-        const unreadCount = unreadCountsResults[idx]?.count || 0;
-
-        return {
-          id: cp.conversation_id,
-          updated_at: (cp.conversations as any)?.updated_at,
-          is_pinned: false,
-          is_archived: false,
-          otherUser: participant?.profiles,
-          lastMessage: lastMsg,
-          unreadCount,
-          is_tech_match: false
-        };
-      });
-
-      const sorted = (userConversations as any[])
-        .filter(c => c.otherUser)
-        .sort((a, b) => {
-          if (a.is_pinned && !b.is_pinned) return -1;
-          if (!a.is_pinned && b.is_pinned) return 1;
-
-          const dateA = new Date(a.lastMessage?.created_at || a.updated_at).getTime();
-          const dateB = new Date(b.lastMessage?.created_at || b.updated_at).getTime();
-          return dateB - dateA;
-        });
-
-      setConversations(sorted as ConversationWithDetails[]);
+      setConversations(userConversations);
     } catch (error) {
       console.error('Error fetching conversations:', error);
       toast.error("Failed to sync messages");
@@ -293,8 +221,11 @@ const Messages = () => {
   useEffect(() => {
     if (!user) return;
 
+    const handleReconnect = () => fetchConversations();
+    window.addEventListener('futora:reconnected', handleReconnect);
+
     const channel = supabase
-      .channel('chat_updates')
+      .channel(`chat_updates_${user.id}`)
       .on('postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'messages' },
         () => fetchConversations())
@@ -306,32 +237,61 @@ const Messages = () => {
         () => fetchConversations())
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      window.removeEventListener('futora:reconnected', handleReconnect);
+      supabase.removeChannel(channel);
+    };
   }, [user, fetchConversations]);
 
   const handlePin = useCallback(async (id: string, current: boolean) => {
+    if (!user) return;
+    const nextPinned = !current;
     setConversations(prev => prev.map(c =>
-      c.id === id ? { ...c, is_pinned: !current } : c
+      c.id === id ? { ...c, is_pinned: nextPinned } : c
     ).sort((a, b) => {
-      const isPinnedA = a.id === id ? !current : a.is_pinned;
-      const isPinnedB = b.id === id ? !current : b.is_pinned;
-      if (isPinnedA && !isPinnedB) return -1;
-      if (!isPinnedA && isPinnedB) return 1;
+      if (a.is_pinned && !b.is_pinned) return -1;
+      if (!a.is_pinned && b.is_pinned) return 1;
       const dateA = new Date(a.lastMessage?.created_at || a.updated_at).getTime();
       const dateB = new Date(b.lastMessage?.created_at || b.updated_at).getTime();
       return dateB - dateA;
     }));
 
+    const { error } = await supabase
+      .from('conversation_participants')
+      .update({ is_pinned: nextPinned })
+      .eq('conversation_id', id)
+      .eq('user_id', user.id);
+
+    if (error) {
+      toast.error("Failed to update pin status");
+      fetchConversations();
+      return;
+    }
+
     toast.success(current ? "Chat unpinned" : "Chat pinned");
-  }, []);
+  }, [user, fetchConversations]);
 
   const handleArchive = useCallback(async (id: string, current: boolean) => {
+    if (!user) return;
+    const nextArchived = !current;
     setConversations(prev => prev.map(c =>
-      c.id === id ? { ...c, is_archived: !current } : c
+      c.id === id ? { ...c, is_archived: nextArchived } : c
     ));
 
+    const { error } = await supabase
+      .from('conversation_participants')
+      .update({ is_archived: nextArchived })
+      .eq('conversation_id', id)
+      .eq('user_id', user.id);
+
+    if (error) {
+      toast.error("Failed to update archive status");
+      fetchConversations();
+      return;
+    }
+
     toast.success(current ? "Chat unarchived" : "Chat archived");
-  }, []);
+  }, [user, fetchConversations]);
 
 
   const filteredConversations = React.useMemo(() => conversations.filter(conv => {

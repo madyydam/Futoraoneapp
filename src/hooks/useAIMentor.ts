@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -12,63 +13,37 @@ export const useAIMentor = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-mentor`;
-
   const sendMessage = useCallback(async (
     input: string,
     mode: MentorMode = 'mentor'
   ) => {
-    const userMsg: Message = { role: 'user', content: input };
-    setMessages(prev => [...prev, userMsg]);
+    const trimmed = input.trim();
+    if (!trimmed) return;
+
+    const userMsg: Message = { role: 'user', content: trimmed };
+    const nextHistory = [...messages, userMsg].slice(-20);
+    setMessages((prev) => [...prev, userMsg]);
     setIsLoading(true);
     setError(null);
 
-    let assistantContent = '';
-
-    const updateAssistant = (chunk: string) => {
-      assistantContent += chunk;
-      setMessages(prev => {
-        const last = prev[prev.length - 1];
-        if (last?.role === 'assistant') {
-          return prev.map((m, i) =>
-            i === prev.length - 1 ? { ...m, content: assistantContent } : m
-          );
-        }
-        return [...prev, { role: 'assistant', content: assistantContent }];
-      });
-    };
-
     try {
-      const resp = await fetch(CHAT_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+      const { data, error: fnError } = await supabase.functions.invoke('ai-mentor', {
+        body: {
+          messages: nextHistory,
+          mode,
         },
-        body: JSON.stringify({
-          messages: [...messages, userMsg],
-          mode
-        }),
       });
 
-      if (!resp.ok) {
-        const errorData = await resp.json();
-        throw new Error(errorData.error || 'Failed to get response');
+      if (fnError) {
+        throw new Error(fnError.message || 'Failed to get AI response');
       }
 
-      const data = await resp.json();
-
-      if (data.generatedText) {
-        updateAssistant(data.generatedText);
-      } else if (data.error) {
-        throw new Error(`${data.error}: ${data.details || 'Unknown error'}`);
-      } else if (data.choices?.[0]?.message?.content) {
-        // Fallback if we accidentally used OpenAI wrapper format
-        updateAssistant(data.choices[0].message.content);
-      } else {
-        throw new Error("Invalid response format from AI");
+      const reply = data?.generatedText || data?.choices?.[0]?.message?.content;
+      if (!reply) {
+        throw new Error(data?.error || 'Invalid response format from AI');
       }
 
+      setMessages((prev) => [...prev, { role: 'assistant', content: reply }]);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
       setError(errorMessage);
@@ -76,7 +51,7 @@ export const useAIMentor = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [messages, CHAT_URL]);
+  }, [messages]);
 
   const clearMessages = useCallback(() => {
     setMessages([]);

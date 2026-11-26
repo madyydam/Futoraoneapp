@@ -19,6 +19,7 @@ const CreatePost = () => {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [existingVideoUrl, setExistingVideoUrl] = useState<string | null>(null);
   const [tags, setTags] = useState("");
   const [postType, setPostType] = useState<"post" | "project_update">("post");
   const [selectedProject, setSelectedProject] = useState<string>("");
@@ -88,6 +89,7 @@ const CreatePost = () => {
       setEditingPostId(postId);
       setContent(data.content);
       if (data.image_url) setImagePreview(data.image_url);
+      if (data.video_url) setExistingVideoUrl(data.video_url);
       setPostType(data.is_project_update ? "project_update" : "post");
       if (data.project_id) setSelectedProject(data.project_id);
       clearDraft(); // Clear draft when editing existing post
@@ -103,6 +105,10 @@ const CreatePost = () => {
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      if (!file.type.startsWith("image/") || file.size > 10 * 1024 * 1024) {
+        toast({ title: "Invalid Image", description: "Select an image under 10MB.", variant: "destructive" });
+        return;
+      }
       setImageFile(file);
       setVideoFile(null);
       const reader = new FileReader();
@@ -116,6 +122,10 @@ const CreatePost = () => {
   const handleVideoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      if (!file.type.startsWith("video/") || file.size > 50 * 1024 * 1024) {
+        toast({ title: "Invalid Video", description: "Select a video under 50MB.", variant: "destructive" });
+        return;
+      }
       setVideoFile(file);
       setImageFile(null);
       setImagePreview(null);
@@ -127,6 +137,7 @@ const CreatePost = () => {
     if (!user || !content.trim()) return;
 
     setLoading(true);
+    const uploadedStoragePaths: string[] = [];
 
     try {
       // AI Content Moderation Check
@@ -136,7 +147,6 @@ const CreatePost = () => {
 
       if (moderationError) {
         console.error("Moderation error:", moderationError);
-        // We continue if moderation service is down, but log it
       } else if (moderationData?.flagged) {
         toast({
           title: "Content Warning",
@@ -148,7 +158,7 @@ const CreatePost = () => {
       }
 
       let imageUrl = imagePreview;
-      let videoUrl = null;
+      let videoUrl = existingVideoUrl;
 
       // Upload image if selected and it's a new file
       if (imageFile) {
@@ -163,17 +173,17 @@ const CreatePost = () => {
           compressedFile = await imageCompression(imageFile, options);
         } catch (error) {
           console.error("Image compression failed:", error);
-          // Fallback to original file if compression fails
         }
 
-        const fileExt = compressedFile.name.split('.').pop();
-        const fileName = `${user.id}/${Math.random()}.${fileExt}`;
+        const fileExt = compressedFile.name.split('.').pop() || 'jpg';
+        const fileName = `${user.id}/${crypto.randomUUID()}.${fileExt}`;
 
         const { error: uploadError } = await supabase.storage
           .from('post-images')
           .upload(fileName, compressedFile);
 
         if (uploadError) throw uploadError;
+        uploadedStoragePaths.push(fileName);
 
         const { data: { publicUrl } } = supabase.storage
           .from('post-images')
@@ -184,14 +194,15 @@ const CreatePost = () => {
 
       // Upload video if selected
       if (videoFile) {
-        const fileExt = videoFile.name.split('.').pop();
-        const fileName = `${user.id}/${Math.random()}.${fileExt}`;
+        const fileExt = videoFile.name.split('.').pop() || 'mp4';
+        const fileName = `${user.id}/${crypto.randomUUID()}.${fileExt}`;
 
         const { error: uploadError } = await supabase.storage
           .from('post-images')
           .upload(fileName, videoFile);
 
         if (uploadError) throw uploadError;
+        uploadedStoragePaths.push(fileName);
 
         const { data: { publicUrl } } = supabase.storage
           .from('post-images')
@@ -210,11 +221,11 @@ const CreatePost = () => {
       };
 
       if (editingPostId) {
-        // Update existing post
         const { error: postError } = await supabase
           .from('posts')
           .update(postData)
-          .eq('id', editingPostId);
+          .eq('id', editingPostId)
+          .eq('user_id', user.id);
 
         if (postError) throw postError;
 
@@ -223,7 +234,6 @@ const CreatePost = () => {
           description: "Your post has been updated successfully.",
         });
       } else {
-        // Create new post
         const { data: newPost, error: postError } = await supabase
           .from('posts')
           .insert(postData)
@@ -232,11 +242,9 @@ const CreatePost = () => {
 
         if (postError) throw postError;
 
-        // Handle tags
         if (tags.trim()) {
-          const tagList = tags.split(',').map(t => t.trim()).filter(Boolean);
+          const tagList = [...new Set(tags.split(',').map(t => t.trim().toLowerCase()).filter(Boolean))].slice(0, 10);
           for (const tagName of tagList) {
-            // Create or get tag
             const { data: tagData, error: tagError } = await supabase
               .from('tags')
               .upsert({ name: tagName }, { onConflict: 'name' })
@@ -244,7 +252,6 @@ const CreatePost = () => {
               .single();
 
             if (!tagError && tagData) {
-              // Link tag to post
               await supabase
                 .from('post_tags')
                 .insert({ post_id: newPost.id, tag_id: tagData.id });
@@ -261,6 +268,10 @@ const CreatePost = () => {
       clearDraft();
       navigate("/feed");
     } catch (error) {
+      // Rollback uploaded storage assets on DB failure
+      if (uploadedStoragePaths.length > 0) {
+        await supabase.storage.from('post-images').remove(uploadedStoragePaths).catch(() => {});
+      }
       toast({
         title: "Error",
         description: (error as Error).message,

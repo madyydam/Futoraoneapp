@@ -1,67 +1,65 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-
-const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { enforceRateLimit, getCorsHeaders, jsonResponse, requireAuth } from "../_shared/auth.ts";
 
 serve(async (req) => {
-    if (req.method === 'OPTIONS') {
-        return new Response(null, { headers: corsHeaders });
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: getCorsHeaders(req) });
+  }
+
+  if (req.method !== 'POST') {
+    return jsonResponse(req, { error: 'Method not allowed' }, 405);
+  }
+
+  try {
+    const auth = await requireAuth(req);
+    if ('errorResponse' in auth) return auth.errorResponse;
+
+    const allowed = await enforceRateLimit(auth.supabase, `moderate_${auth.user.id}`, 60, '1 hour');
+    if (!allowed) {
+      return jsonResponse(req, { error: 'Rate limit exceeded' }, 429);
     }
+
+    const { content } = await req.json();
+    if (typeof content !== 'string' || content.trim().length === 0 || content.length > 10000) {
+      return jsonResponse(req, { error: 'Content must be 1-10000 characters' }, 400);
+    }
+
+    const apiKey = Deno.env.get('OPENAI_API_KEY');
+    if (!apiKey) {
+      return jsonResponse(req, { error: 'Moderation service is not configured' }, 503);
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
 
     try {
-        const { content } = await req.json();
-        const apiKey = Deno.env.get('OPENAI_API_KEY');
+      const response = await fetch('https://api.openai.com/v1/moderations', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        signal: controller.signal,
+        body: JSON.stringify({ input: content.trim() }),
+      });
 
-        if (!apiKey) {
-            return new Response(JSON.stringify({ error: "OPENAI_API_KEY is not set" }), {
-                status: 500,
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            });
-        }
+      const data = await response.json();
+      if (!response.ok) {
+        console.error('OpenAI Moderation API error:', response.status);
+        return jsonResponse(req, { error: 'Moderation provider failed' }, 502);
+      }
 
-        if (!content || content.trim().length === 0) {
-            return new Response(JSON.stringify({ error: "Content is required" }), {
-                status: 400,
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            });
-        }
-
-        console.log(`Moderating content: ${content.substring(0, 50)}...`);
-
-        const response = await fetch('https://api.openai.com/v1/moderations', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${apiKey}`,
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ input: content }),
-        });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-            console.error('OpenAI Moderation API error:', data);
-            throw new Error(data.error?.message || 'Failed to moderate content');
-        }
-
-        const results = data.results[0];
-
-        return new Response(JSON.stringify({
-            flagged: results.flagged,
-            categories: results.categories,
-            category_scores: results.category_scores,
-        }), {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            status: 200,
-        });
-
-    } catch (error: any) {
-        console.error('Moderation Function Error:', error);
-        return new Response(JSON.stringify({ error: error.message }), {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            status: 500,
-        });
+      const results = data.results?.[0];
+      return jsonResponse(req, {
+        flagged: Boolean(results?.flagged),
+        categories: results?.categories ?? {},
+        category_scores: results?.category_scores ?? {},
+      }, 200);
+    } finally {
+      clearTimeout(timeout);
     }
+  } catch (error) {
+    console.error('Moderation Function Error:', error);
+    return jsonResponse(req, { error: 'Internal server error' }, 500);
+  }
 });

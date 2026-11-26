@@ -6,18 +6,15 @@ export const useTrackProfileView = (profileId: string | undefined, currentUserId
     const trackView = async () => {
       if (!profileId || !currentUserId || profileId === currentUserId) return;
 
-      // Record the profile view
-      await supabase.from("profile_views").insert({
+      // Record the profile view (notification is emitted server-side by trigger_notify_on_profile_view)
+      const { error } = await supabase.from("profile_views").insert({
         profile_id: profileId,
         viewer_id: currentUserId,
       });
 
-      // Create notification for profile owner
-      await supabase.from("notifications").insert({
-        user_id: profileId,
-        actor_id: currentUserId,
-        type: "profile_view",
-      });
+      if (error) {
+        console.warn("Failed to record profile view:", error.message);
+      }
     };
 
     trackView();

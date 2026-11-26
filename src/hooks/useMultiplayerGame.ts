@@ -36,10 +36,11 @@ export const useMultiplayerGame = ({
 
     useEffect(() => {
         if (!roomId) return;
+        let cancelled = false;
 
         const setupChannel = async () => {
             const { data: { user } } = await supabase.auth.getUser();
-            if (!user) return;
+            if (!user || cancelled) return;
 
             setMyPlayerId(user.id);
 
@@ -50,6 +51,11 @@ export const useMultiplayerGame = ({
                     },
                 },
             });
+
+            if (cancelled) {
+                supabase.removeChannel(channel);
+                return;
+            }
 
             channel
                 .on('broadcast', { event: 'game_state' }, ({ payload }) => {
@@ -65,6 +71,7 @@ export const useMultiplayerGame = ({
                     }
                 })
                 .subscribe((status) => {
+                    if (cancelled) return;
                     if (status === 'SUBSCRIBED') {
                         setIsConnected(true);
                         channel.track({ user_id: user.id, online_at: new Date().toISOString() });
@@ -79,6 +86,7 @@ export const useMultiplayerGame = ({
         setupChannel();
 
         return () => {
+            cancelled = true;
             // Cleanup channel
             if (channelRef.current) supabase.removeChannel(channelRef.current);
             channelRef.current = null;

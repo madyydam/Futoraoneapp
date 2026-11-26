@@ -157,21 +157,47 @@ const UpcomingFeatures = memo(() => {
                 .eq('id', session.user.id)
                 .single();
 
-            // Generate a waitlist position based on localStorage (since waitlist table doesn't exist)
-            const existingPosition = localStorage.getItem('futora_waitlist_position');
-            let position: number;
+            // Persist waitlist entry in Postgres (avoid spoofable client-side position)
+            const { data: existingEntry, error: lookupError } = await supabase
+                .from('waitlist')
+                .select('id, created_at')
+                .eq('user_id', session.user.id)
+                .maybeSingle();
 
-            if (existingPosition) {
-                position = parseInt(existingPosition, 10);
+            if (lookupError) throw lookupError;
+
+            let alreadyJoined = Boolean(existingEntry);
+            if (!existingEntry) {
+                const { error: insertError } = await supabase
+                    .from('waitlist')
+                    .insert({
+                        user_id: session.user.id,
+                        email: session.user.email || `${profile?.username || session.user.id}@futora.local`,
+                    });
+
+                if (insertError) {
+                    if (insertError.code === '23505') {
+                        alreadyJoined = true;
+                    } else {
+                        throw insertError;
+                    }
+                }
+            }
+
+            const { data: positionData, error: positionError } = await supabase.rpc('get_waitlist_position', {
+                user_uuid: session.user.id,
+            });
+            if (positionError) throw positionError;
+
+            const position = typeof positionData === 'number' && positionData > 0 ? positionData : 1;
+
+            if (alreadyJoined) {
                 toast.info("You are already on the waitlist!", {
-                    description: "Here is your ticket again."
+                    description: "Here is your verified VIP ticket."
                 });
             } else {
-                // Generate a random position between 1-1000
-                position = Math.floor(Math.random() * 1000) + 1;
-                localStorage.setItem('futora_waitlist_position', position.toString());
                 toast.success("Welcome to the future!", {
-                    description: "Your VIP ticket has been generated."
+                    description: "Your VIP ticket has been saved."
                 });
             }
 

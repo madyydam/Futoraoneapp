@@ -83,40 +83,11 @@ export const CommentSection = ({ postId, postAuthorId, currentUser }: CommentSec
     const { toast } = useToast();
 
     const [hasLoaded, setHasLoaded] = useState(false);
+    const [isFetching, setIsFetching] = useState(true);
     const { ref, inView } = useInView({
         triggerOnce: true,
         rootMargin: "200px 0px", // Load when within 200px of viewport
     });
-
-    useEffect(() => {
-        if (inView && !hasLoaded) {
-            setHasLoaded(true);
-            fetchComments();
-
-            // Subscribe to real-time comments
-            const channel = supabase
-                .channel(`comments-${postId}`)
-                .on(
-                    "postgres_changes",
-                    {
-                        event: "*",
-                        schema: "public",
-                        table: "comments",
-                        filter: `post_id=eq.${postId}`,
-                    },
-                    () => {
-                        fetchComments();
-                    }
-                )
-                .subscribe();
-
-            return () => {
-                supabase.removeChannel(channel);
-            };
-        }
-    }, [postId, inView, hasLoaded]);
-
-    const [isFetching, setIsFetching] = useState(true);
 
     const fetchComments = useCallback(async () => {
         setIsFetching(true);
@@ -135,6 +106,36 @@ export const CommentSection = ({ postId, postAuthorId, currentUser }: CommentSec
         }
         setIsFetching(false);
     }, [postId]);
+
+    useEffect(() => {
+        if (!inView) return;
+
+        if (!hasLoaded) {
+            setHasLoaded(true);
+            fetchComments();
+        }
+
+        // Subscribe to real-time comments without tearing down on hasLoaded state change
+        const channel = supabase
+            .channel(`comments-${postId}`)
+            .on(
+                "postgres_changes",
+                {
+                    event: "*",
+                    schema: "public",
+                    table: "comments",
+                    filter: `post_id=eq.${postId}`,
+                },
+                () => {
+                    fetchComments();
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [postId, inView, hasLoaded, fetchComments]);
 
 
     const handleSubmitComment = useCallback(async (e: React.FormEvent) => {
@@ -191,7 +192,7 @@ export const CommentSection = ({ postId, postAuthorId, currentUser }: CommentSec
         } finally {
             setLoading(false);
         }
-    }, [currentUser, newComment, postId, fetchComments, toast]);
+    }, [currentUser, newComment, postId, postAuthorId, fetchComments, toast]);
 
     const handleDeleteComment = useCallback(async (commentId: string) => {
         try {

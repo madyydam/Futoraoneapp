@@ -22,12 +22,13 @@ const Ecosystem = () => {
         {
             name: "Futora Finance",
             tagline: "Next-Gen Financial Stack",
-            description: "Manage wealth, payments, and investments with autonomous AI agents.",
-            url: "https://futorapay.vercel.app/",
+            description: "Manage your in-app native coin wallet, peer transfers, and rewards seamlessly.",
+            url: "/wallet",
+            isInternal: true,
             icon: <CreditCard className="w-6 h-6 text-emerald-400" />,
             color: "from-emerald-500 to-green-500",
             border: "border-emerald-500/50",
-            cta: "Visit App"
+            cta: "Open Native Wallet"
         },
         {
             name: "FutoraLift",
@@ -194,7 +195,14 @@ const Ecosystem = () => {
                                     "h-full bg-[#0A0A0A] border border-white/10 hover:border-white/20 transition-all duration-300 overflow-hidden cursor-pointer shadow-2xl relative flex flex-col group",
                                     platform.border
                                 )}
-                                onClick={() => platform.url !== "#" && window.open(platform.url, '_blank')}
+                                onClick={() => {
+                                    if (platform.url === "#") return;
+                                    if ((platform as { isInternal?: boolean }).isInternal) {
+                                        navigate(platform.url);
+                                    } else {
+                                        window.open(platform.url, '_blank', 'noopener,noreferrer');
+                                    }
+                                }}
                             >
                                 {/* Top Gradient Border */}
                                 <div className={cn("h-1 w-full bg-gradient-to-r opacity-80", platform.color)} />
@@ -224,15 +232,15 @@ const Ecosystem = () => {
                                             <div className="flex items-center gap-2 w-full">
                                                 <Button
                                                     className="flex-1 bg-white/5 hover:bg-emerald-500/20 border border-white/10 hover:border-emerald-500/50 text-white font-bold h-10 rounded-lg text-[10px] uppercase tracking-wide transition-all"
-                                                    onClick={(e) => { e.stopPropagation(); window.open("https://futorapay.vercel.app/", "_blank"); }}
+                                                    onClick={(e) => { e.stopPropagation(); navigate("/wallet"); }}
                                                 >
                                                     Wallet <ArrowUpRight className="w-3 h-3 ml-1" />
                                                 </Button>
                                                 <Button
                                                     className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold h-10 rounded-lg text-[10px] uppercase tracking-wide transition-all shadow-lg shadow-emerald-900/20"
-                                                    onClick={(e) => { e.stopPropagation(); window.open("https://futorapay.vercel.app/", "_blank"); }}
+                                                    onClick={(e) => { e.stopPropagation(); navigate("/wallet"); }}
                                                 >
-                                                    Pay <ArrowUpRight className="w-3 h-3 ml-1" />
+                                                    Send Coins <ArrowUpRight className="w-3 h-3 ml-1" />
                                                 </Button>
                                             </div>
                                         ) : (
@@ -276,7 +284,7 @@ const Ecosystem = () => {
                         </div>
                         <Button
                             className="bg-white text-black hover:bg-white/90 font-black text-sm px-10 py-7 rounded-full uppercase tracking-widest shadow-[0_0_40px_rgba(255,255,255,0.2)] hover:shadow-[0_0_60px_rgba(255,255,255,0.4)] hover:scale-105 transition-all duration-300"
-                            onClick={() => window.open("https://forms.gle/iuJYka5rUbgsxYVNA", "_blank")}
+                            onClick={() => window.open("https://forms.gle/iuJYka5rUbgsxYVNA", "_blank", "noopener,noreferrer")}
                         >
                             Apply for Job <ArrowUpRight className="w-5 h-5 ml-2" />
                         </Button>

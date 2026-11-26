@@ -52,6 +52,7 @@ const Chat = () => {
   const [isEditingName, setIsEditingName] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const visualChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   const { typingUsers, broadcastTyping } = useTypingIndicator(conversationId || "", user?.id);
   const { categories } = useRoomCategories(conversationId);
@@ -67,6 +68,12 @@ const Chat = () => {
       const cleanup = subscribeToMessages();
       markMessagesAsRead();
 
+      const handleReconnect = () => {
+        fetchConversationDetails();
+        markMessagesAsRead();
+      };
+      window.addEventListener("futora:reconnected", handleReconnect);
+
       // Load saved customization
       const savedWallpaper = localStorage.getItem(`futora_chat_wallpaper_${conversationId}`);
       if (savedWallpaper) setWallpaper(savedWallpaper);
@@ -74,7 +81,10 @@ const Chat = () => {
       const savedBubbleColor = localStorage.getItem(`futora_chat_bubble_color_${conversationId}`);
       if (savedBubbleColor) setBubbleColor(savedBubbleColor);
 
-      return cleanup;
+      return () => {
+        window.removeEventListener("futora:reconnected", handleReconnect);
+        cleanup();
+      };
     }
   }, [user, conversationId]);
 
@@ -155,8 +165,9 @@ const Chat = () => {
           filter: `conversation_id=eq.${conversationId}`
         },
         (payload) => {
-          if (payload.new.sender_id !== user?.id) {
-            setMessages(prev => [...prev, payload.new as Message]);
+          const incoming = payload.new as Message;
+          if (incoming.sender_id !== user?.id) {
+            setMessages(prev => prev.some(m => m.id === incoming.id) ? prev : [...prev, incoming]);
             markMessagesAsRead();
           }
         }
@@ -179,7 +190,10 @@ const Chat = () => {
       })
       .subscribe();
 
+    visualChannelRef.current = visualChannel;
+
     return () => {
+      visualChannelRef.current = null;
       supabase.removeChannel(messageChannel);
       supabase.removeChannel(visualChannel);
     };
@@ -223,7 +237,10 @@ const Chat = () => {
       setNewMessage(messageContent);
       toast({ title: "Error", description: error.message, variant: "destructive" });
     } else {
-      setMessages(prev => [...prev, data as Message]);
+      setMessages(prev => {
+        const nextMsg = data as Message;
+        return prev.some(m => m.id === nextMsg.id) ? prev : [...prev, nextMsg];
+      });
       await supabase.from("conversations").update({ updated_at: new Date().toISOString() }).eq("id", conversationId);
       if (otherUser && user) {
         sendMessageNotification(otherUser.id, user.user_metadata?.full_name || user.email || "Someone", messageContent);
@@ -235,7 +252,7 @@ const Chat = () => {
   const handlePromote = useCallback(async (id: string, type: MessageType) => {
     setMessages(prev => prev.map(m => m.id === id ? { ...m, message_type: type } : m));
     await supabase.from('messages').update({ message_type: type }).eq('id', id);
-    supabase.channel(`visual-sync-${conversationId}`).send({
+    visualChannelRef.current?.send({
       type: 'broadcast',
       event: 'type_update',
       payload: { id, type }
@@ -244,7 +261,7 @@ const Chat = () => {
       title: type === 'normal' ? "Reverted to Chat" : "Insight Logged!",
       description: type !== 'normal' ? `Message promoted to ${type}` : undefined
     });
-  }, [conversationId, toast]);
+  }, [toast]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -253,7 +270,7 @@ const Chat = () => {
   const saveWallpaper = async (w: string) => {
     setWallpaper(w);
     localStorage.setItem(`futora_chat_wallpaper_${conversationId}`, w);
-    supabase.channel(`visual-sync-${conversationId}`).send({
+    visualChannelRef.current?.send({
       type: 'broadcast',
       event: 'visual_update',
       payload: { wallpaper: w }
@@ -270,7 +287,7 @@ const Chat = () => {
   const saveBubbleColor = async (c: string) => {
     setBubbleColor(c);
     localStorage.setItem(`futora_chat_bubble_color_${conversationId}`, c);
-    supabase.channel(`visual-sync-${conversationId}`).send({
+    visualChannelRef.current?.send({
       type: 'broadcast',
       event: 'visual_update',
       payload: { bubbleColor: c }
@@ -310,7 +327,7 @@ const Chat = () => {
                       setRoomName(newName);
                       setIsEditingName(false);
                       supabase.from('conversations').update({ name: newName }).eq('id', conversationId);
-                      supabase.channel(`visual-sync-${conversationId}`).send({
+                      visualChannelRef.current?.send({
                         type: 'broadcast',
                         event: 'room_update',
                         payload: { name: newName }

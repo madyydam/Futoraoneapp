@@ -48,7 +48,7 @@ const AdminDashboard = () => {
 
     const fetchDashboardData = async () => {
         try {
-            const { count: userCount } = await supabase.from("profiles").select("*", { count: 'exact', head: true });
+            const { count: userCount } = await supabase.from("profiles").select("id", { count: 'exact', head: true });
             const { count: postCount } = await supabase.from("posts").select("*", { count: 'exact', head: true });
             const { count: projectCount } = await supabase.from("projects").select("*", { count: 'exact', head: true });
             const { count: reportCount } = await supabase.from("reports" as any).select("*", { count: 'exact', head: true });

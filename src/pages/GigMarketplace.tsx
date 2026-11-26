@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { BottomNav } from "@/components/BottomNav";
 import { useToast } from "@/hooks/use-toast";
 import { useDebounce } from "../hooks/use-debounce";
+import { sanitizePostgrestSearch } from "@/lib/security";
 
 // Mock data deleted - now using real database listings
 
@@ -38,9 +39,12 @@ const GigMarketplace = () => {
                 .from('gig_listings')
                 .select('*');
 
-            // Search (case-insensitive)
+            // Search (case-insensitive, PostgREST-escaped)
             if (debouncedSearch) {
-                query = query.or(`title.ilike.%${debouncedSearch}%,description.ilike.%${debouncedSearch}%`);
+                const cleanSearch = sanitizePostgrestSearch(debouncedSearch);
+                if (cleanSearch) {
+                    query = query.or(`title.ilike.%${cleanSearch}%,description.ilike.%${cleanSearch}%`);
+                }
             }
 
             // Category filter (using skills_required as proxy)
