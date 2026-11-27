@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -15,7 +16,7 @@ import { useMutualFollowers } from "@/hooks/useMutualFollowers";
 import { MutualFollowersModal } from "@/components/MutualFollowersModal";
 import { BlockUserDialog } from "@/components/BlockUserDialog";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
-import { CartoonLoader } from "@/components/CartoonLoader";
+import { AppScreenSkeleton } from "@/components/skeletons/AppScreenSkeleton";
 
 import { ProfileHeader } from "@/components/profile/ProfileHeader";
 import { ProfileStats } from "@/components/profile/ProfileStats";
@@ -80,6 +81,7 @@ const UserProfile = () => {
     const navigate = useNavigate();
     const { toast } = useToast();
     const { isAdmin } = useIsAdmin();
+    const queryClient = useQueryClient();
     const [currentUser, setCurrentUser] = useState<User | null>(null);
     const [profile, setProfile] = useState<Profile | null>(null);
     const [loading, setLoading] = useState(true);
@@ -117,13 +119,7 @@ const UserProfile = () => {
         setFollowingCount(followingResult.count || 0);
     }, [userId]);
 
-    useEffect(() => {
-        if (currentUser && userId) {
-            checkBlockStatus();
-        }
-    }, [currentUser, userId]);
-
-    const checkBlockStatus = async () => {
+    const checkBlockStatus = useCallback(async () => {
         if (!currentUser || !userId) return;
 
         const { data } = await supabase
@@ -134,7 +130,13 @@ const UserProfile = () => {
             .maybeSingle();
 
         setIsBlocked(!!data);
-    };
+    }, [currentUser, userId]);
+
+    useEffect(() => {
+        if (currentUser && userId) {
+            checkBlockStatus();
+        }
+    }, [currentUser, userId, checkBlockStatus]);
 
     const handleBlock = async () => {
         if (!currentUser || !userId) return;
@@ -154,6 +156,9 @@ const UserProfile = () => {
             });
         } else {
             setIsBlocked(true);
+            queryClient.invalidateQueries({ queryKey: ["my_conversations_summary"] });
+            queryClient.invalidateQueries({ queryKey: ["posts_feed"] });
+            queryClient.invalidateQueries({ queryKey: ["blocked_users"] });
             toast({
                 title: "User blocked",
                 description: "You will no longer receive messages from this user.",
@@ -318,11 +323,20 @@ const UserProfile = () => {
             return;
         }
 
-        const { data: profileData, error: profileError } = await supabase
+        const cleanParam = decodeURIComponent(userId).trim();
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanParam);
+
+        let profileQuery = supabase
             .from("profiles")
-            .select("id, username, full_name, avatar_url, bio, location, github_url, linkedin_url, portfolio_url, tech_skills, verification_category, is_verified, theme_color, vibe_mood, badges")
-            .eq("id", userId)
-            .maybeSingle();
+            .select("id, username, full_name, avatar_url, bio, location, github_url, linkedin_url, portfolio_url, tech_skills, verification_category, is_verified, theme_color, vibe_mood, badges");
+
+        if (isUuid) {
+            profileQuery = profileQuery.eq("id", cleanParam);
+        } else {
+            profileQuery = profileQuery.eq("username", cleanParam);
+        }
+
+        const { data: profileData, error: profileError } = await profileQuery.maybeSingle();
 
         if (profileError || !profileData) {
             toast({
@@ -333,6 +347,8 @@ const UserProfile = () => {
             navigate("/feed");
             return;
         }
+
+        const targetUid = profileData.id;
 
         const enhancedProfile: Profile = {
             id: profileData.id,
@@ -354,7 +370,7 @@ const UserProfile = () => {
 
         setProfile(enhancedProfile);
 
-        // Fetch all data in parallel for better performance
+        // Fetch all data in parallel for better performance using targetUid
         const [projectsResult, postsResult] = await Promise.all([
             supabase
                 .from("projects")
@@ -362,7 +378,7 @@ const UserProfile = () => {
                     *,
                     project_likes(id)
                 `)
-                .eq("user_id", userId)
+                .eq("user_id", targetUid)
                 .order('created_at', { ascending: false }),
             supabase
                 .from("posts")
@@ -371,7 +387,7 @@ const UserProfile = () => {
                     likes(id),
                     comments(id)
                 `)
-                .eq("user_id", userId)
+                .eq("user_id", targetUid)
                 .order('created_at', { ascending: false })
         ]);
 
@@ -388,7 +404,7 @@ const UserProfile = () => {
     }, [fetchData]);
 
     if (loading) {
-        return <CartoonLoader />;
+        return <AppScreenSkeleton />;
     }
 
     return (

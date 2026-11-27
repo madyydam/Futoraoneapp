@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, memo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, memo, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, RotateCcw, Sparkles, Trophy, Timer, Hash, Globe, Users, Copy } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -148,6 +148,8 @@ const MemoryMatch = () => {
         });
     }, []);
 
+    const sendMoveRef = useRef<any>(() => {});
+
     const initializeGame = useCallback((isRemoteReset = false) => {
         playSound('click');
 
@@ -182,15 +184,7 @@ const MemoryMatch = () => {
         // For now, following the instruction.
         // If sendMove is truly a dependency, it should be added: [gameMode, isHost, playSound, sendMove]
         if (gameMode === 'ONLINE') {
-            // sendMove will be defined after useMultiplayerGame hook is called.
-            // This function is called in useEffect after useMultiplayerGame is defined.
-            // So, it should be safe to call sendMove here.
-            // However, if sendMove itself changes, this useCallback would not update.
-            // For this refactor, we assume sendMove is stable or its changes don't require re-creating initializeGame.
-            // If sendMove is not stable, it should be added to the dependency array.
-            // For now, we follow the provided example's dependency list.
-
-            sendMove({
+            sendMoveRef.current({
                 cards: gameCards,
                 currentPlayer: 1,
                 scores: { 1: 0, 2: 0 },
@@ -198,7 +192,7 @@ const MemoryMatch = () => {
                 reset: isRemoteReset
             });
         }
-    }, [gameMode, isHost, playSound]); // sendMove omitted as per instruction example
+    }, [gameMode, isHost, playSound]);
 
     const handleWin = useCallback((finalScores?: { 1: number, 2: number }) => {
         setIsWon(true);
@@ -207,7 +201,7 @@ const MemoryMatch = () => {
 
         if (gameMode === 'ONLINE') {
 
-            sendMove({ isWon: true });
+            sendMoveRef.current({ isWon: true });
 
             // Determine winner for confetti
             const s = finalScores || scores;
@@ -234,7 +228,7 @@ const MemoryMatch = () => {
             triggerConfetti();
             triggerWinReward();
         }
-    }, [bestScore, gameMode, isHost, moves, playSound, scores, triggerConfetti]); // sendMove omitted as per instruction example
+    }, [bestScore, gameMode, isHost, moves, playSound, scores, triggerConfetti, triggerWinReward]);
 
     const { isConnected, playerCount, sendMove } = useMultiplayerGame({
         gameId: 'memory',
@@ -265,6 +259,7 @@ const MemoryMatch = () => {
             }
         }
     });
+    sendMoveRef.current = sendMove;
 
     // Load Best Score
     useEffect(() => {

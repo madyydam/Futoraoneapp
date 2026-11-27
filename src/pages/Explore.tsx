@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { BottomNav } from "@/components/BottomNav";
@@ -26,6 +26,7 @@ const Explore = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const activeSearchIdRef = useRef(0);
 
   const { data: people = [], isLoading: loadingPeople, refetch: refetchPeople } = useQuery<UserProfile[]>({
     queryKey: ["explore_trending_people", currentUser?.id],
@@ -67,6 +68,7 @@ const Explore = () => {
   const performSearch = useCallback(async (query: string) => {
     const cleanQuery = sanitizePostgrestSearch(query);
     if (!cleanQuery) return;
+    const currentSearchId = ++activeSearchIdRef.current;
     setSearchLoading(true);
     setShowResults(true);
 
@@ -77,6 +79,9 @@ const Explore = () => {
         .select("id, username, full_name, avatar_url, is_verified")
         .or(`username.ilike.%${cleanQuery}%,full_name.ilike.%${cleanQuery}%`)
         .limit(3);
+
+      // Discard stale out-of-order network responses
+      if (currentSearchId !== activeSearchIdRef.current) return;
 
       const peopleResults: SearchResult[] = (profiles || []).map(p => ({
         id: p.id,
@@ -112,11 +117,16 @@ const Explore = () => {
           meta: `${p.likes} Likes`
         }));
 
+      if (currentSearchId !== activeSearchIdRef.current) return;
       setSearchResults([...peopleResults, ...topicResults, ...projectResults]);
     } catch (error) {
-      logger.error("Search error:", error);
+      if (currentSearchId === activeSearchIdRef.current) {
+        logger.error("Search error:", error);
+      }
     } finally {
-      setSearchLoading(false);
+      if (currentSearchId === activeSearchIdRef.current) {
+        setSearchLoading(false);
+      }
     }
   }, []);
 

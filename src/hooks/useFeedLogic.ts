@@ -100,6 +100,7 @@ export const useFeedLogic = () => {
         placeholderData: (previousData) => previousData,
         staleTime: 1000 * 60 * 2, // 2 minutes fresh
         gcTime: 1000 * 60 * 60, // 1 hour cached
+        maxPages: 10, // Cap DOM expansion and memory retention to ~50 posts
         queryFn: async ({ pageParam = 0 }) => {
             const from = (pageParam as number);
             const to = from + PAGE_SIZE - 1;
@@ -349,6 +350,8 @@ export const useFeedLogic = () => {
             toast({ title: "Error", description: "Failed to block user", variant: "destructive" });
         } else {
             queryClient.invalidateQueries({ queryKey: ["posts_feed"] });
+            queryClient.invalidateQueries({ queryKey: ["blocked_users"] });
+            queryClient.invalidateQueries({ queryKey: ["my_conversations_summary"] });
             toast({ title: "User Blocked", description: "You will no longer see their posts in your feed." });
         }
     }, [user, queryClient, toast]);

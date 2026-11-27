@@ -128,8 +128,40 @@ if (typeof window !== "undefined") {
   }
 }
 
+const safeLocalStorage = {
+  getItem: (key: string) => {
+    try {
+      return typeof window !== "undefined" ? window.localStorage.getItem(key) : null;
+    } catch {
+      return null;
+    }
+  },
+  setItem: (key: string, value: string) => {
+    try {
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(key, value);
+      }
+    } catch {
+      try {
+        window.localStorage.removeItem(key);
+      } catch {
+        void 0;
+      }
+    }
+  },
+  removeItem: (key: string) => {
+    try {
+      if (typeof window !== "undefined") {
+        window.localStorage.removeItem(key);
+      }
+    } catch {
+      void 0;
+    }
+  },
+};
+
 const persister = createSyncStoragePersister({
-  storage: window.localStorage,
+  storage: safeLocalStorage,
 });
 
 
@@ -142,8 +174,16 @@ const App = () => {
         dehydrateOptions: {
           shouldDehydrateQuery: (query) => {
             const key = String(query.queryKey[0] ?? "");
-            // Never persist auth/admin/wallet/private messages in localStorage
-            return !["auth_user", "is_admin", "native_wallet_v2", "native_transactions"].includes(key);
+            // Never persist auth/admin/wallet or heavy infinite lists in 5MB localStorage
+            return ![
+              "auth_user",
+              "is_admin",
+              "native_wallet_v2",
+              "native_transactions",
+              "posts_feed",
+              "explore_trending_people",
+              "my_conversations_summary",
+            ].includes(key);
           },
         },
       }}

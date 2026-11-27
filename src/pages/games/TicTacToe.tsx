@@ -159,6 +159,29 @@ const TicTacToe = () => {
     const [difficulty, setDifficulty] = useState<Difficulty>("HARD");
     const [isAiTurn, setIsAiTurn] = useState(false);
 
+    // Recover match state from sessionStorage on accidental refresh
+    useEffect(() => {
+        try {
+            const saved = sessionStorage.getItem("futora_tictactoe_session");
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                if (Array.isArray(parsed.board)) setBoard(parsed.board);
+                if (typeof parsed.xIsNext === 'boolean') setXIsNext(parsed.xIsNext);
+                if (parsed.scores) setScores(parsed.scores);
+            }
+        } catch {
+            void 0;
+        }
+    }, []);
+
+    useEffect(() => {
+        try {
+            sessionStorage.setItem("futora_tictactoe_session", JSON.stringify({ board, xIsNext, scores }));
+        } catch {
+            void 0;
+        }
+    }, [board, xIsNext, scores]);
+
     // Online State
     const [roomId, setRoomId] = useState("");
     const [showRoomDialog, setShowRoomDialog] = useState(false);
@@ -286,7 +309,7 @@ const TicTacToe = () => {
                 playSound('draw');
             }
         }
-    }, [board, gameMode, isHost, playSound, winner]);
+    }, [board, gameMode, isHost, playSound, triggerWinReward, winner]);
 
     const makeAiMove = useCallback(() => {
         if (winner) return;

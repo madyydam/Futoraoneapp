@@ -29,21 +29,22 @@ export const useUnreadMessages = (userId: string | undefined) => {
 
     fetchUnreadCount();
 
-    const debouncedFetch = () => {
+    const syncFetch = () => {
+      fetchUnreadCount();
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
       timeoutRef.current = setTimeout(() => {
         fetchUnreadCount();
-      }, 1500);
+      }, 400);
     };
 
-    window.addEventListener("futora:reconnected", debouncedFetch);
+    window.addEventListener("futora:reconnected", syncFetch);
 
     const channel = supabase
       .channel(`unread-messages-${userId}`)
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "messages" },
-        () => debouncedFetch()
+        () => syncFetch()
       )
       .on(
         "postgres_changes",
@@ -53,12 +54,12 @@ export const useUnreadMessages = (userId: string | undefined) => {
           table: "conversation_participants",
           filter: `user_id=eq.${userId}`,
         },
-        () => debouncedFetch()
+        () => syncFetch()
       )
       .subscribe();
 
     return () => {
-      window.removeEventListener("futora:reconnected", debouncedFetch);
+      window.removeEventListener("futora:reconnected", syncFetch);
       supabase.removeChannel(channel);
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };

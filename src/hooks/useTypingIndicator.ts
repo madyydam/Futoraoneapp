@@ -35,6 +35,14 @@ export const useTypingIndicator = (conversationId: string, userId: string | unde
                     setTypingUsers((prev) => prev.filter((id) => id !== typerId));
                 }, 3000);
             })
+            .on('broadcast', { event: 'typing_stop' }, (payload) => {
+                const { userId: typerId } = payload.payload;
+                setTypingUsers((prev) => prev.filter((id) => id !== typerId));
+                if (typingTimeoutRef.current[typerId]) {
+                    clearTimeout(typingTimeoutRef.current[typerId]);
+                    delete typingTimeoutRef.current[typerId];
+                }
+            })
             .subscribe();
 
         return () => {
@@ -47,6 +55,22 @@ export const useTypingIndicator = (conversationId: string, userId: string | unde
             }
         };
     }, [conversationId, userId]);
+
+    useEffect(() => {
+        const handleVisibilityChange = () => {
+            if (document.hidden && channelRef.current && userId) {
+                // Broadcast typing stopped immediately on screen lock or tab switch
+                channelRef.current.send({
+                    type: 'broadcast',
+                    event: 'typing_stop',
+                    payload: { userId },
+                });
+            }
+        };
+
+        document.addEventListener("visibilitychange", handleVisibilityChange);
+        return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+    }, [userId]);
 
     const broadcastTyping = useCallback(() => {
         if (!channelRef.current || !userId) return;

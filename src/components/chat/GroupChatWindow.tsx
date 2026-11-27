@@ -292,6 +292,17 @@ export function GroupChatWindow({ groupId, currentUserId }: { groupId: string; c
                     scrollToBottom();
                 }
             })
+            .on('postgres_changes', {
+                event: 'DELETE', schema: 'public', table: 'group_members',
+                filter: `group_id=eq.${groupId}`
+            }, (payload: any) => {
+                if (payload.old && payload.old.user_id === currentUserId) {
+                    toast.error("You are no longer a member of this group.");
+                    navigate("/messages");
+                } else if (payload.old?.user_id) {
+                    setMembers(prev => prev.filter(m => m.user_id !== payload.old.user_id));
+                }
+            })
             .subscribe();
 
         return () => {

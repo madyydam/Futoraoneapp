@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, RotateCcw, Trophy, Timer, Zap } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -44,6 +44,8 @@ const WordBlitz = () => {
         if (saved) setBestScore(parseInt(saved));
     }, []);
 
+    const endGameRef = useRef<() => void>(() => {});
+
     useEffect(() => {
         let timer: NodeJS.Timeout;
         if (isPlaying && timeLeft > 0) {
@@ -51,7 +53,7 @@ const WordBlitz = () => {
                 setTimeLeft(t => t - 1);
             }, 1000);
         } else if (timeLeft === 0 && isPlaying) {
-            endGame();
+            endGameRef.current();
         }
         return () => clearInterval(timer);
     }, [isPlaying, timeLeft]);
@@ -103,6 +105,7 @@ const WordBlitz = () => {
             triggerWinReward();
         }
     };
+    endGameRef.current = endGame;
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();

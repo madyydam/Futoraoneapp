@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, RotateCcw, Trophy, Cpu, Users, Globe, Copy } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -91,11 +91,13 @@ const ConnectFour = () => {
     }, [scores]);
 
     // AI Logic Trigger
+    const makeAiMoveRef = useRef<() => void>(() => {});
+
     useEffect(() => {
         if (gameMode === "AI" && currentPlayer === 2 && !winner) {
             setIsAiTurn(true);
             const timer = setTimeout(() => {
-                makeAiMove();
+                makeAiMoveRef.current();
             }, 800);
             return () => clearTimeout(timer);
         }
@@ -184,6 +186,7 @@ const ConnectFour = () => {
         }
         setIsAiTurn(false);
     };
+    makeAiMoveRef.current = makeAiMove;
 
     const handleColumnClick = (col: number, isAi = false) => {
         if (winner) return;

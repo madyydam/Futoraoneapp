@@ -14,6 +14,7 @@ import imageCompression from 'browser-image-compression';
 import { useDraftPost } from "@/hooks/useDraftPost";
 import { logger } from "@/lib/logger";
 import { toSafeUserError } from "@/lib/errorMapper";
+import { withRetry } from "@/lib/security";
 
 const CreatePost = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -202,14 +203,25 @@ const CreatePost = () => {
 
       // Upload video if selected
       if (videoFile) {
+        if (videoFile.size > 50 * 1024 * 1024) {
+          toast({
+            title: "Video Too Large",
+            description: "Please select a video under 50 MB for smooth mobile playback.",
+            variant: "destructive",
+          });
+          setLoading(false);
+          return;
+        }
+
         const fileExt = videoFile.name.split('.').pop() || 'mp4';
         const fileName = `${user.id}/${crypto.randomUUID()}.${fileExt}`;
 
-        const { error: uploadError } = await supabase.storage
-          .from('post-images')
-          .upload(fileName, videoFile);
+        const uploadRes = await withRetry(
+          () => supabase.storage.from('post-images').upload(fileName, videoFile),
+          { retries: 2, baseDelayMs: 500 }
+        );
 
-        if (uploadError) throw uploadError;
+        if (uploadRes.error) throw uploadRes.error;
         uploadedStoragePaths.push(fileName);
 
         const { data: { publicUrl } } = supabase.storage

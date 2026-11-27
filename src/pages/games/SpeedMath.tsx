@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Calculator, Trophy, Timer, RotateCcw, Zap } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -46,6 +46,8 @@ const SpeedMath = () => {
         if (saved) setBestScores(JSON.parse(saved));
     }, []);
 
+    const endGameRef = useRef<() => void>(() => {});
+
     useEffect(() => {
         let timer: NodeJS.Timeout;
         if (isPlaying && timeLeft > 0) {
@@ -53,7 +55,7 @@ const SpeedMath = () => {
                 setTimeLeft(t => t - 1);
             }, 1000);
         } else if (timeLeft === 0 && isPlaying) {
-            endGame();
+            endGameRef.current();
         }
         return () => clearInterval(timer);
     }, [isPlaying, timeLeft]);
@@ -124,6 +126,7 @@ const SpeedMath = () => {
             triggerWinReward();
         }
     };
+    endGameRef.current = endGame;
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();

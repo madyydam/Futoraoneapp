@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -107,6 +107,27 @@ export default function Wallet() {
   const [transferNote, setTransferNote] = useState("");
   const [transferring, setTransferring] = useState(false);
   const [copiedHandle, setCopiedHandle] = useState(false);
+  const transferLockRef = useRef(false);
+
+  // Stripe 3DS payment return reconciliation
+  useEffect(() => {
+    if (!userId) return;
+    const params = new URLSearchParams(window.location.search);
+    const paymentStatus = params.get("payment_status") || params.get("status") || params.get("redirect_status");
+    const sessionId = params.get("session_id");
+
+    if (paymentStatus === "succeeded" || paymentStatus === "success" || sessionId) {
+      toast({
+        title: "Deposit Confirmed! 🎉",
+        description: "Your coin balance has been updated.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["native_wallet_v2", userId] });
+      queryClient.invalidateQueries({ queryKey: ["native_transactions"] });
+
+      const cleanUrl = window.location.origin + window.location.pathname;
+      window.history.replaceState({}, document.title, cleanUrl);
+    }
+  }, [userId, queryClient, toast]);
 
   const { data: walletData, isLoading: walletLoading } = useQuery({
     queryKey: ["native_wallet_v2", userId],
@@ -160,6 +181,8 @@ export default function Wallet() {
 
   const handleTransfer = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (transferLockRef.current) return;
+
     const numericAmount = Number(transferAmount);
     if (!recipientUsername.trim() || !Number.isFinite(numericAmount) || numericAmount <= 0) {
       toast({
@@ -170,6 +193,7 @@ export default function Wallet() {
       return;
     }
 
+    transferLockRef.current = true;
     setTransferring(true);
     try {
       const { error } = await (supabase.rpc as any)("transfer_wallet_coins", {
@@ -201,6 +225,7 @@ export default function Wallet() {
       });
     } finally {
       setTransferring(false);
+      transferLockRef.current = false;
     }
   };
 

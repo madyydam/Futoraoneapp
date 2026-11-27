@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Hash, TrendingUp } from "lucide-react";
 import { BottomNav } from "@/components/BottomNav";
@@ -32,12 +32,7 @@ const TopicPage = () => {
     const [isFollowing, setIsFollowing] = useState(false);
     const [loadingFollow, setLoadingFollow] = useState(false);
 
-    useEffect(() => {
-        fetchTopicPosts();
-        checkFollowStatus();
-    }, [tag]);
-
-    const checkFollowStatus = async () => {
+    const checkFollowStatus = useCallback(async () => {
         try {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user || !tag) return;
@@ -53,7 +48,46 @@ const TopicPage = () => {
         } catch (error) {
             console.error("Error checking follow status:", error);
         }
-    };
+    }, [tag]);
+
+    const fetchTopicPosts = useCallback(async () => {
+        setLoading(true);
+        try {
+            const { data, error } = await supabase
+                .from('posts')
+                .select(`
+                    id,
+                    content,
+                    created_at,
+                    profiles(username, full_name, avatar_url),
+                    likes(id),
+                    comments(id)
+                `)
+                .ilike('content', `%#${tag}%`)
+                .order('created_at', { ascending: false })
+                .limit(50);
+
+            if (error) throw error;
+
+            const postsList = (data as unknown as Post[]) || [];
+            setPosts(postsList);
+            setPostCount(postsList.length);
+        } catch (error) {
+            console.error("Error fetching topic posts:", error);
+            toast({
+                title: "Error loading posts",
+                description: "Could not load posts for this topic",
+                variant: "destructive"
+            });
+        } finally {
+            setLoading(false);
+        }
+    }, [tag, toast]);
+
+    useEffect(() => {
+        fetchTopicPosts();
+        checkFollowStatus();
+    }, [tag, fetchTopicPosts, checkFollowStatus]);
 
     const handleFollow = async () => {
         try {
@@ -108,42 +142,6 @@ const TopicPage = () => {
         }
     };
 
-    const fetchTopicPosts = async () => {
-        setLoading(true);
-        try {
-            const { data, error } = await supabase
-                .from('posts')
-                .select(`
-                    id,
-                    content,
-                    created_at,
-                    profiles(username, full_name, avatar_url),
-                    likes(id),
-                    comments(id)
-                `)
-                .order('created_at', { ascending: false })
-                .limit(20);
-
-            if (error) throw error;
-
-            // Filter posts containing the hashtag
-            const filtered = data?.filter(post =>
-                post.content.toLowerCase().includes(`#${tag?.toLowerCase()}`)
-            ) || [];
-
-            setPosts(filtered);
-            setPostCount(filtered.length);
-        } catch (error) {
-            console.error("Error fetching topic posts:", error);
-            toast({
-                title: "Error loading posts",
-                description: "Could not load posts for this topic",
-                variant: "destructive"
-            });
-        } finally {
-            setLoading(false);
-        }
-    };
 
     return (
         <div className="min-h-screen bg-background pb-20">

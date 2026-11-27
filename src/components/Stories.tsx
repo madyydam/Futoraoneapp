@@ -137,6 +137,10 @@ export const Stories = memo(() => {
       const usersMap = new Map<string, StoryUser>();
 
       data?.forEach((item: any) => {
+        // Enforce 24-hour expiration filter client-side as well
+        const isStillFresh = (Date.now() - new Date(item.created_at).getTime()) < 86400000;
+        if (!isStillFresh) return;
+
         const uId = item.user_id;
         if (!groupedStories[uId]) {
           groupedStories[uId] = [];
@@ -188,6 +192,9 @@ export const Stories = memo(() => {
     fetchStories();
     getCurrentUser();
 
+    // Reconcile stories every 10 minutes to auto-evict expired items in background tabs
+    const interval = setInterval(fetchStories, 1000 * 60 * 10);
+
     // Realtime subscription for stories
     const channel = supabase
       .channel("public:stories")
@@ -200,6 +207,7 @@ export const Stories = memo(() => {
       .subscribe();
 
     return () => {
+      clearInterval(interval);
       supabase.removeChannel(channel);
     };
   }, [fetchStories, getCurrentUser]);

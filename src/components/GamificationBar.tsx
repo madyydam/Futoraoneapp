@@ -54,7 +54,7 @@ export const GamificationBar = ({ userProfile }: GamificationBarProps) => {
     // Let's assume simpler: 1000 XP per level for visualization
     const xpPerLevel = 1000;
     const currentLevelXp = xp % xpPerLevel;
-    const progress = (currentLevelXp / xpPerLevel) * 100;
+    const progress = Math.min(100, Math.max(0, (currentLevelXp / xpPerLevel) * 100));
 
     // Mock daily challenges if not present
     const challenges: DailyChallenge[] = userProfile?.daily_challenges || [

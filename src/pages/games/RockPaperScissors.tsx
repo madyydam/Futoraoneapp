@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, RotateCcw, Hand, Scissors, Scroll, Zap, Cpu, Users, Globe, Copy } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -72,6 +72,8 @@ const RockPaperScissors = () => {
         });
     }, []);
 
+    const sendMoveRef = useRef<any>(() => {});
+
     const determineWinner = useCallback((c1: Choice, c2: Choice, updateScore = true) => {
         if (!c1 || !c2) return;
 
@@ -120,19 +122,14 @@ const RockPaperScissors = () => {
                 setScores(newScores);
             } else if (gameMode === 'ONLINE' && isHost && updateScore) {
                 setScores(newScores);
-                // We depend on 'sendMove' which is not in this callback scope directly if extracted? 
-                // But we are inside component, so it's fine.
-                // However, wait. sendMove is from useMultiplayerGame.
-                // We'll need to pass it or accessible.
-
-                sendMove({ p1Choice: c1, p2Choice: c2, scores: newScores });
+                sendMoveRef.current({ p1Choice: c1, p2Choice: c2, scores: newScores });
             } else if (gameMode === 'ONLINE') {
                 // Client just updates local display, actual sync comes from host usually but for responsive UI we update
                 setScores(newScores);
             }
 
         }, 100);
-    }, [gameMode, isHost, playSound, scores, triggerWin]); // sendMove added via eslint-disable-next-line hack or we need to include it.
+    }, [gameMode, isHost, playSound, scores, triggerWin, triggerWinReward]);
 
     const { isConnected, playerCount, sendMove } = useMultiplayerGame({
         gameId: 'rps',
@@ -169,6 +166,7 @@ const RockPaperScissors = () => {
             toast.success("Player joined!");
         }
     });
+    sendMoveRef.current = sendMove;
 
 
     const createRoom = useCallback(() => {

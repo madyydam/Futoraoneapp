@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ArrowLeft, RotateCcw, Trophy, User, Cpu, Users, Globe, Copy } from "lucide-react";
@@ -166,11 +166,13 @@ const DotsAndBoxes = () => {
     };
 
     // AI Logic
+    const makeAiMoveRef = useRef<() => void>(() => {});
+
     useEffect(() => {
         if (gameMode === "AI" && currentPlayer === 2 && !winner) {
             setIsAiTurn(true);
             const timer = setTimeout(() => {
-                makeAiMove();
+                makeAiMoveRef.current();
             }, 500);
             return () => clearTimeout(timer);
         }
@@ -216,6 +218,7 @@ const DotsAndBoxes = () => {
         }
         setIsAiTurn(false);
     };
+    makeAiMoveRef.current = makeAiMove;
 
     const isCompletingMove = (move: { r: number, c: number, v: boolean }) => {
         // ... (Keep existing logic)

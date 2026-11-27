@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, RotateCcw, Trophy, Hash, Zap, Plus } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -33,44 +33,11 @@ const NumberMerge = () => {
     const [gameOver, setGameOver] = useState(false);
     const [won, setWon] = useState(false);
 
-    useEffect(() => {
-        const saved = localStorage.getItem("number_merge_best");
-        if (saved) setBestScore(parseInt(saved));
-        initGame();
-
-        // Add keyboard controls
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if (gameOver) return;
-
-            switch (e.key) {
-                case 'ArrowUp':
-                    e.preventDefault();
-                    move('up');
-                    break;
-                case 'ArrowDown':
-                    e.preventDefault();
-                    move('down');
-                    break;
-                case 'ArrowLeft':
-                    e.preventDefault();
-                    move('left');
-                    break;
-                case 'ArrowRight':
-                    e.preventDefault();
-                    move('right');
-                    break;
-            }
-        };
-
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [gameOver, board]);
-
-    const createEmptyBoard = (): Board => {
+    const createEmptyBoard = useCallback((): Board => {
         return Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(null));
-    };
+    }, []);
 
-    const addRandomTile = (currentBoard: Board): Board => {
+    const addRandomTile = useCallback((currentBoard: Board): Board => {
         const newBoard = currentBoard.map(row => [...row]);
         const emptyTiles: [number, number][] = [];
 
@@ -88,9 +55,9 @@ const NumberMerge = () => {
         }
 
         return newBoard;
-    };
+    }, []);
 
-    const initGame = () => {
+    const initGame = useCallback(() => {
         let newBoard = createEmptyBoard();
         newBoard = addRandomTile(newBoard);
         newBoard = addRandomTile(newBoard);
@@ -98,7 +65,46 @@ const NumberMerge = () => {
         setScore(0);
         setGameOver(false);
         setWon(false);
-    };
+    }, [addRandomTile, createEmptyBoard]);
+
+    useEffect(() => {
+        const saved = localStorage.getItem("number_merge_best");
+        if (saved) setBestScore(parseInt(saved));
+        initGame();
+    }, [initGame]);
+
+    const moveRef = useRef<(direction: 'up' | 'down' | 'left' | 'right') => void>(() => {});
+
+    useEffect(() => {
+        // Add keyboard controls
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (gameOver) return;
+
+            switch (e.key) {
+                case 'ArrowUp':
+                    e.preventDefault();
+                    moveRef.current('up');
+                    break;
+                case 'ArrowDown':
+                    e.preventDefault();
+                    moveRef.current('down');
+                    break;
+                case 'ArrowLeft':
+                    e.preventDefault();
+                    moveRef.current('left');
+                    break;
+                case 'ArrowRight':
+                    e.preventDefault();
+                    moveRef.current('right');
+                    break;
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [gameOver]);
+
+
 
     const move = (direction: 'up' | 'down' | 'left' | 'right') => {
         const newBoard = JSON.parse(JSON.stringify(board)) as Board;
@@ -203,6 +209,7 @@ const NumberMerge = () => {
             }
         }
     };
+    moveRef.current = move;
 
     const checkGameOver = (currentBoard: Board): boolean => {
         // Check for empty tiles
