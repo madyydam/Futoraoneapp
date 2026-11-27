@@ -11,6 +11,7 @@ import { formatDistanceToNow } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { chatLocalCache } from "@/lib/chatLocalCache";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -362,8 +363,12 @@ export function GroupsList({ currentUserId, searchQuery = '' }: GroupsListProps)
     }, [currentUserId, fetchGroups]);
 
     const handleNavigate = useCallback((id: string) => {
+        const target = groups.find(g => g.id === id);
+        if (target) {
+            chatLocalCache.setGroupChat(id, { group: target });
+        }
         navigate(`/messages/group/${id}`);
-    }, [navigate]);
+    }, [groups, navigate]);
 
     // Filter by search
     const filtered = useMemo(() =>

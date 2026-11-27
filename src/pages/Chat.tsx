@@ -7,7 +7,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ArrowLeft, Send, Heart, Palette, LayoutDashboard, Edit3, MoreVertical, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { User } from "@supabase/supabase-js";
-import { CartoonLoader } from "@/components/CartoonLoader";
+import { ChatSkeleton } from "@/components/chat/ChatSkeleton";
+import { chatLocalCache } from "@/lib/chatLocalCache";
 import { useTypingIndicator } from "@/hooks/useTypingIndicator";
 import { sendMessageNotification } from "@/services/notification.service";
 import { MessageBubble, MessageType } from "@/components/chat/MessageBubble";
@@ -35,11 +36,12 @@ const Chat = () => {
   const { conversationId } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const cachedDirectChat = conversationId ? chatLocalCache.getDirectChat(conversationId) : null;
   const [user, setUser] = useState<User | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<Message[]>(() => (cachedDirectChat?.messages as Message[]) || []);
   const [newMessage, setNewMessage] = useState("");
-  const [otherUser, setOtherUser] = useState<OtherUser | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [otherUser, setOtherUser] = useState<OtherUser | null>(() => (cachedDirectChat?.otherUser as OtherUser) || null);
+  const [loading, setLoading] = useState<boolean>(() => !cachedDirectChat || (!cachedDirectChat.otherUser && (!cachedDirectChat.messages || cachedDirectChat.messages.length === 0)));
   const [sending, setSending] = useState(false);
   const [isTechMatch, setIsTechMatch] = useState(false);
 
@@ -48,7 +50,7 @@ const Chat = () => {
   const [bubbleColor, setBubbleColor] = useState("");
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isIntelligenceOpen, setIsIntelligenceOpen] = useState(false);
-  const [roomName, setRoomName] = useState<string | null>(null);
+  const [roomName, setRoomName] = useState<string | null>(() => cachedDirectChat?.roomName || null);
   const [isEditingName, setIsEditingName] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -104,6 +106,10 @@ const Chat = () => {
   const fetchConversationDetails = async () => {
     if (!user || !conversationId) return;
 
+    let resolvedOtherUser: OtherUser | null = otherUser;
+    let resolvedMessages: Message[] = messages;
+    let resolvedRoomName: string | null = roomName;
+
     const { data: participantData } = await supabase
       .from("conversation_participants")
       .select("user_id")
@@ -119,14 +125,16 @@ const Chat = () => {
         .maybeSingle();
 
       if (profileData) {
-        setOtherUser(profileData as unknown as OtherUser);
+        resolvedOtherUser = profileData as unknown as OtherUser;
+        setOtherUser(resolvedOtherUser);
       } else {
-        setOtherUser({
+        resolvedOtherUser = {
           id: participantData.user_id,
           username: "user",
           full_name: "Developer",
           avatar_url: null
-        });
+        };
+        setOtherUser(resolvedOtherUser);
       }
     }
 
@@ -137,6 +145,7 @@ const Chat = () => {
       .order("created_at", { ascending: true });
 
     if (messagesData) {
+      resolvedMessages = messagesData;
       setMessages(messagesData);
     }
 
@@ -147,8 +156,16 @@ const Chat = () => {
       .maybeSingle();
 
     if (convData?.name) {
+      resolvedRoomName = convData.name;
       setRoomName(convData.name);
     }
+
+    // Persist to local cache for instant 0ms loads on future visits
+    chatLocalCache.setDirectChat(conversationId, {
+      messages: resolvedMessages,
+      otherUser: resolvedOtherUser,
+      roomName: resolvedRoomName,
+    });
 
     setLoading(false);
   };
@@ -167,7 +184,11 @@ const Chat = () => {
         (payload) => {
           const incoming = payload.new as Message;
           if (incoming.sender_id !== user?.id) {
-            setMessages(prev => prev.some(m => m.id === incoming.id) ? prev : [...prev, incoming]);
+            setMessages(prev => {
+              const updated = prev.some(m => m.id === incoming.id) ? prev : [...prev, incoming];
+              chatLocalCache.setDirectChat(conversationId, { messages: updated });
+              return updated;
+            });
             markMessagesAsRead();
           }
         }
@@ -239,7 +260,9 @@ const Chat = () => {
     } else {
       setMessages(prev => {
         const nextMsg = data as Message;
-        return prev.some(m => m.id === nextMsg.id) ? prev : [...prev, nextMsg];
+        const updated = prev.some(m => m.id === nextMsg.id) ? prev : [...prev, nextMsg];
+        chatLocalCache.setDirectChat(conversationId, { messages: updated });
+        return updated;
       });
       await supabase.from("conversations").update({ updated_at: new Date().toISOString() }).eq("id", conversationId);
       if (otherUser && user) {
@@ -301,7 +324,7 @@ const Chat = () => {
     }
   };
 
-  if (loading) return <CartoonLoader />;
+  if (loading) return <ChatSkeleton onBack={() => navigate("/messages")} />;
 
   return (
     <div className="h-screen bg-background flex flex-col overflow-hidden">

@@ -17,6 +17,7 @@ import { CommunityChatWindow } from "@/components/chat/CommunityChatWindow";
 import { CommunityHub } from "@/components/chat/CommunityHub";
 import { CommunityAdminPanel } from "@/components/chat/CommunityAdminPanel";
 import { ChannelDialog } from "@/components/chat/ChannelDialog";
+import { ChatSkeleton } from "@/components/chat/ChatSkeleton";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     Sheet,
@@ -186,12 +187,7 @@ export default function CommunityChat() {
     };
 
     if (loading) {
-        return (
-            <div className="h-screen flex flex-col items-center justify-center gap-3 bg-background">
-                <div className="w-12 h-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
-                <p className="text-sm font-bold text-muted-foreground animate-pulse">Initializing Vibe...</p>
-            </div>
-        );
+        return <ChatSkeleton isGroup onBack={() => navigate("/messages")} />;
     }
 
     const isCreator = community?.created_by === currentUserId;

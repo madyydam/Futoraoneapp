@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   X,
@@ -35,12 +36,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { formatDistanceToNow } from "date-fns";
@@ -86,6 +81,7 @@ export const StoryViewer = ({
   onPrevUser,
   onStoryDeleted,
 }: StoryViewerProps) => {
+  const navigate = useNavigate();
   const [stories, setStories] = useState<Story[]>(initialStories);
   const [currentIndex, setCurrentIndex] = useState(initialStoryIndex);
   const [progress, setProgress] = useState(0);
@@ -97,7 +93,7 @@ export const StoryViewer = ({
   // Floating reactions state
   const [floatingEmojis, setFloatingEmojis] = useState<{ id: number; emoji: string; x: number }[]>([]);
 
-  // Owner Viewers Sheet & Action Dialogs
+  // Owner Viewers Modal & Action Dialogs
   const [viewersOpen, setViewersOpen] = useState(false);
   const [viewers, setViewers] = useState<StoryViewerUser[]>([]);
   const [loadingViewers, setLoadingViewers] = useState(false);
@@ -119,10 +115,13 @@ export const StoryViewer = ({
     setStories(initialStories);
   }, [initialStories]);
 
-  // Fetch current user
+  // Fetch current user immediately from session cache and verify
   useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user?.id) setCurrentUserId(session.user.id);
+    });
     supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) setCurrentUserId(user.id);
+      if (user?.id) setCurrentUserId(user.id);
     });
   }, []);
 
@@ -210,8 +209,9 @@ export const StoryViewer = ({
     fetchViewerCount();
   }, [currentStory, isOwner]);
 
-  // Fetch viewers list when sheet opens
-  const handleOpenViewers = async () => {
+  // Fetch viewers list when modal opens
+  const handleOpenViewers = async (e?: React.MouseEvent) => {
+    e?.stopPropagation();
     if (!currentStory) return;
     setIsPaused(true);
     setViewersOpen(true);
@@ -221,7 +221,9 @@ export const StoryViewer = ({
       const { data, error } = await supabase
         .from("story_views")
         .select(`
+          id,
           viewed_at,
+          viewer_id,
           profiles:viewer_id (
             id,
             username,
@@ -232,18 +234,52 @@ export const StoryViewer = ({
         .eq("story_id", currentStory.id)
         .order("viewed_at", { ascending: false });
 
-      if (error) throw error;
+      if (!error && data) {
+        const formatted: StoryViewerUser[] = data.map((v: any) => {
+          const prof = Array.isArray(v.profiles) ? v.profiles[0] : v.profiles;
+          return {
+            id: prof?.id || v.viewer_id || "",
+            username: prof?.username || "user",
+            avatar_url: prof?.avatar_url || null,
+            full_name: prof?.full_name || null,
+            viewed_at: v.viewed_at || new Date().toISOString(),
+          };
+        });
+        setViewers(formatted);
+        setViewerCount(formatted.length);
+      } else {
+        // Fallback: query story_views and join profiles manually if needed
+        const { data: rawViews } = await supabase
+          .from("story_views")
+          .select("viewer_id, viewed_at")
+          .eq("story_id", currentStory.id)
+          .order("viewed_at", { ascending: false });
 
-      const formatted: StoryViewerUser[] = (data || []).map((v: any) => ({
-        id: v.profiles?.id || "",
-        username: v.profiles?.username || "user",
-        avatar_url: v.profiles?.avatar_url || null,
-        full_name: v.profiles?.full_name || null,
-        viewed_at: v.viewed_at,
-      }));
+        if (rawViews && rawViews.length > 0) {
+          const viewerIds = rawViews.map((r: any) => r.viewer_id);
+          const { data: profs } = await supabase
+            .from("profiles")
+            .select("id, username, avatar_url, full_name")
+            .in("id", viewerIds);
 
-      setViewers(formatted);
-      setViewerCount(formatted.length);
+          const profMap = new Map((profs || []).map((p: any) => [p.id, p]));
+          const formatted: StoryViewerUser[] = rawViews.map((r: any) => {
+            const p = profMap.get(r.viewer_id);
+            return {
+              id: r.viewer_id,
+              username: p?.username || "user",
+              avatar_url: p?.avatar_url || null,
+              full_name: p?.full_name || null,
+              viewed_at: r.viewed_at || new Date().toISOString(),
+            };
+          });
+          setViewers(formatted);
+          setViewerCount(formatted.length);
+        } else {
+          setViewers([]);
+          setViewerCount(0);
+        }
+      }
     } catch (err) {
       console.error("Error fetching story viewers:", err);
     } finally {
@@ -501,8 +537,23 @@ export const StoryViewer = ({
                 </div>
               </div>
 
-              {/* Action Buttons: 3-Dots Menu & Close */}
-              <div className="flex items-center gap-1">
+              {/* Action Buttons: Viewers Badge, 3-Dots Menu & Close */}
+              <div className="flex items-center gap-1.5">
+                {isOwner && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleOpenViewers(e);
+                    }}
+                    className="text-white hover:text-white hover:bg-white/20 rounded-full h-8 px-2.5 flex items-center gap-1.5 text-xs font-semibold border border-white/20 bg-white/10 backdrop-blur-md transition-transform active:scale-95"
+                  >
+                    <Eye className="w-3.5 h-3.5 text-pink-400" />
+                    <span>{viewerCount}</span>
+                  </Button>
+                )}
+
                 <DropdownMenu onOpenChange={(open) => setIsPaused(open)}>
                   <DropdownMenuTrigger asChild>
                     <Button
@@ -515,10 +566,20 @@ export const StoryViewer = ({
                   </DropdownMenuTrigger>
                   <DropdownMenuContent
                     align="end"
-                    className="w-48 bg-neutral-900/95 border-white/10 text-white backdrop-blur-xl rounded-2xl shadow-2xl p-1.5 z-50"
+                    className="w-52 bg-neutral-900/95 border-white/10 text-white backdrop-blur-xl rounded-2xl shadow-2xl p-1.5 z-50"
                   >
                     {isOwner ? (
                       <>
+                        <DropdownMenuItem
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenViewers(e);
+                          }}
+                          className="hover:bg-white/10 cursor-pointer font-medium rounded-xl flex items-center gap-2 text-pink-300"
+                        >
+                          <Eye className="w-4 h-4 text-pink-400" />
+                          View Story Viewers ({viewerCount})
+                        </DropdownMenuItem>
                         <DropdownMenuItem
                           onClick={() => setDeleteDialogOpen(true)}
                           className="text-red-400 hover:text-red-300 hover:bg-red-500/10 cursor-pointer font-semibold rounded-xl flex items-center gap-2"
@@ -617,7 +678,10 @@ export const StoryViewer = ({
               <div className="flex items-center justify-between">
                 <Button
                   variant="ghost"
-                  onClick={handleOpenViewers}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleOpenViewers(e);
+                  }}
                   className="rounded-full bg-white/15 hover:bg-white/25 text-white text-xs font-semibold px-4 py-2 flex items-center gap-2 border border-white/20 backdrop-blur-md shadow-lg transition-transform active:scale-95"
                 >
                   <Eye className="w-4 h-4 text-pink-400" />
@@ -729,63 +793,126 @@ export const StoryViewer = ({
           </Button>
         </div>
 
-        {/* Viewers Bottom Sheet (Owner Only) */}
-        <Sheet open={viewersOpen} onOpenChange={(open) => { setViewersOpen(open); setIsPaused(open); }}>
-          <SheetContent side="bottom" className="bg-neutral-900 border-white/10 text-white rounded-t-3xl max-h-[60vh] p-6">
-            <SheetHeader className="pb-4 border-b border-white/10">
-              <SheetTitle className="text-white flex items-center justify-between text-base font-bold">
-                <span className="flex items-center gap-2">
-                  <Eye className="w-5 h-5 text-pink-400" />
-                  Story Viewers ({viewerCount})
-                </span>
-              </SheetTitle>
-            </SheetHeader>
-
-            <div className="mt-4 overflow-y-auto max-h-[45vh] space-y-3 pr-1">
-              {loadingViewers ? (
-                <div className="flex items-center justify-center py-8 gap-2 text-white/50 text-sm">
-                  <Loader2 className="w-5 h-5 animate-spin text-pink-400" />
-                  Loading viewers...
-                </div>
-              ) : viewers.length === 0 ? (
-                <div className="text-center py-8 text-white/50 space-y-1">
-                  <Users className="w-8 h-8 mx-auto text-white/20 mb-2" />
-                  <p className="text-sm font-semibold">No views yet</p>
-                  <p className="text-xs">Followers will appear here as soon as they view this story.</p>
-                </div>
-              ) : (
-                viewers.map((viewer) => (
-                  <div
-                    key={`${viewer.id}-${viewer.viewed_at}`}
-                    className="flex items-center justify-between p-2 rounded-2xl hover:bg-white/5 transition-colors"
-                  >
-                    <div className="flex items-center gap-3">
-                      <Avatar className="w-10 h-10 border border-white/20">
-                        <AvatarImage src={viewer.avatar_url || undefined} />
-                        <AvatarFallback className="bg-pink-500/20 text-pink-300 font-bold">
-                          {viewer.username[0]?.toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <p className="font-bold text-sm text-white">{viewer.username}</p>
-                        {viewer.full_name && (
-                          <p className="text-xs text-white/50">{viewer.full_name}</p>
-                        )}
-                      </div>
+        {/* Middle of the Screen Viewers Modal Window */}
+        <AnimatePresence>
+          {viewersOpen && (
+            <div
+              className="fixed inset-0 z-[1000000] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+              onClick={(e) => {
+                e.stopPropagation();
+                setViewersOpen(false);
+                setIsPaused(false);
+              }}
+            >
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9, y: 15 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9, y: 15 }}
+                transition={{ type: "spring", damping: 25, stiffness: 350 }}
+                className="w-full max-w-sm sm:max-w-md bg-neutral-900 border border-white/20 text-white rounded-3xl shadow-2xl overflow-hidden flex flex-col"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Modal Header */}
+                <div className="flex items-center justify-between p-4 px-5 border-b border-white/10 bg-white/5">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-full bg-pink-500/20 border border-pink-500/30 flex items-center justify-center text-pink-400">
+                      <Eye className="w-4 h-4" />
                     </div>
-                    <span className="text-xs text-white/40">
-                      {formatDistanceToNow(new Date(viewer.viewed_at), { addSuffix: true })}
-                    </span>
+                    <div>
+                      <h3 className="text-white font-bold text-base flex items-center gap-2">
+                        Story Viewers
+                        <span className="text-xs bg-pink-500/20 text-pink-300 font-bold px-2 py-0.5 rounded-full border border-pink-500/40">
+                          {viewerCount}
+                        </span>
+                      </h3>
+                      <p className="text-xs text-white/50">People who viewed this story</p>
+                    </div>
                   </div>
-                ))
-              )}
+                  <button
+                    onClick={() => {
+                      setViewersOpen(false);
+                      setIsPaused(false);
+                    }}
+                    className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white/70 hover:text-white flex items-center justify-center transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Modal Viewers List */}
+                <div className="p-3 overflow-y-auto max-h-[50vh] space-y-2">
+                  {loadingViewers ? (
+                    <div className="flex flex-col items-center justify-center py-12 gap-3 text-white/60">
+                      <Loader2 className="w-7 h-7 animate-spin text-pink-500" />
+                      <p className="text-sm font-medium">Checking viewers...</p>
+                    </div>
+                  ) : viewers.length === 0 ? (
+                    <div className="text-center py-12 px-4 space-y-2">
+                      <div className="w-12 h-12 rounded-full bg-white/5 border border-white/10 flex items-center justify-center mx-auto text-white/30">
+                        <Users className="w-6 h-6" />
+                      </div>
+                      <p className="text-sm font-semibold text-white/90">No views yet</p>
+                      <p className="text-xs text-white/50 max-w-xs mx-auto">
+                        Followers and friends will appear here as soon as they view your story.
+                      </p>
+                    </div>
+                  ) : (
+                    viewers.map((viewer) => (
+                      <div
+                        key={`${viewer.id}-${viewer.viewed_at}`}
+                        onClick={() => {
+                          if (viewer.username || viewer.id) {
+                            navigate(`/user/${viewer.username || viewer.id}`);
+                          }
+                        }}
+                        className="flex items-center justify-between p-2.5 rounded-2xl hover:bg-white/10 active:bg-white/15 cursor-pointer transition-colors group"
+                      >
+                        <div className="flex items-center gap-3">
+                          <Avatar className="w-10 h-10 border border-white/20 group-hover:border-pink-500/50 transition-colors">
+                            <AvatarImage src={viewer.avatar_url || undefined} />
+                            <AvatarFallback className="bg-gradient-to-tr from-[#f09433] to-[#bc1888] text-white font-bold text-sm">
+                              {viewer.username?.[0]?.toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <p className="font-bold text-sm text-white group-hover:text-pink-300 transition-colors">
+                              {viewer.username}
+                            </p>
+                            {viewer.full_name && (
+                              <p className="text-xs text-white/50">{viewer.full_name}</p>
+                            )}
+                          </div>
+                        </div>
+                        <span className="text-xs text-white/40">
+                          {formatDistanceToNow(new Date(viewer.viewed_at), { addSuffix: true })}
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                {/* Modal Footer */}
+                <div className="p-3 px-4 border-t border-white/10 bg-white/5 flex justify-end">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setViewersOpen(false);
+                      setIsPaused(false);
+                    }}
+                    className="rounded-xl text-white/80 hover:text-white hover:bg-white/10 text-xs font-semibold px-4"
+                  >
+                    Close
+                  </Button>
+                </div>
+              </motion.div>
             </div>
-          </SheetContent>
-        </Sheet>
+          )}
+        </AnimatePresence>
 
         {/* Delete Confirmation Alert Dialog */}
         <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-          <AlertDialogContent className="bg-neutral-900 border border-white/15 text-white rounded-2xl max-w-sm">
+          <AlertDialogContent className="bg-neutral-900 border border-white/15 text-white rounded-2xl max-w-sm z-[1000000]">
             <AlertDialogHeader>
               <AlertDialogTitle className="text-white text-lg font-bold">Delete Story?</AlertDialogTitle>
               <AlertDialogDescription className="text-neutral-400 text-sm">

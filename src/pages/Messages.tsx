@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { formatDistanceToNow } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/useAuth";
-import { CartoonLoader } from "@/components/CartoonLoader";
+import { chatLocalCache } from "@/lib/chatLocalCache";
 import { CreateGroupDialog } from "@/components/chat/CreateGroupDialog";
 import { CreateCommunityDialog } from "@/components/chat/CreateCommunityDialog";
 import { AdvancedFilterModal, FilterOptions } from "@/components/chat/AdvancedFilterModal";
@@ -452,7 +452,10 @@ const Messages = () => {
                   <ConversationItem
                     key={conv.id}
                     conv={conv}
-                    onClick={(id) => navigate(`/chat/${id}`)}
+                    onClick={(id) => {
+                      chatLocalCache.setDirectChat(id, { otherUser: conv.otherUser });
+                      navigate(`/chat/${id}`);
+                    }}
                     onPin={handlePin}
                     onArchive={handleArchive}
                   />

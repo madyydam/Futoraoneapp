@@ -2,8 +2,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { GroupChatWindow } from "@/components/chat/GroupChatWindow";
-import { BottomNav } from "@/components/BottomNav";
-import { Loader2 } from "lucide-react";
+import { ChatSkeleton } from "@/components/chat/ChatSkeleton";
 
 export default function GroupChat() {
     const { groupId } = useParams();
@@ -23,11 +22,7 @@ export default function GroupChat() {
     }, [navigate]);
 
     if (loading) {
-        return (
-            <div className="flex items-center justify-center min-h-screen">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            </div>
-        );
+        return <ChatSkeleton isGroup onBack={() => navigate("/messages")} />;
     }
 
     if (!userId || !groupId) return null;

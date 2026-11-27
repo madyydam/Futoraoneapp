@@ -12,6 +12,7 @@ import { MessageBubble, MessageType } from "@/components/chat/MessageBubble";
 import ChatWallpaperPicker from "@/components/chat/ChatWallpaperPicker";
 import { RoomIntelligence } from "@/components/chat/RoomIntelligence";
 import { Badge } from "@/components/ui/badge";
+import { chatLocalCache } from "@/lib/chatLocalCache";
 
 interface Message {
     id: string;
@@ -30,9 +31,10 @@ interface Profile {
 }
 
 export const ChatWindow = memo(({ conversationId, currentUserId }: { conversationId: string; currentUserId: string }) => {
-    const [messages, setMessages] = useState<Message[]>([]);
+    const cachedData = conversationId ? chatLocalCache.getDirectChat(conversationId) : null;
+    const [messages, setMessages] = useState<Message[]>(() => (cachedData?.messages as Message[]) || []);
     const [newMessage, setNewMessage] = useState("");
-    const [otherUser, setOtherUser] = useState<Profile | null>(null);
+    const [otherUser, setOtherUser] = useState<Profile | null>(() => (cachedData?.otherUser as Profile) || null);
     const [isTyping, setIsTyping] = useState(false);
     const scrollRef = useRef<HTMLDivElement>(null);
     const visualChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
@@ -46,7 +48,7 @@ export const ChatWindow = memo(({ conversationId, currentUserId }: { conversatio
     const [bubbleColor, setBubbleColor] = useState("");
     const [isPickerOpen, setIsPickerOpen] = useState(false);
     const [isIntelligenceOpen, setIsIntelligenceOpen] = useState(false);
-    const [roomName, setRoomName] = useState<string | null>(null);
+    const [roomName, setRoomName] = useState<string | null>(() => cachedData?.roomName || null);
     const [isEditingName, setIsEditingName] = useState(false);
 
     const markAsRead = useCallback(async (messageId: string) => {
@@ -87,13 +89,16 @@ export const ChatWindow = memo(({ conversationId, currentUserId }: { conversatio
 
             if (profileData) {
                 setOtherUser(profileData as unknown as Profile);
+                chatLocalCache.setDirectChat(conversationId, { otherUser: profileData });
             } else {
-                setOtherUser({
+                const fallbackUser = {
                     id: participantData.user_id,
                     username: 'user',
                     full_name: 'Developer',
                     avatar_url: null
-                });
+                };
+                setOtherUser(fallbackUser);
+                chatLocalCache.setDirectChat(conversationId, { otherUser: fallbackUser });
             }
         }
 
@@ -105,6 +110,7 @@ export const ChatWindow = memo(({ conversationId, currentUserId }: { conversatio
 
         if (convData?.name) {
             setRoomName(convData.name);
+            chatLocalCache.setDirectChat(conversationId, { roomName: convData.name });
         }
     }, [conversationId, currentUserId]);
 
@@ -117,6 +123,7 @@ export const ChatWindow = memo(({ conversationId, currentUserId }: { conversatio
 
         if (data) {
             setMessages(data as Message[]);
+            chatLocalCache.setDirectChat(conversationId, { messages: data });
             const unreadMessages = data.filter(m => m.sender_id !== currentUserId && !m.read_at);
             unreadMessages.forEach(m => markAsRead(m.id));
             scrollToBottom();
@@ -147,7 +154,11 @@ export const ChatWindow = memo(({ conversationId, currentUserId }: { conversatio
                 { event: 'INSERT', schema: 'public', table: 'messages', filter: `conversation_id=eq.${conversationId}` },
                 (payload) => {
                     const newMsg = payload.new as Message;
-                    setMessages((prev) => prev.some(m => m.id === newMsg.id) ? prev : [...prev, newMsg]);
+                    setMessages((prev) => {
+                        const updated = prev.some(m => m.id === newMsg.id) ? prev : [...prev, newMsg];
+                        chatLocalCache.setDirectChat(conversationId, { messages: updated });
+                        return updated;
+                    });
                     if (newMsg.sender_id !== currentUserId) markAsRead(newMsg.id);
                     scrollToBottom();
                 }

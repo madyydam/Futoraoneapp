@@ -18,6 +18,8 @@ import {
     DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
 import { format, isToday, isYesterday, isSameDay } from "date-fns";
+import { ChatSkeleton } from "@/components/chat/ChatSkeleton";
+import { chatLocalCache } from "@/lib/chatLocalCache";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -167,11 +169,12 @@ MemberRow.displayName = "MemberRow";
 
 export function GroupChatWindow({ groupId, currentUserId }: { groupId: string; currentUserId: string }) {
     const navigate = useNavigate();
-    const [messages, setMessages] = useState<Message[]>([]);
-    const [members, setMembers] = useState<Member[]>([]);
+    const cachedGroupChat = groupId ? chatLocalCache.getGroupChat(groupId) : null;
+    const [messages, setMessages] = useState<Message[]>(() => (cachedGroupChat?.messages as Message[]) || []);
+    const [members, setMembers] = useState<Member[]>(() => (cachedGroupChat?.members as Member[]) || []);
     const [newMessage, setNewMessage] = useState("");
-    const [group, setGroup] = useState<Group | null>(null);
-    const [loading, setLoading] = useState(true);
+    const [group, setGroup] = useState<Group | null>(() => (cachedGroupChat?.group as Group) || null);
+    const [loading, setLoading] = useState<boolean>(() => !cachedGroupChat || (!cachedGroupChat.group && (!cachedGroupChat.messages || cachedGroupChat.messages.length === 0)));
     const [sending, setSending] = useState(false);
     const [userRole, setUserRole] = useState<'admin' | 'member' | null>(null);
     const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
@@ -218,12 +221,14 @@ export function GroupChatWindow({ groupId, currentUserId }: { groupId: string; c
                     profilesMap[p.id] = { full_name: p.full_name, avatar_url: p.avatar_url };
                 });
             }
-            setMessages((messagesData || []).map(m => ({
+            const enrichedMsgs = (messagesData || []).map(m => ({
                 ...m,
                 profiles: profilesMap[m.sender_id] || { full_name: 'Unknown', avatar_url: null }
-            })));
+            }));
+            setMessages(enrichedMsgs);
 
             // 3. Members with profiles
+            let enrichedMembers: Member[] = [];
             const { data: membersData } = await supabase
                 .from('group_members')
                 .select('user_id, role')
@@ -237,7 +242,7 @@ export function GroupChatWindow({ groupId, currentUserId }: { groupId: string; c
                 const profileMap: Record<string, any> = {};
                 (memberProfiles || []).forEach((p: any) => { profileMap[p.id] = p; });
 
-                const enrichedMembers: Member[] = membersData.map((m: any) => ({
+                enrichedMembers = membersData.map((m: any) => ({
                     user_id: m.user_id,
                     role: m.role,
                     profiles: profileMap[m.user_id] || { full_name: 'Unknown', avatar_url: null }
@@ -255,6 +260,12 @@ export function GroupChatWindow({ groupId, currentUserId }: { groupId: string; c
                 const me = membersData.find((m: any) => m.user_id === currentUserId);
                 if (me) setUserRole(me.role as 'admin' | 'member');
             }
+
+            chatLocalCache.setGroupChat(groupId, {
+                group: groupData as Group,
+                messages: enrichedMsgs,
+                members: enrichedMembers,
+            });
 
             markMessagesAsRead();
         } catch (error) {
@@ -282,10 +293,14 @@ export function GroupChatWindow({ groupId, currentUserId }: { groupId: string; c
                     .from('profiles').select('full_name, avatar_url')
                     .eq('id', incoming.sender_id).maybeSingle();
 
-                setMessages(prev => prev.some(m => m.id === incoming.id) ? prev : [...prev, {
-                    ...incoming,
-                    profiles: profile || { full_name: 'Unknown', avatar_url: null }
-                }]);
+                setMessages(prev => {
+                    const next = prev.some(m => m.id === incoming.id) ? prev : [...prev, {
+                        ...incoming,
+                        profiles: profile || { full_name: 'Unknown', avatar_url: null }
+                    }];
+                    chatLocalCache.setGroupChat(groupId, { messages: next });
+                    return next;
+                });
 
                 if (incoming.sender_id !== currentUserId) {
                     markMessagesAsRead();
@@ -368,15 +383,7 @@ export function GroupChatWindow({ groupId, currentUserId }: { groupId: string; c
     const pinnedMessages = useMemo(() => messages.filter(m => m.is_pinned), [messages]);
 
     if (loading) {
-        return (
-            <div className="flex flex-col h-[100dvh] items-center justify-center bg-background space-y-4">
-                <div className="relative w-14 h-14">
-                    <div className="w-14 h-14 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
-                    <Users className="absolute inset-0 m-auto w-5 h-5 text-primary/60" />
-                </div>
-                <p className="text-sm text-muted-foreground font-medium animate-pulse">Loading group...</p>
-            </div>
-        );
+        return <ChatSkeleton isGroup onBack={() => navigate('/messages')} />;
     }
 
     return (
