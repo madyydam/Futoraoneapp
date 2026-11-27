@@ -22,7 +22,7 @@ import { ModeToggle } from "@/components/mode-toggle";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { QRCodeDialog } from "@/components/QRCodeDialog";
-import { CartoonLoader } from "@/components/CartoonLoader";
+import { AppScreenSkeleton } from "@/components/skeletons/AppScreenSkeleton";
 import { AchievementShowcase } from "@/components/AchievementShowcase";
 import { ProfileStatsCard } from "@/components/ProfileStatsCard";
 import { WalletCard } from "@/components/rewards/WalletCard";
@@ -137,7 +137,7 @@ const Profile = () => {
   const { signOut } = useAuth();
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -247,8 +247,8 @@ const Profile = () => {
     navigate("/");
   }, [signOut, toast, navigate]);
 
-  if (loading || isLoading) {
-    return <CartoonLoader />;
+  if (isLoading && !profileData && !profile) {
+    return <AppScreenSkeleton />;
   }
 
   return (

@@ -104,11 +104,11 @@ export const FeedPost = memo(({ post, currentUser, onLike, onSave, onShare, onDe
       initial={{ opacity: 0, y: 20, scale: 0.98 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ delay: Math.min(index * 0.05, 0.3), type: "spring", stiffness: 80, damping: 20 }}
-      className="group mb-6"
+      className={`group mb-6 ${index > 2 ? 'feed-item-contained' : ''}`}
     >
       <Card
         className="overflow-hidden border border-border shadow-sm hover:shadow-lg transition-all duration-300 bg-card rounded-[1.25rem] ring-1 ring-black/5 dark:ring-white/5"
-        style={{ contentVisibility: index > 5 ? 'auto' : 'visible', containIntrinsicSize: '0 500px' }}
+        style={{ contentVisibility: index > 2 ? 'auto' : 'visible', containIntrinsicSize: '0 450px' }}
       >
         {/* Subtle Gradient Glow on Hover */}
         <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-700 bg-gradient-to-br from-indigo-500/5 via-transparent to-purple-500/5 pointer-events-none" />

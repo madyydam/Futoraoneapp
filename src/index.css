@@ -233,3 +233,21 @@
   background-image: linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
     linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
 }
+
+/* Performance & Smooth Scrolling Utilities */
+.feed-item-contained {
+  content-visibility: auto;
+  contain-intrinsic-size: 0 450px;
+}
+
+.smooth-gpu-scroll {
+  -webkit-overflow-scrolling: touch;
+  transform: translateZ(0);
+  will-change: scroll-position;
+}
+
+.gpu-accelerated {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  perspective: 1000px;
+}

@@ -86,6 +86,8 @@ export const useFeedLogic = () => {
     });
 
     // Infinite Query for Posts
+    const blockedKey = useMemo(() => blockedIds.slice().sort().join(","), [blockedIds]);
+
     const {
         data,
         fetchNextPage,
@@ -94,7 +96,10 @@ export const useFeedLogic = () => {
         isFetchingNextPage,
         refetch
     } = useInfiniteQuery({
-        queryKey: ["posts_feed", blockedIds],
+        queryKey: ["posts_feed", blockedKey],
+        placeholderData: (previousData) => previousData,
+        staleTime: 1000 * 60 * 2, // 2 minutes fresh
+        gcTime: 1000 * 60 * 60, // 1 hour cached
         queryFn: async ({ pageParam = 0 }) => {
             const from = (pageParam as number);
             const to = from + PAGE_SIZE - 1;
@@ -150,7 +155,6 @@ export const useFeedLogic = () => {
         },
         getNextPageParam: (lastPage) => lastPage.nextCursor,
         initialPageParam: 0,
-        staleTime: 1000 * 60 * 2, // 2 minutes
     });
 
     const posts = useMemo(() => data?.pages.flatMap(page => page.posts) || [], [data]);

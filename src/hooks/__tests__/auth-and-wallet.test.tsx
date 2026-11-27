@@ -65,6 +65,7 @@ import { OpportunitySection } from "@/components/explore/OpportunitySection";
 import { ProfileHeader } from "@/components/profile/ProfileHeader";
 import { UserSearchDialog } from "@/components/chat/UserSearchDialog";
 import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
+import { InstallPrompt } from "@/components/pwa/InstallPrompt";
 import { useGameReward } from "@/hooks/useGameReward";
 
 function createQueryWrapper() {
@@ -484,5 +485,25 @@ describe("Auth, RBAC, and Economy invariants", () => {
         },
       });
     });
+  });
+
+  it("renders top-tab PWA install banner on beforeinstallprompt and prompts on click", async () => {
+    localStorage.removeItem("pwa-dismissed");
+    render(<InstallPrompt />);
+
+    const mockPrompt = vi.fn();
+    const event = new Event("beforeinstallprompt") as any;
+    event.prompt = mockPrompt;
+    event.userChoice = Promise.resolve({ outcome: "accepted" });
+
+    act(() => {
+      window.dispatchEvent(event);
+    });
+
+    const installButton = await screen.findByRole("button", { name: /^Install$/i });
+    expect(installButton).toBeInTheDocument();
+
+    fireEvent.click(installButton);
+    expect(mockPrompt).toHaveBeenCalledTimes(1);
   });
 });
